@@ -75,6 +75,8 @@ tag, not backfilled to an earlier commit date.
   (BL-8, 56628ee).
 
 ### Changed
+- **Relicensed from MIT to AGPL-3.0-or-later** (sole-author relicense): keeps
+  derivatives and network deployments open; prior released snapshots remain MIT.
 - Recorded the supported Python floor of `>=3.12` in the remaining developer-facing
   surfaces (ADR 0004, which supersedes ADR 0002 and ADR 0001's four-version matrix
   provision; `CONTRIBUTING.md`; the committed main-ruleset target now requires only

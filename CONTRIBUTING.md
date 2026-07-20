@@ -1,7 +1,7 @@
 # Contributing to Women-Artist Discovery
 
 Thanks for your interest. Women-Artist Discovery is an independent personal open-source project
-(MIT, unaffiliated with any employer or client). It is a *values-aware* recommender, and the whole
+(AGPL-3.0-or-later, unaffiliated with any employer or client). It is a *values-aware* recommender, and the whole
 point of the repo is that its responsible-AI posture is **mechanically enforced rather than
 asserted**. Please read this before opening an issue or a pull request — one invariant, the
 sourced-not-inferred identity rule, is non-negotiable and shapes how code and tests are written.
@@ -93,7 +93,7 @@ git commit -s -m "feat(recommender): weight sourced-identity signal in re-rank"
 Types: `feat`, `fix`, `docs`, `refactor`, `test`, `build`, `ci`, `chore`, `perf`, `revert`. Common
 scopes mirror the packages: `pipeline`, `recommender`, `export`, `app`, `eval`, `a11y`, `deps`. By
 signing off you certify you wrote the contribution, or have the right to submit it under the
-project's MIT license, and that it contains no proprietary or client material.
+project's AGPL-3.0-or-later license, and that it contains no proprietary or client material.
 
 ## Pull requests
 
@@ -155,8 +155,8 @@ outside of code (it requires an account and a real edit on live Wikidata). Recor
 ## License
 
 By contributing, you agree that your contributions are licensed under the project's
-[MIT](LICENSE) license. You must have the right to release what you contribute.
+[AGPL-3.0-or-later](LICENSE) license. You must have the right to release what you contribute.
 
 ---
 
-*Maintainer: Chelsea Kelly-Reif · License: MIT*
+*Maintainer: Chelsea Kelly-Reif · License: AGPL-3.0-or-later*

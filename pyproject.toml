@@ -10,7 +10,7 @@ version = "0.1.0"
 description = "A values-aware music-discovery engine with a sourced-not-inferred identity model."
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "Chelsea" }]
 dependencies = [
     # requests>=2.33 / urllib3>=2.7 carry the fixes for the former RR-4 network-path

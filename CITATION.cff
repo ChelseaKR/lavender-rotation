@@ -10,5 +10,5 @@ authors:
     given-names: Chelsea
 version: 0.1.0
 date-released: 2026-07-17
-license: MIT
+license: AGPL-3.0-or-later
 repository-code: "https://github.com/ChelseaKR/women-artist-discovery"

@@ -4,7 +4,7 @@
 
 **Trans women are women here — explicitly.** The three terms in the tagline are not redundant; they cover three different shapes: *women* (solo artists whose sourced self-identification is woman — cis or trans, with no distinction drawn anywhere in the data model), *nonbinary* artists (represented as nonbinary, never folded into another category), and *female-fronted* (band-composition metadata: an act whose sourced lineup/role data shows a woman — cis or trans — fronting it, which is a fact about the band, never a claim about any individual). A trans woman artist whose self-identification is sourced is surfaced as a woman, full stop.
 
-**Status:** `Beta` · **Track:** Personal (data/ML + small web app) · **License:** MIT · **Data:** personal/local
+**Status:** `Beta` · **Track:** Personal (data/ML + small web app) · **License:** AGPL-3.0-or-later · **Data:** personal/local
 
 ## Quickstart
 
