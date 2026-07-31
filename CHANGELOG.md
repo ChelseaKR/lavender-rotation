@@ -12,6 +12,11 @@ tag, not backfilled to an earlier commit date.
 
 ## [Unreleased]
 
+- Release authorization now runs from reviewed `main` through the immutable
+  portfolio authorizer, builds and signs the exact selected commit, and hands
+  only verified assets to a checkout-free publisher that rechecks the tag
+  object immediately before creating the release.
+
 ### Security
 - Update the transitive GitPython lock from 3.1.50 to 3.1.55, clearing the
   high-severity joined-short-option clone bypass fixed after 3.1.50.
