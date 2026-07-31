@@ -12,6 +12,11 @@ tag, not backfilled to an earlier commit date.
 
 ## [Unreleased]
 
+- Release authorization now runs from reviewed `main` through the immutable
+  portfolio authorizer, builds and signs the exact selected commit, and hands
+  only verified assets to a checkout-free publisher that rechecks the tag
+  object immediately before creating the release.
+
 ### Added
 - Mutation-testing gate on the safety-critical modules (CQ-47): `make mutation` runs cosmic-ray
   over `pipeline/identity.py` (no-inference) and `recommender/rerank.py` (boost-only), executing
