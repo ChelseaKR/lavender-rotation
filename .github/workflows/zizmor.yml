@@ -38,6 +38,8 @@ jobs:
           # issue still fails the check.
           min-severity: medium
           # Public repo (2026-07-19): upload SARIF to GHAS code scanning while
-          # preserving the real exit-code gate and workflow annotations.
+          # preserving the real exit-code gate. zizmor-action treats
+          # advanced-security and annotations as mutually exclusive, so the
+          # SARIF/code-scanning path is the one we keep; findings surface there.
           advanced-security: true
-          annotations: true
+          annotations: false

@@ -1,8 +1,7 @@
 name: scorecard
 
-# SEC-36/37/38, CICD-03/21: OpenSSF Scorecard — retains a private artifact for
-# review. Public-result publishing and private-repo code-scanning upload are
-# deliberately disabled.
+# SEC-36/37/38, CICD-03/21: OpenSSF Scorecard publishes the public result and
+# retains a short-lived SARIF artifact for independent review.
 
 on:
   workflow_dispatch: {}
@@ -40,7 +39,7 @@ jobs:
           publish_results: true  # public repo (2026-07-19) — publish to the OpenSSF public dataset
 
       - name: Upload SARIF results
-        # No GHAS code scanning on a private repo — no-op unless the repo goes public.
+        # Visibility-aware for forks or mirrors; this public repository uploads.
         if: ${{ !github.event.repository.private }}
         uses: github/codeql-action/upload-sarif@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a  # v4.36.3
         with:

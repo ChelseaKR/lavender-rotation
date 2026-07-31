@@ -72,6 +72,9 @@ tag, not backfilled to an earlier commit date.
   Python ≥3.10 (see Security, below) and dropped Python 3.9 (EOL 2025-10-31) from the CI matrix.
 
 ### Fixed
+- OpenSSF Scorecard workflow comments now describe the repository's current
+  public publishing path instead of its superseded restricted-publication
+  posture.
 - 320 px reflow defect caught by the new browser specs: the score-summary and fairness tables
   forced page-level horizontal scrolling at narrow widths (WCAG 2.2 §1.4.10). Data tables now sit
   in keyboard-focusable, labelled scroll regions (`role="region"`, `tabindex="0"`,
