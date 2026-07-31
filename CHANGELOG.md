@@ -12,6 +12,15 @@ tag, not backfilled to an earlier commit date.
 
 ## [Unreleased]
 
+- Release authorization now runs from reviewed `main` through the immutable
+  portfolio authorizer, builds and signs the exact selected commit, and hands
+  only verified assets to a checkout-free publisher that rechecks the tag
+  object immediately before creating the release.
+
+### Security
+- Update the transitive GitPython lock from 3.1.50 to 3.1.55, clearing the
+  high-severity joined-short-option clone bypass fixed after 3.1.50.
+
 ### Added
 - Make the internationalization row's N/A reason part of the machine-readable
   conformance status instead of leaving the table parser with a bare exemption.
@@ -65,6 +74,9 @@ tag, not backfilled to an earlier commit date.
   Python ≥3.10 (see Security, below) and dropped Python 3.9 (EOL 2025-10-31) from the CI matrix.
 
 ### Fixed
+- OpenSSF Scorecard workflow comments now describe the repository's current
+  public publishing path instead of its superseded restricted-publication
+  posture.
 - 320 px reflow defect caught by the new browser specs: the score-summary and fairness tables
   forced page-level horizontal scrolling at narrow widths (WCAG 2.2 §1.4.10). Data tables now sit
   in keyboard-focusable, labelled scroll regions (`role="region"`, `tabindex="0"`,

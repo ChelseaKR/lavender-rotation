@@ -1,6 +1,6 @@
 name: release
 
-# P1-4 / REL-13/14/15, SEC-27/29: tag-triggered release. Nothing in `ci.yml`'s PR
+# P1-4 / REL-13/14/15, SEC-27/29: trusted-main release. Nothing in `ci.yml`'s PR
 # green check is trusted here — this re-runs the full `make verify` gate set at
 # the exact tagged commit, then builds, SBOMs, signs, and publishes.
 #
@@ -12,8 +12,12 @@ name: release
 # execution log for the exact command.
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing signed stable SemVer tag (vX.Y.Z)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -21,18 +25,27 @@ permissions:
 # §8b: never cancel an in-flight release; the group still serializes
 # accidental duplicate runs of the same tag.
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
-  release:
+  authorize:
+    uses: ChelseaKR/portfolio-standards/.github/workflows/release-authorize.yml@3692aa5270d673f91f8571b4fc0ce1c622bf67e5
+    permissions:
+      contents: read
+    with:
+      tag: ${{ inputs.tag }}
+
+  build:
+    needs: authorize
     runs-on: ubuntu-latest
     permissions:
-      contents: write # to create the GitHub Release
+      contents: read
       id-token: write # cosign keyless signing (OIDC)
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
+          ref: ${{ needs.authorize.outputs.release-commit }}
           persist-credentials: false
           fetch-depth: 0 # full history so the CHANGELOG/tag correspondence is checkable
 
@@ -68,8 +81,12 @@ jobs:
       # REL-10: the tag must have a matching CHANGELOG section, extracted verbatim
       # into the GitHub Release body — a missing section fails the release outright.
       - name: Extract this version's CHANGELOG section
+        env:
+          TAG: ${{ needs.authorize.outputs.release-tag }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${TAG#v}"
+          package_version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          test "${version}" = "${package_version}"
           awk -v ver="$version" '
             $0 ~ ("^## \\[" ver "\\]") { found=1; print; next }
             found && /^## \[/ { exit }
@@ -101,14 +118,35 @@ jobs:
               --output-certificate "$f.pem"
           done
 
-      # `gh` ships preinstalled on GitHub-hosted runners — prefer it over a
-      # third-party action for the one built-in-covered step (zizmor
-      # superfluous-actions), which is one fewer external action to trust/pin.
-      - name: Create GitHub Release
+      - name: Upload verified release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          path: |
+            dist/*
+            release-notes.md
+          if-no-files-found: error
+
+  publish-release:
+    needs: [authorize, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: release-assets
+      - name: Recheck immutable tag object and create the release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.authorize.outputs.release-tag }}
+          TAG_OBJECT_SHA: ${{ needs.authorize.outputs.tag-object-sha }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
-            --notes-file release-notes.md \
-            dist/*.whl dist/*.tar.gz dist/sbom.cdx.json dist/*.sig dist/*.pem
+          set -euo pipefail
+          LIVE_TAG_OBJECT="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq .object.sha)"
+          test "${LIVE_TAG_OBJECT}" = "${TAG_OBJECT_SHA}"
+          gh release create "${TAG}" \
+            --title "${TAG}" \
+            --notes-file release-assets/release-notes.md \
+            --verify-tag release-assets/dist/*
