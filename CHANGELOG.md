@@ -22,6 +22,8 @@ tag, not backfilled to an earlier commit date.
   high-severity joined-short-option clone bypass fixed after 3.1.50.
 
 ### Added
+- Make the internationalization row's N/A reason part of the machine-readable
+  conformance status instead of leaving the table parser with a bare exemption.
 - Mutation-testing gate on the safety-critical modules (CQ-47): `make mutation` runs cosmic-ray
   over `pipeline/identity.py` (no-inference) and `recommender/rerank.py` (boost-only), executing
   the full unit suite against every generated mutant, and fails if fewer than 70% are killed per
