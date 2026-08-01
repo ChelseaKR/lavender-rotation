@@ -50,7 +50,13 @@ network — enforced across `pipeline/`, `recommender/`, `app/`, and `export/`.
 |--------|---------------|-----------------|
 | `pipeline/lastfm.py` | Last.fm scrobble/tag/similarity fetch, cached, rate-limited | `import requests` (lazy, inside the client) |
 | `pipeline/doctor.py` | Explicit `wad doctor --check-upstream` reachability probes; never runs by default | `import requests` (lazy, inside the opt-in check) |
-| `export/spotify.py` | Playlist export via OAuth; the only live implementation is `RequestsTransport` | `import requests` (lazy, inside `RequestsTransport.request`) |
+| `export/base.py` | The shared exporter seam: PKCE/OAuth helpers plus the **one** live transport used by every playlist provider (Spotify, TIDAL, and any future adapter) | `import requests` (lazy, inside `RequestsTransport.request`) |
+
+A new **playlist provider** does not extend this table: `export/base.py` owns the
+only transport in `export/`, so `export/tidal.py` reaches the network exactly as
+`export/spotify.py` does — through an injected `HttpTransport` it does not
+construct. That is why this list got shorter, not longer, when the second
+provider landed.
 
 Adding a new live client (e.g. a FIX-01 MusicBrainz/Discogs/Wikidata HTTP
 client) requires updating **both** of the following in the same change, or the

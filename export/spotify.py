@@ -29,23 +29,52 @@ listener as the primary redirect capture):
    access token.
 6. :func:`export_recommendations` → search each artist, create the playlist,
    add the matched tracks. Unmatched artists are reported, never dropped silently.
+
+The OAuth machinery (PKCE, state verification, the loopback listener) and the
+one live HTTP transport now live in :mod:`export.base`, shared with every other
+provider adapter; only the URLs, scopes, and API shapes below are Spotify's.
+:class:`SpotifyExporter` is this module's :class:`~export.base.Exporter`.
 """
 
 from __future__ import annotations
 
 import base64
-import hashlib
-import http.server
-import secrets
 import urllib.parse
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Optional, Protocol, runtime_checkable
+from typing import Any, Optional
 
 from pipeline.models import Recommendation
 
+from export.base import (
+    HttpResponse,
+    HttpTransport,
+    PkcePair,
+    RequestsTransport,
+    capture_redirect,
+    parse_redirect,
+)
 from export.models import ExportError, PlaylistExport
 from export.tracklist import recommendations_to_tracks
+
+__all__ = [
+    "API_ROOT",
+    "AUTH_URL",
+    "DEFAULT_SCOPES",
+    "TOKEN_URL",
+    "HttpResponse",
+    "HttpTransport",
+    "PkcePair",
+    "RequestsTransport",
+    "SpotifyClient",
+    "SpotifyCredentials",
+    "SpotifyExporter",
+    "SpotifyOAuth",
+    "SpotifyToken",
+    "capture_redirect",
+    "export_recommendations",
+    "parse_redirect",
+]
 
 AUTH_URL = "https://accounts.spotify.com/authorize"
 TOKEN_URL = "https://accounts.spotify.com/api/token"  # noqa: S105 - public endpoint, not a secret
@@ -54,89 +83,6 @@ API_ROOT = "https://api.spotify.com/v1"
 DEFAULT_SCOPES: tuple[str, ...] = ("playlist-modify-private", "playlist-modify-public")
 #: Spotify caps additions at 100 URIs per request.
 _ADD_BATCH = 100
-#: How long the loopback listener waits for the browser to redirect back.
-_CAPTURE_TIMEOUT = 120.0
-
-
-@dataclass(frozen=True)
-class PkcePair:
-    """A PKCE verifier/challenge pair (RFC 7636, S256 method).
-
-    The verifier never leaves process memory: it is generated here, held only
-    long enough to be passed to :meth:`SpotifyOAuth.exchange_code`, and never
-    serialised, logged, or transmitted anywhere except in the token-exchange
-    POST body over TLS.
-    """
-
-    verifier: str
-    challenge: str
-
-    @classmethod
-    def generate(cls) -> PkcePair:
-        """Generate a fresh, cryptographically random verifier + S256 challenge."""
-        verifier = secrets.token_urlsafe(64)
-        digest = hashlib.sha256(verifier.encode()).digest()
-        challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-        return cls(verifier=verifier, challenge=challenge)
-
-
-@dataclass(frozen=True)
-class HttpResponse:
-    """A minimal HTTP response: a status code and the parsed JSON body."""
-
-    status: int
-    body: dict[str, Any]
-
-    @property
-    def ok(self) -> bool:
-        return 200 <= self.status < 300
-
-
-@runtime_checkable
-class HttpTransport(Protocol):
-    """The tiny HTTP surface the Spotify client needs. Injectable for testing."""
-
-    def request(
-        self,
-        method: str,
-        url: str,
-        *,
-        headers: Optional[Mapping[str, str]] = None,
-        data: Optional[Mapping[str, str]] = None,
-        json_body: Optional[Mapping[str, Any]] = None,
-    ) -> HttpResponse: ...
-
-
-class RequestsTransport:  # pragma: no cover - live network path, verified manually
-    """The one live transport. Imports ``requests`` lazily, like the Last.fm client."""
-
-    def __init__(self, timeout: float = 15.0) -> None:
-        self.timeout = timeout
-
-    def request(
-        self,
-        method: str,
-        url: str,
-        *,
-        headers: Optional[Mapping[str, str]] = None,
-        data: Optional[Mapping[str, str]] = None,
-        json_body: Optional[Mapping[str, Any]] = None,
-    ) -> HttpResponse:
-        import requests
-
-        resp = requests.request(
-            method,
-            url,
-            headers=dict(headers or {}),
-            data=dict(data) if data is not None else None,
-            json=dict(json_body) if json_body is not None else None,
-            timeout=self.timeout,
-        )
-        try:
-            body = resp.json() if resp.content else {}
-        except ValueError:
-            body = {}
-        return HttpResponse(status=resp.status_code, body=body if isinstance(body, dict) else {})
 
 
 @dataclass(frozen=True)
@@ -274,78 +220,6 @@ class SpotifyOAuth:
         return SpotifyToken.from_body(resp.body)
 
 
-def parse_redirect(url: str, expected_state: str) -> str:
-    """Parse the full redirected URL, verify ``state``, and return the ``code``.
-
-    Raises :class:`ExportError` if Spotify reported an ``error`` param, or if
-    the returned ``state`` does not match ``expected_state`` — the state check
-    is what makes CSRF protection an enforced, tested failure path rather than
-    a value that is generated but never verified.
-    """
-    query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
-    error = query.get("error", [""])[0]
-    if error:
-        raise ExportError(f"Spotify authorization failed: {error}")
-    returned_state = query.get("state", [""])[0]
-    if returned_state != expected_state:
-        raise ExportError("OAuth state mismatch — possible CSRF")
-    code = query.get("code", [""])[0]
-    if not code:
-        raise ExportError("redirected URL did not contain an authorization code")
-    return code
-
-
-class _RedirectCaptureHandler(http.server.BaseHTTPRequestHandler):
-    """Stashes the redirected path/query on the server, then closes the tab."""
-
-    def do_GET(self) -> None:  # pragma: no cover - stdlib handler naming
-        self.server.captured_path = self.path  # type: ignore[attr-defined]
-        body = b"<html><body>Spotify authorized. You can close this tab.</body></html>"
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, format: str, *args: Any) -> None:  # pragma: no cover - silence stdlib
-        pass
-
-
-def _loopback_port(redirect_uri: str) -> int:
-    """Validate a native-app loopback redirect and return its port."""
-    parsed = urllib.parse.urlparse(redirect_uri)
-    if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost"}:
-        raise ExportError("Spotify redirect URI must use HTTP loopback (127.0.0.1 or localhost)")
-    try:
-        return parsed.port or 80
-    except ValueError as exc:
-        raise ExportError("Spotify redirect URI has an invalid port") from exc
-
-
-def capture_redirect(  # pragma: no cover - binds a real socket, verified manually
-    redirect_uri: str, timeout: float = _CAPTURE_TIMEOUT
-) -> str:
-    """Run a one-shot loopback listener and return the redirected path+query.
-
-    Parses host/port from ``redirect_uri``, binds ``http.server.HTTPServer`` to
-    ``127.0.0.1`` on that port, and blocks for a single request (or until
-    ``timeout`` elapses) — the native-app-recommended way to receive the OAuth
-    redirect without the user having to copy-paste a URL by hand.
-    """
-    port = _loopback_port(redirect_uri)
-    server = http.server.HTTPServer(("127.0.0.1", port), _RedirectCaptureHandler)
-    server.timeout = timeout
-    server.captured_path = None  # type: ignore[attr-defined]
-    try:
-        server.handle_request()
-    finally:
-        server.server_close()
-    path: Optional[str] = server.captured_path  # type: ignore[attr-defined]
-    if not path:
-        raise ExportError("timed out waiting for the Spotify redirect")
-    return path
-
-
 class SpotifyClient:
     """Thin, typed wrapper over the Spotify Web API endpoints we use."""
 
@@ -466,3 +340,33 @@ def export_recommendations(
         playlist_id=playlist_id,
         unmatched=tuple(unmatched),
     )
+
+
+@dataclass(frozen=True)
+class SpotifyExporter:
+    """Spotify as an :class:`~export.base.Exporter`.
+
+    A thin adapter so callers can hold the protocol rather than the module. The
+    authenticated :class:`SpotifyClient` is constructed by whoever drove the
+    OAuth flow, because consent is a user action and cannot be hidden inside a
+    constructor.
+    """
+
+    client: SpotifyClient
+    provider: str = "spotify"
+
+    def export(
+        self,
+        recs: Sequence[Recommendation],
+        *,
+        username: str = "you",
+        playlist_name: Optional[str] = None,
+        public: bool = False,
+    ) -> PlaylistExport:
+        return export_recommendations(
+            recs,
+            self.client,
+            username=username,
+            playlist_name=playlist_name,
+            public=public,
+        )
