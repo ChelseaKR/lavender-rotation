@@ -41,7 +41,7 @@ from __future__ import annotations
 import base64
 import urllib.parse
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from pipeline.models import Recommendation
@@ -87,10 +87,15 @@ _ADD_BATCH = 100
 
 @dataclass(frozen=True)
 class SpotifyCredentials:
-    """Spotify app credentials, read from the environment — never hard-coded."""
+    """Spotify app credentials, read from the environment — never hard-coded.
+
+    ``client_secret`` is ``repr=False`` so the dataclass's generated ``repr``
+    cannot spill it into a traceback, a debugger frame, or a log line that
+    renders this object.
+    """
 
     client_id: str
-    client_secret: str
+    client_secret: str = field(repr=False)
     redirect_uri: str
 
     @classmethod
@@ -119,13 +124,19 @@ class SpotifyCredentials:
 
 @dataclass(frozen=True)
 class SpotifyToken:
-    """An OAuth access token (plus optional refresh token)."""
+    """An OAuth access token (plus optional refresh token).
 
-    access_token: str
+    Both token fields are ``repr=False``: rendering this object anywhere —
+    ``print``, a log record, an unhandled traceback that shows locals — must
+    never emit the bearer credential in clear text. Only the non-secret
+    metadata (type, scope, lifetime) survives into the ``repr``.
+    """
+
+    access_token: str = field(repr=False)
     token_type: str = "Bearer"  # noqa: S105 - OAuth token *type*, not a credential
     scope: str = ""
     expires_in: int = 0
-    refresh_token: Optional[str] = None
+    refresh_token: Optional[str] = field(default=None, repr=False)
 
     @classmethod
     def from_body(cls, body: Mapping[str, Any]) -> SpotifyToken:

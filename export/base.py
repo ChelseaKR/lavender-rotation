@@ -34,7 +34,7 @@ import http.server
 import secrets
 import urllib.parse
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Optional, Protocol, runtime_checkable
 
 from export.models import ExportError, PlaylistExport
@@ -116,10 +116,13 @@ class PkcePair:
     The verifier never leaves process memory: it is generated here, held only
     long enough to be passed to the provider's token exchange, and never
     serialised, logged, or transmitted anywhere except in that POST body
-    over TLS.
+    over TLS. ``repr=False`` is what makes the "never logged" half of that
+    claim true by construction rather than by convention — the generated
+    ``repr`` would otherwise print the verifier in any traceback that renders
+    this object. The challenge is a public SHA-256 digest of it, so it stays.
     """
 
-    verifier: str
+    verifier: str = field(repr=False)
     challenge: str
 
     @classmethod

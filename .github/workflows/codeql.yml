@@ -40,6 +40,14 @@ jobs:
         uses: github/codeql-action/init@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a  # v4.36.3
         with:
           languages: ${{ matrix.language }}
+          # `+` = *in addition to* the default security suite, never instead of it.
+          # AlertSuppression.ql is what turns a reviewed in-source
+          # `# codeql[<rule-id>]` comment into a `suppressions` entry on that result
+          # in the SARIF, which the gate below is the only thing that honours. Only
+          # the python pack ships one, so the actions leg gets no extra query.
+          # (`packs`, not `queries`: the `queries` input resolves entries as external
+          # *repository* specifiers, so a pack-relative path is rejected there.)
+          packs: ${{ matrix.language == 'python' && '+codeql/python-queries:AlertSuppression.ql' || '' }}
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a  # v4.36.3
@@ -52,9 +60,20 @@ jobs:
       - name: Fail on findings (blocking gate; GHAS upload above is visibility only)
         shell: bash
         run: |
-          count=$(jq -s '[.[] | .runs[]?.results[]?] | length' codeql-results/*.sarif)
-          echo "CodeQL findings: ${count}"
+          # A finding blocks unless CodeQL *itself* reports it as suppressed in
+          # source — i.e. an `# codeql[<rule-id>]` comment sits on the line above
+          # it, carrying a written justification the reviewer of that PR had to
+          # read. The decision stays in the diff next to the code, not in this
+          # step: nothing here names a rule or a path, so the gate cannot be
+          # widened by editing the workflow, and every other finding of every
+          # rule still fails the build.
+          suppressed=$(jq -s '[.[] | .runs[]?.results[]? | select((.suppressions // []) | length > 0)] | length' codeql-results/*.sarif)
+          count=$(jq -s '[.[] | .runs[]?.results[]? | select((.suppressions // []) | length == 0)] | length' codeql-results/*.sarif)
+          echo "CodeQL findings: ${count} blocking, ${suppressed} suppressed in source"
+          if [ "${suppressed:-0}" -gt 0 ]; then
+            jq -r '.runs[]?.results[]? | select((.suppressions // []) | length > 0) | "  suppressed: \(.ruleId // "rule"): \(.locations[0].physicalLocation.artifactLocation.uri // "?"):\(.locations[0].physicalLocation.region.startLine // 0)"' codeql-results/*.sarif
+          fi
           if [ "${count:-0}" -gt 0 ]; then
-            jq -r '.runs[]?.results[]? | "\(.ruleId // "rule"): \(.locations[0].physicalLocation.artifactLocation.uri // "?"):\(.locations[0].physicalLocation.region.startLine // 0)"' codeql-results/*.sarif
+            jq -r '.runs[]?.results[]? | select((.suppressions // []) | length == 0) | "\(.ruleId // "rule"): \(.locations[0].physicalLocation.artifactLocation.uri // "?"):\(.locations[0].physicalLocation.region.startLine // 0)"' codeql-results/*.sarif
             exit 1
           fi

@@ -101,6 +101,74 @@ def test_runtime_guard_blocks_connection_and_datagram_paths() -> None:
     sock.close()
 
 
+#: Every credential-bearing value object in the repo, paired with the secret it
+#: holds. A new provider adapter that adds one belongs on this list — that is the
+#: point of keeping the list here rather than one assertion per adapter module.
+def _secret_bearing_objects() -> list[tuple[str, object, tuple[str, ...]]]:
+    from export.base import PkcePair
+    from export.spotify import SpotifyCredentials, SpotifyToken
+    from export.tidal import TidalCredentials, TidalToken
+
+    return [
+        (
+            "SpotifyCredentials",
+            SpotifyCredentials(
+                client_id="cid",
+                client_secret="SPOTIFY-SECRET",  # gitleaks:allow - canary, not a credential
+                redirect_uri="http://127.0.0.1/cb",
+            ),
+            ("SPOTIFY-SECRET",),
+        ),
+        (
+            "SpotifyToken",
+            SpotifyToken(access_token="SPOTIFY-ACCESS", refresh_token="SPOTIFY-REFRESH"),
+            ("SPOTIFY-ACCESS", "SPOTIFY-REFRESH"),
+        ),
+        (
+            "TidalCredentials",
+            TidalCredentials(
+                client_id="cid",
+                redirect_uri="http://127.0.0.1/cb",
+                client_secret="TIDAL-SECRET",  # gitleaks:allow - canary, not a credential
+            ),
+            ("TIDAL-SECRET",),
+        ),
+        (
+            "TidalToken",
+            TidalToken(access_token="TIDAL-ACCESS", refresh_token="TIDAL-REFRESH"),
+            ("TIDAL-ACCESS", "TIDAL-REFRESH"),
+        ),
+        ("PkcePair", PkcePair(verifier="PKCE-VERIFIER", challenge="chal"), ("PKCE-VERIFIER",)),
+    ]
+
+
+def test_credential_objects_never_render_their_secret() -> None:
+    """A secret must not survive being rendered as text (CWE-312/CWE-532).
+
+    ``@dataclass``'s generated ``repr`` prints every field by default, so an
+    OAuth token object dropped into a log line, an f-string, a debugger frame,
+    or a traceback that renders locals would spill the bearer credential in
+    clear text — without any call site ever *asking* for the secret. Marking the
+    secret fields ``repr=False`` closes that off at the type, so no future call
+    site has to remember to.
+    """
+    for name, obj, secrets_held in _secret_bearing_objects():
+        for rendered in (repr(obj), str(obj), f"{obj}"):
+            for secret in secrets_held:
+                assert secret not in rendered, (
+                    f"{name} leaked a secret when rendered as text: {rendered!r}"
+                )
+
+
+def test_credential_reprs_still_carry_their_non_secret_metadata() -> None:
+    """The gate above must not be satisfiable by rendering nothing useful."""
+    from export.tidal import TidalToken
+
+    rendered = repr(TidalToken(access_token="TIDAL-ACCESS", scope="playlists.write"))
+    assert "TidalToken" in rendered
+    assert "playlists.write" in rendered
+
+
 def test_cache_uses_only_stdlib_sqlite() -> None:
     cache_src = (Path(pipeline.__file__).parent / "cache.py").read_text(encoding="utf-8")
     assert "import sqlite3" in cache_src
