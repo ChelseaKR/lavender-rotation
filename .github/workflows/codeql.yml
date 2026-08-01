@@ -45,7 +45,9 @@ jobs:
           # `# codeql[<rule-id>]` comment into a `suppressions` entry on that result
           # in the SARIF, which the gate below is the only thing that honours. Only
           # the python pack ships one, so the actions leg gets no extra query.
-          queries: ${{ matrix.language == 'python' && '+codeql/python-queries:AlertSuppression.ql' || '' }}
+          # (`packs`, not `queries`: the `queries` input resolves entries as external
+          # *repository* specifiers, so a pack-relative path is rejected there.)
+          packs: ${{ matrix.language == 'python' && '+codeql/python-queries:AlertSuppression.ql' || '' }}
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a  # v4.36.3

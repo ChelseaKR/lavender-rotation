@@ -113,7 +113,9 @@ def _secret_bearing_objects() -> list[tuple[str, object, tuple[str, ...]]]:
         (
             "SpotifyCredentials",
             SpotifyCredentials(
-                client_id="cid", client_secret="SPOTIFY-SECRET", redirect_uri="http://127.0.0.1/cb"
+                client_id="cid",
+                client_secret="SPOTIFY-SECRET",  # gitleaks:allow - canary, not a credential
+                redirect_uri="http://127.0.0.1/cb",
             ),
             ("SPOTIFY-SECRET",),
         ),
@@ -125,7 +127,9 @@ def _secret_bearing_objects() -> list[tuple[str, object, tuple[str, ...]]]:
         (
             "TidalCredentials",
             TidalCredentials(
-                client_id="cid", redirect_uri="http://127.0.0.1/cb", client_secret="TIDAL-SECRET"
+                client_id="cid",
+                redirect_uri="http://127.0.0.1/cb",
+                client_secret="TIDAL-SECRET",  # gitleaks:allow - canary, not a credential
             ),
             ("TIDAL-SECRET",),
         ),
