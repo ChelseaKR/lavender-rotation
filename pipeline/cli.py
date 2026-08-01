@@ -201,6 +201,32 @@ def _cmd_refresh(args: argparse.Namespace) -> int:
     if changes:
         for change in changes:
             print(  # noqa: T201
+                # --- Reviewed suppression: py/clear-text-logging-sensitive-data ---
+                # CodeQL flags the expression below because the attribute is
+                # literally named ``gender``, which its sensitive-data heuristic
+                # classifies as "private". Reviewed 2026-08-01 and suppressed
+                # deliberately, for this one expression only:
+                #
+                # * The sink is ``print`` to **stdout** — this command's report to
+                #   the operator who ran it, not a diagnostic log. The
+                #   no-identity-in-logs invariant (OBS-11) governs the ``wad.*``
+                #   logger stream and is enforced by ``tests/test_log_privacy.py``;
+                #   no logger call site is involved here, so that gate is untouched.
+                # * ``IdentityLabel.gender`` is not a secret. A non-UNKNOWN value is
+                #   only constructible from at least one cited, SELF_IDENTIFIED
+                #   source (``pipeline/models.py``), and showing it alongside that
+                #   basis and those sources is the product's stated purpose (README
+                #   "Guardrails"). ``wad recommend`` prints the same fact, and the
+                #   dashboard renders it.
+                # * This subcommand is DEMO ONLY (see the banner printed above):
+                #   ``new`` comes from the fixture catalog committed to this repo and
+                #   ``old`` from the operator's own local cache, on their own screen.
+                #
+                # What this repo actually protects — API keys, OAuth tokens, PKCE
+                # verifiers, listening history — never reaches this expression, and
+                # the query stays armed everywhere else: the CI gate skips only
+                # results CodeQL itself reports as suppressed in source.
+                # codeql[py/clear-text-logging-sensitive-data]
                 f"{change.artist_id}: {change.old.gender} -> {change.new.gender} "
                 f"(sources: {len(change.old.sources)} -> {len(change.new.sources)})"
             )

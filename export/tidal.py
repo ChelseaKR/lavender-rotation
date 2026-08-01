@@ -46,7 +46,7 @@ from __future__ import annotations
 import base64
 import urllib.parse
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from pipeline.models import Recommendation
@@ -74,12 +74,14 @@ class TidalCredentials:
 
     ``client_secret`` is optional: a public/native client authenticates the
     token exchange with PKCE alone, and sending an empty secret would be worse
-    than sending none.
+    than sending none. It is ``repr=False`` so the dataclass's generated
+    ``repr`` cannot spill it into a traceback, a debugger frame, or a log line
+    that renders this object.
     """
 
     client_id: str
     redirect_uri: str
-    client_secret: str = ""
+    client_secret: str = field(default="", repr=False)
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> TidalCredentials:
@@ -109,13 +111,19 @@ class TidalCredentials:
 
 @dataclass(frozen=True)
 class TidalToken:
-    """An OAuth access token (plus optional refresh token)."""
+    """An OAuth access token (plus optional refresh token).
 
-    access_token: str
+    Both token fields are ``repr=False``: rendering this object anywhere —
+    ``print``, a log record, an unhandled traceback that shows locals — must
+    never emit the bearer credential in clear text. Only the non-secret
+    metadata (type, scope, lifetime) survives into the ``repr``.
+    """
+
+    access_token: str = field(repr=False)
     token_type: str = "Bearer"  # noqa: S105 - OAuth token *type*, not a credential
     scope: str = ""
     expires_in: int = 0
-    refresh_token: Optional[str] = None
+    refresh_token: Optional[str] = field(default=None, repr=False)
 
     @classmethod
     def from_body(cls, body: Mapping[str, Any]) -> TidalToken:
