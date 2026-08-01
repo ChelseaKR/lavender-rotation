@@ -17,6 +17,7 @@ from typing import Any, Optional
 
 import pytest
 from export import spotify as sp
+from export.base import Exporter, loopback_port
 from export.models import ExportError, ExportFormat, PlaylistExport, PlaylistTrack
 from export.spotify import (
     HttpResponse,
@@ -24,6 +25,7 @@ from export.spotify import (
     PkcePair,
     SpotifyClient,
     SpotifyCredentials,
+    SpotifyExporter,
     SpotifyOAuth,
     SpotifyToken,
     export_recommendations,
@@ -296,12 +298,14 @@ def test_parse_redirect_raises_when_code_missing() -> None:
     ],
 )
 def test_loopback_listener_rejects_non_loopback_or_https_uris(uri: str) -> None:
+    # Moved to export.base with the rest of the provider-agnostic OAuth flow (#54);
+    # the guarantee is unchanged and now covers every adapter, not just Spotify.
     with pytest.raises(ExportError, match="HTTP loopback"):
-        sp._loopback_port(uri)
+        loopback_port(uri)
 
 
 def test_loopback_listener_accepts_localhost_and_returns_port() -> None:
-    assert sp._loopback_port("http://localhost:8765/callback") == 8765
+    assert loopback_port("http://localhost:8765/callback") == 8765
 
 
 def test_refresh_reuses_old_refresh_token_when_absent() -> None:
@@ -467,3 +471,15 @@ def test_playlist_track_and_export_value_helpers() -> None:
     assert HttpResponse(204, {}).ok
     assert not HttpResponse(500, {}).ok
     assert PlaylistExport("spotify", "n", track_count=0).fully_matched is False
+
+
+def test_spotify_exporter_satisfies_the_protocol(profile, catalog, source) -> None:
+    """Spotify is now one implementation of `export.base.Exporter`, not the export
+    path itself — the seam #54 asks for. A caller holds the protocol."""
+    recs = recommend(profile, catalog, source, k=3, lens_strength=0.5)
+    client = SpotifyClient(SpotifyToken(access_token="a"), FakeTransport())
+    exporter: Exporter = SpotifyExporter(client)
+
+    assert isinstance(exporter, Exporter)
+    assert exporter.provider == "spotify"
+    assert exporter.export(recs, username="ada").provider == "spotify"

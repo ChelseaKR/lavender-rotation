@@ -37,7 +37,11 @@ TELEMETRY_TOKENS = (
 # Network may only be reached from these modules — the live API clients. This
 # is the single source of truth for sanctioned egress; keep it in sync with
 # "Egress registry / allowlist" in docs/audits/privacy-notes.md.
-NETWORK_ALLOWED = {"pipeline/lastfm.py", "pipeline/doctor.py", "export/spotify.py"}
+# `export/base.py` replaced `export/spotify.py` here when the second provider adapter
+# landed (#54): the one live HTTP transport moved into the shared seam, so the export
+# half of this allowlist got SHORTER as providers were added instead of growing one
+# entry per provider. A new adapter that needs its own socket has to change this line.
+NETWORK_ALLOWED = {"pipeline/lastfm.py", "pipeline/doctor.py", "export/base.py"}
 NETWORK_TOKENS = (
     "import requests",
     "import httpx",

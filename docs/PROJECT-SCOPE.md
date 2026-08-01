@@ -24,13 +24,13 @@ Package metadata checked in this pass:
 - Docs for roadmap, audits, ADRs, I18N, identity ethics, fairness, privacy, and residual risk.
 - Eval reports, model cards, data cards, accessibility outputs, and AI risk notes.
 - Tests for identity, privacy, adapters, reproducibility, export, eval, feedback, cache lifecycle, fairness observability, and accessibility.
-- Spotify and portable playlist export paths.
+- Spotify, TIDAL, and portable playlist export paths, behind one `Exporter` seam.
 
 ## How It Is Put Together
 
 - pipeline/ handles ingest, enrichment, identity, models, and cache behavior.
 - recommender/ contains collaborative, content, hybrid, rerank, explanation, and eval code.
-- export/ contains Spotify and tracklist outputs.
+- export/ contains the provider-agnostic `Exporter` seam (`base.py`), the Spotify and TIDAL adapters, and the credential-free tracklist outputs.
 - app/ contains dashboard and static rendering.
 - docs/audits/ records identity, fairness, model, data, privacy, and residual-risk notes.
 
