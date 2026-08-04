@@ -22,6 +22,13 @@ tag, not backfilled to an earlier commit date.
   high-severity joined-short-option clone bypass fixed after 3.1.50.
 
 ### Added
+- Docs-currency guard (`scripts/check-readme-claims.py`, wired into `make test`): re-derives the
+  actual test count (`pytest --collect-only`) and coverage total (`coverage report
+  --format=total`) and fails if either drifts from README's "Project status" claim, instead of
+  that sentence silently going stale as the suite grows. Closes the "M8 auto-stamp backlog item"
+  PR #49 flagged as open ("the README build-blockquote test count is not bumped here"); same
+  "claims must be regenerable, never hand-typed" discipline `scripts/writeup-check.py` already
+  applies to `docs/writeup/methods.md`.
 - Make the internationalization row's N/A reason part of the machine-readable
   conformance status instead of leaving the table parser with a bare exemption.
 - Mutation-testing gate on the safety-critical modules (CQ-47): `make mutation` runs cosmic-ray

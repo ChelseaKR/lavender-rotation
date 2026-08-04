@@ -108,6 +108,24 @@ CodeQL/zizmor/osv-scanner/Scorecard workflows added. Nothing in the identity/fai
 (`pipeline/identity.py`, `recommender/rerank.py`, `tests/test_no_inference.py`,
 `tests/test_unknown_first_class.py`) was touched.
 
+### Build log addendum (2026-08-04) — docs-currency guard for README's test/coverage claim
+- **Closes an explicitly-flagged gap.** PR #49 (mutation-testing gate, M8/CQ-47) noted in its own
+  description that "the README build-blockquote test count is not bumped here ... the M8
+  auto-stamp backlog item is the systemic fix and remains open." By the time this landed the
+  claim ("433 tests at 97% coverage") had drifted to 501 actual tests — silent staleness the repo
+  had no gate against, exactly the "keep docs live" discipline this section already cites.
+- **`scripts/check-readme-claims.py`**, run as the last step of `make test` (stage 3, right after
+  pytest populates `.coverage`): re-derives the actual test count via `pytest --collect-only` and
+  the actual coverage total via `coverage report --format=total`, and fails loudly if either
+  differs from what README's "## Project status" paragraph currently states. Mirrors
+  `scripts/writeup-check.py`'s existing "claims must be regenerable, never hand-typed and stale"
+  pattern for `docs/writeup/methods.md`, applied here to the README's own gate summary.
+- **Scope, deliberately narrow.** Only README's present-tense "## Project status" claim is
+  checked. `docs/USER-RESEARCH.md`'s persona interview quoting "108 tests @ 94%" and this file's
+  own build-log addenda quoting point-in-time numbers (e.g. "149 passed, 96% coverage" above) are
+  dated, historical snapshots by design, not live claims — checking them would be a category
+  error, not a fix.
+
 ## 7. Quality attributes & metrics
 | Metric | Target | Measured by | Gate |
 |--------|--------|-------------|------|

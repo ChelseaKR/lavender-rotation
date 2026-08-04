@@ -83,6 +83,7 @@ max-complexity = 10
 "tests/*" = ["S101", "S105", "S106"]  # asserts and dummy secrets in fixtures
 "app/*" = ["T20"]                     # streamlit uses st.write, not print; harmless
 "scripts/writeup-check.py" = ["T20"]  # CLI checker reports via stdout/stderr
+"scripts/check-readme-claims.py" = ["T20"]  # CLI checker reports via stdout/stderr
 
 # ---------------------------------------------------------------------------
 # Type-check gate (CI stage 2) — strict.

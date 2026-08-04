@@ -68,6 +68,10 @@ test: ## Stage 3 — unit + integration tests with coverage gates (>=85%; identi
 	# resolver must hold >=95% branch coverage, above the 85% baseline. Scoped
 	# re-report over the .coverage data the pytest run just wrote.
 	$(PYTHON) -m coverage report --include="pipeline/identity.py" --fail-under=95
+	# Docs-currency guard: README's "NNN tests at NN% coverage" claim must match
+	# this run, not a hand-typed number from whenever it was last edited (the
+	# "M8 auto-stamp backlog item" PR #49 flagged as still open).
+	$(PYTHON) scripts/check-readme-claims.py
 
 # Dependency-audit waivers (SECURITY-AND-SUPPLY-CHAIN-STANDARD §4 "Unfixable
 # HIGH/CRITICAL waiver — committed, justified waiver JSON").
