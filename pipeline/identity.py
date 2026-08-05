@@ -17,6 +17,7 @@ name/voice/image/genre input.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Optional
@@ -81,6 +82,39 @@ _SOURCE_BASE_CONFIDENCE: dict[SourceKind, float] = {
     SourceKind.WIKIDATA_P21: 0.80,
     SourceKind.MUSICBRAINZ_GENDER: 0.70,
 }
+
+
+#: A MusicBrainz artist URL resolves by MBID, which is a UUID; a Wikidata one
+#: resolves by Q-number. Anything else is a label, not a locator.
+_MUSICBRAINZ_ARTIST = re.compile(
+    r"^https://musicbrainz\.org/artist/"
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
+_WIKIDATA_ENTITY = re.compile(r"^https://www\.wikidata\.org/wiki/Q[1-9][0-9]*$")
+
+
+def citation_problem(kind: SourceKind, citation: str) -> Optional[str]:
+    """Why ``citation`` cannot locate a record for ``kind``, or ``None`` if it can.
+
+    Deliberately *not* enforced in ``IdentityEvidence.__post_init__``: evidence is
+    a plain value object built throughout the suite (including property tests that
+    generate arbitrary citations), and a constructor invariant would impose a
+    contract the rest of the codebase was not written against. It is a gate the
+    shipped fixture is held to instead (``tests/test_demo_citations.py``), which
+    is where the failure actually was.
+
+    Only the two sources with a machine-checkable identifier scheme are checked.
+    An artist statement or a Discogs lineup is cited by whatever URL carries it,
+    and inventing a pattern for those would reject honest citations.
+    """
+    text = (citation or "").strip()
+    if not text:
+        return "is empty"
+    if kind is SourceKind.MUSICBRAINZ_GENDER and not _MUSICBRAINZ_ARTIST.match(text):
+        return "is not a MusicBrainz artist URL ending in an MBID (UUID)"
+    if kind is SourceKind.WIKIDATA_P21 and not _WIKIDATA_ENTITY.match(text):
+        return "is not a Wikidata entity URL ending in a Q-number"
+    return None
 
 
 @dataclass(frozen=True)

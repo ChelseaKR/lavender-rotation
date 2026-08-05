@@ -59,7 +59,11 @@ def _ev(kind: SourceKind, value: str, citation: str) -> IdentityEvidence:
 # Sourced individual-gender evidence (women / man / nonbinary). -----------------
 _GENDER_EVIDENCE: dict[str, list[IdentityEvidence]] = {
     "mitski": [
-        _ev(SourceKind.MUSICBRAINZ_GENDER, "female", "https://musicbrainz.org/artist/mitski"),
+        _ev(
+            SourceKind.MUSICBRAINZ_GENDER,
+            "female",
+            "https://musicbrainz.org/artist/fa58cf24-0e44-421d-8519-8bf461dcfaa5",
+        ),
         _ev(SourceKind.WIKIDATA_P21, "Q6581072", "https://www.wikidata.org/wiki/Q16735549"),
     ],
     "phoebe-bridgers": [
@@ -69,10 +73,18 @@ _GENDER_EVIDENCE: dict[str, list[IdentityEvidence]] = {
         _ev(SourceKind.ARTIST_STATEMENT, "woman", "https://example.org/zauner-interview"),
     ],
     "soccer-mommy": [
-        _ev(SourceKind.MUSICBRAINZ_GENDER, "female", "https://musicbrainz.org/artist/sm"),
+        _ev(
+            SourceKind.MUSICBRAINZ_GENDER,
+            "female",
+            "https://musicbrainz.org/artist/84803b1d-dcb3-490d-9af5-debbba64a011",
+        ),
     ],
     "snail-mail": [
-        _ev(SourceKind.MUSICBRAINZ_GENDER, "female", "https://musicbrainz.org/artist/snail"),
+        _ev(
+            SourceKind.MUSICBRAINZ_GENDER,
+            "female",
+            "https://musicbrainz.org/artist/86cd4d38-857c-42bd-a5da-9acedcab1e01",
+        ),
     ],
     "lucy-dacus": [
         _ev(SourceKind.WIKIDATA_P21, "Q6581072", "https://www.wikidata.org/wiki/Q47545178"),
@@ -81,14 +93,22 @@ _GENDER_EVIDENCE: dict[str, list[IdentityEvidence]] = {
         _ev(SourceKind.ARTIST_STATEMENT, "woman", "https://example.org/lenker"),
     ],
     "moses-sumney": [
-        _ev(SourceKind.MUSICBRAINZ_GENDER, "male", "https://musicbrainz.org/artist/moses"),
+        _ev(
+            SourceKind.MUSICBRAINZ_GENDER,
+            "male",
+            "https://musicbrainz.org/artist/89c081d4-2ab2-4d3e-8589-ad77dfc40384",
+        ),
     ],
     "shamir": [
         _ev(SourceKind.ARTIST_STATEMENT, "nonbinary", "https://example.org/shamir-nb"),
     ],
     # mystery-act, arena-men, big-pop-dude... see below; the first two stay unknown.
+    # An invented act, so it cannot carry a real MusicBrainz record. It cites an
+    # example.org statement like the demo's other illustrative citations rather
+    # than a fabricated MBID: a made-up identifier in a real registry's URL space
+    # is the one citation shape this project must not model.
     "big-pop-dude": [
-        _ev(SourceKind.MUSICBRAINZ_GENDER, "male", "https://musicbrainz.org/artist/bpd"),
+        _ev(SourceKind.ARTIST_STATEMENT, "man", "https://example.org/big-pop-dude-statement"),
     ],
 }
 
