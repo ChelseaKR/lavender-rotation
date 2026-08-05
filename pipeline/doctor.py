@@ -10,10 +10,13 @@ Checks:
   Informational only (demo mode needs none of them): never hard-fails, and
   never includes the value, only presence/absence.
 * **cache** — the resolved data directory + cache path, whether the cache
-  file opens cleanly, and whether its ``PRAGMA user_version`` matches
-  :data:`pipeline.cache.CACHE_SCHEMA_VERSION`. Hard checks: a cache that
-  won't open or is on the wrong schema version is exactly the kind of silent
-  failure this command exists to surface.
+  file opens cleanly, whether its ``PRAGMA user_version`` matches
+  :data:`pipeline.cache.CACHE_SCHEMA_VERSION`, and its on-disk size. Hard
+  checks: a cache that won't open or is on the wrong schema version is
+  exactly the kind of silent failure this command exists to surface. Size is
+  informational — it's the one signal `wad doctor` gives an operator for
+  *when* to reach for `wad refresh --ttl-days`, since nothing else in the
+  CLI reports cache footprint.
 * **upstream** — opt-in only (``--check-upstream``); pings the four external
   APIs this project talks to. Never runs by default, and its own failures are
   never hard (a bad network shouldn't make ``wad doctor`` non-zero on a
@@ -95,6 +98,18 @@ def _check_env_keys() -> list[Check]:
     return checks
 
 
+def _format_bytes(n: int) -> str:
+    """Human-readable byte count, e.g. ``4.0 KiB``. Binary (1024) units, capped at GiB."""
+    size = float(n)
+    unit = "B"
+    for next_unit in ("KiB", "MiB", "GiB"):
+        if size < 1024:
+            break
+        size /= 1024
+        unit = next_unit
+    return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+
+
 def _check_cache() -> list[Check]:
     checks: list[Check] = []
     try:
@@ -136,6 +151,12 @@ def _check_cache() -> list[Check]:
             f"user_version={version} (expected {CACHE_SCHEMA_VERSION})",
         )
     )
+    try:
+        size_bytes = db_path.stat().st_size
+    except OSError as exc:  # pragma: no cover - defensive; the open above already proved it exists
+        checks.append(Check("cache_size", False, f"cannot stat cache file: {exc}", hard=False))
+    else:
+        checks.append(Check("cache_size", True, _format_bytes(size_bytes), hard=False))
     return checks
 
 
