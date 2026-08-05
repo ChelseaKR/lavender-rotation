@@ -169,6 +169,125 @@ def test_credential_reprs_still_carry_their_non_secret_metadata() -> None:
     assert "playlists.write" in rendered
 
 
+#: The Last.fm key the live client is driven with below. Distinctive enough that
+#: finding it anywhere is unambiguous, and never a real credential.
+_LASTFM_CANARY = "lastfm-canary-do-not-ship"
+
+
+def _live_lastfm_client(monkeypatch, responder):
+    """A :class:`LastfmClient` whose only network call is ``responder``.
+
+    ``requests.get`` is replaced wholesale, so the real ``_get`` body runs —
+    cache lookup, request, status check, cache write — with no socket. Returns
+    the client, its cache, and the list that records what was sent.
+    """
+    import requests
+    from pipeline.cache import Cache
+    from pipeline.lastfm import LastfmClient, RateLimiter
+
+    sent: list[dict[str, str]] = []
+
+    def fake_get(url, params=None, timeout=None):  # type: ignore[no-untyped-def]
+        sent.append(dict(params or {}))
+        return responder(url, dict(params or {}))
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    cache = Cache(":memory:")
+    client = LastfmClient(
+        api_key=_LASTFM_CANARY,
+        cache=cache,
+        limiter=RateLimiter(min_interval=0.0),
+        now_fn=lambda: "2026-08-01",
+    )
+    return client, cache, sent
+
+
+def test_lastfm_api_key_never_reaches_the_local_cache(monkeypatch) -> None:
+    """The key authenticates a request; it is not part of the request's identity.
+
+    Last.fm has no header auth, so the credential rides in the query string —
+    and the query string used to *be* the ``http_cache`` key, which wrote the
+    key into the operator's SQLite file in clear text, outliving the process and
+    any rotation of the key. The cache key is now built without it.
+    """
+
+    class _Resp:
+        status_code = 200
+        text = '{"artist": {"tags": {"tag": []}}}'
+
+        def raise_for_status(self) -> None:
+            return None
+
+    client, cache, sent = _live_lastfm_client(monkeypatch, lambda url, params: _Resp())
+    client.artist_tags("mitski")
+
+    rows = cache.conn.execute("SELECT url, body FROM http_cache").fetchall()
+    assert rows, "expected the live client to have written a cache row"
+    for url, body in rows:
+        assert _LASTFM_CANARY not in url, f"API key persisted into the cache key: {url!r}"
+        assert _LASTFM_CANARY not in body
+    # …and the gate is not passing merely because the key was never sent.
+    assert sent and sent[0]["api_key"] == _LASTFM_CANARY
+    cache.close()
+
+
+def test_lastfm_api_key_never_reaches_an_exception_message(monkeypatch) -> None:
+    """``requests`` puts the full URL — key included — in every error it raises.
+
+    ``raise_for_status`` renders "… for url: https://…&api_key=…", and a
+    connection failure renders "… Max retries exceeded with url: /2.0/?…". Either
+    one escaping would put the credential into every traceback and crash report
+    downstream, so the client re-raises its own error ``from None``. The whole
+    formatted traceback is checked, not just the message, because ``from None``
+    is what stops the leaking original being chained into it.
+    """
+    import traceback
+
+    import requests
+    from pipeline.lastfm import LastfmRequestError
+
+    leaky_url = (
+        "https://ws.audioscrobbler.com/2.0/?method=artist.gettoptags"
+        f"&api_key={_LASTFM_CANARY}&format=json"
+    )
+    # What `raise_for_status` actually raises: a message carrying the URL, and a
+    # response to read the status off. The other three carry only the message.
+    forbidden = requests.HTTPError(f"403 Client Error: Forbidden for url: {leaky_url}")
+    forbidden.response = requests.Response()
+    forbidden.response.status_code = 403
+
+    failures = (
+        (forbidden, "HTTP 403"),
+        (requests.HTTPError(f"500 Server Error for url: {leaky_url}"), "HTTPError"),
+        (
+            requests.ConnectionError(f"Max retries exceeded with url: {leaky_url}"),
+            "ConnectionError",
+        ),
+        (requests.Timeout(f"Read timed out for url: {leaky_url}"), "Timeout"),
+    )
+    for failure, expected_detail in failures:
+        assert _LASTFM_CANARY in str(failure), "the canary failure must actually carry the key"
+
+        def responder(url, params, failure=failure):  # type: ignore[no-untyped-def]
+            raise failure
+
+        client, cache, _ = _live_lastfm_client(monkeypatch, responder)
+        try:
+            client.artist_tags("mitski")
+        except LastfmRequestError as exc:
+            rendered = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+            assert _LASTFM_CANARY not in rendered, (
+                f"API key survived into a rendered traceback: {rendered!r}"
+            )
+            # …and what is left is still enough to diagnose the failure with.
+            assert "artist.gettoptags" in str(exc)
+            assert expected_detail in str(exc)
+        else:
+            raise AssertionError(f"{type(failure).__name__} did not surface as LastfmRequestError")
+        finally:
+            cache.close()
+
+
 def test_cache_uses_only_stdlib_sqlite() -> None:
     cache_src = (Path(pipeline.__file__).parent / "cache.py").read_text(encoding="utf-8")
     assert "import sqlite3" in cache_src

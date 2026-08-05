@@ -9,16 +9,52 @@ Two implementations of :class:`ScrobbleSource`:
 * :class:`FixtureLastfm` — an offline, deterministic source built from a dict.
   Used by every test and by the dashboard's demo mode, so the whole system runs
   with no API key and no network.
+
+**The API key.** Last.fm authenticates a read request with an ``api_key`` query
+parameter — no header auth exists, and its docs reserve POST for write services
+— so the credential is unavoidably part of the request URL. Two places that URL
+must therefore never reach: the on-disk cache (see :meth:`LastfmClient.cache_key`)
+and an exception message (see :class:`LastfmRequestError`). Both are asserted by
+``tests/test_privacy.py``.
 """
 
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+import urllib.parse
+from collections.abc import Callable, Mapping
 from typing import Optional, Protocol, runtime_checkable
 
 from pipeline.cache import Cache
 from pipeline.models import Scrobble
+
+
+class LastfmRequestError(RuntimeError):
+    """A failed Last.fm request, rendered *without* the API key.
+
+    ``requests`` puts the fully-expanded request URL into the message of every
+    exception it raises — ``HTTPError`` from ``raise_for_status`` ("… for url:
+    https://…?…&api_key=…"), and ``ConnectionError``/``Timeout`` alike ("… Max
+    retries exceeded with url: /2.0/?…&api_key=…"). Since Last.fm's REST API
+    takes the key as a query parameter and offers no header auth, letting one of
+    those escape would put the credential into every traceback, crash report and
+    error log downstream of it.
+
+    So the live client catches them and re-raises this instead, ``from None`` so
+    the leaking original is not chained into the rendered traceback either.
+    """
+
+
+def redacted_failure_message(method: str, status: Optional[int], exc_name: str) -> str:
+    """The one message shape :class:`LastfmRequestError` is ever built from.
+
+    Deliberately assembled from three non-secret pieces — the API *method*, the
+    HTTP status if there was a response, and the ``requests`` exception class
+    name if there was not. Nothing derived from the request URL is admissible,
+    because the key rides in that URL.
+    """
+    detail = f"HTTP {status}" if status is not None else exc_name
+    return f"Last.fm request failed ({detail}) for method={method!r}"
 
 
 @runtime_checkable
@@ -122,21 +158,49 @@ class LastfmClient:  # pragma: no cover - live network path, verified via integr
         self.limiter = limiter or RateLimiter()
         self._now = now_fn
 
-    def _get(self, params: dict[str, str]) -> str:
-        import urllib.parse
+    def cache_key(self, params: Mapping[str, str]) -> str:
+        """The cache identity of a request — deliberately *without* the API key.
 
+        The key is a credential, not part of what makes two requests the same
+        request: the same method and arguments return the same response whoever
+        asks. Including it would have written the secret into the ``http_cache``
+        table in clear text, where it would outlive the process, the rotation of
+        the key, and any log the operator thought to scrub.
+
+        Changing the key shape invalidates rows an earlier build wrote; that is
+        the intended cost. Those rows simply miss and are re-fetched (or aged
+        out by ``wad refresh --ttl-days``).
+        """
+        query = urllib.parse.urlencode({**params, "format": "json"})
+        return f"{self.API_ROOT}?{query}"
+
+    def _get(self, params: dict[str, str]) -> str:
         import requests
 
-        query = urllib.parse.urlencode({**params, "api_key": self.api_key, "format": "json"})
-        url = f"{self.API_ROOT}?{query}"
-        cached = self.cache.get_cached_response(url)
+        key = self.cache_key(params)
+        cached = self.cache.get_cached_response(key)
         if cached is not None:
             return cached
         self.limiter.acquire()
-        resp = requests.get(url, timeout=15)
-        resp.raise_for_status()
-        body = resp.text
-        self.cache.put_cached_response(url, body, self._now())
+        # The key travels as a query parameter because that is what Last.fm's
+        # REST docs specify for a read service — there is no header auth, and
+        # POST is documented only for write services. It is handed to `requests`
+        # at call time and never interpolated into a string this module holds,
+        # stores, or renders; see `LastfmRequestError` for the other half.
+        try:
+            resp = requests.get(
+                self.API_ROOT,
+                params={**params, "api_key": self.api_key, "format": "json"},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            body = resp.text
+        except requests.RequestException as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            raise LastfmRequestError(
+                redacted_failure_message(params.get("method", "?"), status, type(exc).__name__)
+            ) from None
+        self.cache.put_cached_response(key, body, self._now())
         return body
 
     def recent_scrobbles(self, username: str, limit: int = 200) -> list[Scrobble]:

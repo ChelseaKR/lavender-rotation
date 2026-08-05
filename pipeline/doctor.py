@@ -30,13 +30,18 @@ from pipeline.cache import CACHE_SCHEMA_VERSION, Cache, CacheSchemaError
 from pipeline.paths import default_db_path, resolve_data_dir
 
 # Environment variables the pipeline reads. None are strictly required for
-# demo mode; WAD_LASTFM_API_KEY enables live ingest, the WAD_SPOTIFY_* trio
-# enables playlist export. Report presence only — never the value.
+# demo mode; WAD_LASTFM_API_KEY enables live ingest, and the WAD_SPOTIFY_* /
+# WAD_TIDAL_* sets each enable one playlist-export provider. A new exporter
+# belongs here so `wad doctor` can tell the operator what is configured.
+# Report presence only — never the value.
 ENV_KEYS: tuple[str, ...] = (
     "WAD_LASTFM_API_KEY",
     "WAD_SPOTIFY_CLIENT_ID",
     "WAD_SPOTIFY_CLIENT_SECRET",
     "WAD_SPOTIFY_REDIRECT_URI",
+    "WAD_TIDAL_CLIENT_ID",
+    "WAD_TIDAL_CLIENT_SECRET",
+    "WAD_TIDAL_REDIRECT_URI",
 )
 
 # (human label, host) — used only by the opt-in upstream reachability check.
