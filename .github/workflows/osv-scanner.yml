@@ -10,6 +10,10 @@ on:
     paths: ["uv.lock", "pyproject.toml"]
   schedule:
     - cron: "23 4 * * 1"  # weekly, Monday
+  # On demand, so this gate can be exercised without waiting for Monday or
+  # touching a lockfile. Its absence is why the startup failure below went a
+  # week without anyone being able to test a fix.
+  workflow_dispatch:
 
 permissions:
   contents: read
