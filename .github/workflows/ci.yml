@@ -2,9 +2,10 @@ name: ci
 
 # Mirrors QUALITY-AND-METRICS-STANDARD §"enforcement pipeline". Every stage is
 # blocking; a merge to main requires Python 3.12 and 3.13 green (branch
-# protection, no admin bypass — see docs/audits/branch-ruleset.json for the
-# target ruleset). The full supported-version matrix runs weekly and on demand
-# instead of four more times after every merge.
+# protection — see docs/audits/branch-ruleset.json for the target ruleset).
+# 3.12 and 3.13 are the whole supported set (ADR 0004, requires-python
+# ">=3.12"), so the weekly and on-demand runs cover exactly the same two
+# runtimes the PR gate does; there is no wider compatibility matrix to schedule.
 # `make verify` runs the exact same stages locally — CI just invokes that one
 # target instead of re-listing its steps, so the two cannot drift (CICD-27).
 
@@ -28,11 +29,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Floor is >=3.12 (ADR 0004); 3.9 (EOL 2025-10-31) and the 3.10/3.11 era are history.
-        # Branch protection requires the two current runtimes on PRs. Older
-        # supported runtimes are compatibility coverage, not duplicate merge
-        # gates, and therefore run on the weekly/manual matrix.
-        python-version: ${{ github.event_name == 'pull_request' && fromJSON('["3.12", "3.13"]') || fromJSON('["3.12", "3.13"]') }}
+        # Floor is >=3.12 (ADR 0004); 3.9 (EOL 2025-10-31) and the 3.10/3.11 era are history,
+        # which leaves 3.12 and 3.13 as the complete supported set. Both are
+        # required status checks ("verify (3.12)", "verify (3.13)") — renaming
+        # or reshaping this list changes those context names and silently
+        # detaches the ruleset, so keep it a plain literal.
+        #
+        # This was a `github.event_name == 'pull_request' && A || B` expression
+        # whose two branches were the identical ["3.12", "3.13"], left over from
+        # the pre-#51 era when the floor was 3.9 and a wider compatibility
+        # matrix existed to defer to the weekly run. It selected nothing, while
+        # reading as though scheduled runs covered more runtimes than PRs did.
+        python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
