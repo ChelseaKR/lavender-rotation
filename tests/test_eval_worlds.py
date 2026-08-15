@@ -127,7 +127,11 @@ def test_compare_lift_is_one_when_both_zero() -> None:
     )
     comparison = compare({"hybrid": zero, "popularity": zero})
     assert comparison.lift == 1.0
-    assert comparison.hybrid_beats_popularity is True  # tie on map, tie on recall
+    # A draw is not a win. Two models scoring an identical 0.0 on every metric
+    # used to return True here, which made "the offline eval must beat the
+    # popularity baseline" (README) a gate that a total tie satisfied.
+    assert comparison.hybrid_beats_popularity is False
+    assert comparison.verdict == "popularity"
 
 
 def test_evaluate_worlds_aggregate_can_lose(demo_user) -> None:
@@ -209,3 +213,117 @@ def test_eval_real_returns_only_a_summary_never_raw_plays(
         "verdict",
         "models",
     }
+
+
+# --- #82: a metric that cannot fail is not a measurement ---------------------
+
+
+def test_recall_is_marked_non_discriminating_when_k_covers_the_whole_pool() -> None:
+    """With k >= pool size the top-k is the pool, so recall is the same for any order.
+
+    The check is deliberately behavioural rather than a bare flag assertion: it
+    scores a perfect ranking and its exact reverse and shows they tie.
+    """
+    from recommender.eval import _score
+
+    positives = {"a", "c"}
+    best = ["a", "c", "b", "d"]
+    worst = list(reversed(best))
+
+    perfect = _score("perfect", best, positives, k=5)
+    reversed_ = _score("reversed", worst, positives, k=5)
+
+    assert perfect.recall_at_k == reversed_.recall_at_k == 1.0
+    assert perfect.recall_discriminates is False
+    assert reversed_.recall_discriminates is False
+    # MAP still separates them, which is why it is the metric the verdict uses.
+    assert perfect.map_at_k > reversed_.map_at_k
+
+
+def test_recall_discriminates_once_k_is_below_the_pool() -> None:
+    from recommender.eval import _score
+
+    positives = {"a", "c"}
+    best = ["a", "c", "b", "d"]
+    worst = list(reversed(best))
+
+    perfect = _score("perfect", best, positives, k=2)
+    reversed_ = _score("reversed", worst, positives, k=2)
+
+    assert perfect.recall_discriminates is True
+    assert perfect.recall_at_k > reversed_.recall_at_k
+
+
+def test_mean_recall_delta_excludes_the_worlds_where_recall_could_not_vary() -> None:
+    """The headline number must not be one world's value divided by five.
+
+    Before this, four of the five shipped worlds had a four-candidate pool at
+    k=5, contributed a structurally-pinned recall_delta of 0.0, and turned
+    demo-tuned-indie's 0.5 into a reported `mean_recall_delta: 0.1`.
+    """
+    report = evaluate_worlds(k=5)
+
+    pinned = report["recall_pinned_worlds"]
+    n_discriminating = report["n_worlds_recall_discriminating"]
+    assert n_discriminating == report["n_worlds"] - len(pinned)
+
+    contributing = [
+        w["recall_delta"] for w in report["worlds"].values() if w["recall_discriminates"]
+    ]
+    assert len(contributing) == n_discriminating
+    if contributing:
+        expected = round(sum(contributing) / len(contributing), 4)
+        assert report["mean_recall_delta"] == expected
+    else:
+        assert report["mean_recall_delta"] is None
+
+
+def test_the_denominator_travels_with_the_headline_recall_number() -> None:
+    """A caveat that stays in a docstring is not a caveat on the number."""
+    report = evaluate_worlds(k=5)
+    if report["recall_pinned_worlds"]:
+        assert "recall_caveat" in report
+        assert "n_worlds_recall_discriminating" in report
+        for name in report["recall_pinned_worlds"]:
+            assert name in report["recall_caveat"]
+            assert report["worlds"][name]["recall_discriminates"] is False
+            assert "recall_note" in report["worlds"][name]
+
+
+def test_a_world_where_recall_can_vary_carries_no_pinned_note() -> None:
+    report = evaluate_worlds(k=5)
+    discriminating = {name for name, w in report["worlds"].items() if w["recall_discriminates"]}
+    assert discriminating, "at least one world must be able to measure recall"
+    for name in discriminating:
+        assert "recall_note" not in report["worlds"][name]
+
+
+def test_an_exact_draw_across_every_world_does_not_pass_the_gate() -> None:
+    """The aggregate rule used to accept `map_delta == 0 and recall_delta >= 0`.
+
+    A world where the hybrid and the baseline return identical rankings hits
+    that clause exactly, and the multiworld gate reported verdict "hybrid".
+    """
+    tied = _tied_world()
+    report = evaluate_worlds({"tied": tied}, k=5)
+    assert report["mean_map_delta"] == 0.0
+    assert report["hybrid_beats_popularity"] is False
+    assert report["verdict"] == "popularity"
+
+
+def _tied_world():
+    """A world with one candidate, so every ranker returns the same list."""
+
+    def build():
+        catalog = {
+            "seed": Artist(artist_id="seed", name="Seed", tags=("t",), listeners=100),
+            "only": Artist(artist_id="only", name="Only", tags=("t",), listeners=50),
+        }
+        scrobbles = [Scrobble("seed", "Seed", "s1", 1_700_000_000 + i * 3600) for i in range(7)]
+        scrobbles += [Scrobble("only", "Only", "o1", 1_700_100_000 + i * 3600) for i in range(3)]
+        source = FixtureLastfm(
+            scrobbles={"u": scrobbles}, tags={"seed": ("t",), "only": ("t",)}, similar={}
+        )
+        return "u", scrobbles, catalog, source
+
+    return build

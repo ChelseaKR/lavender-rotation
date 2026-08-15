@@ -180,6 +180,22 @@ tag, not backfilled to an earlier commit date.
   lens keeps boosting such bands by intersecting its own aligned set with the sourced front
   genders, so no artist loses exposure to the fix. `tests/test_front_person_labels.py` asserts
   the absence of the harm across every surface `recommender/why.py` feeds.
+- `mean_recall_delta` in the multiworld eval report was one world's number divided by five.
+  Four of the five fixture worlds have a four-candidate rankable pool at the default `k=5`, so
+  the top-k is the entire pool for every possible ordering and `recall_at_k` is 1.0 for any
+  ranker — a perfect one, a random one, a reversed one — including the popularity baseline.
+  Those four contributed a structurally-pinned `recall_delta` of 0.0, turning
+  demo-tuned-indie's measured 0.5 into a published headline of 0.1. Recall is now reported
+  per world with `recall_discriminates` and a note naming the pool size, `mean_recall_delta`
+  averages only the worlds where recall could vary, and
+  `n_worlds_recall_discriminating` sits next to it so the denominator is never implicit.
+  The report's own caveat told readers to trust the aggregate over any single world; the
+  aggregate's recall signal came from that single world.
+- The eval verdict accepted a draw. `hybrid_beats_popularity` was true when MAP@k tied and
+  recall was merely not worse — a condition an exact tie on every metric in every world
+  satisfies, and one the recall half of which was pinned true anyway in the four worlds above.
+  Both the per-world and aggregate rules now require a strict MAP@k improvement, which is what
+  README's merge-blocking "the offline eval must beat the popularity baseline" says.
 - OpenSSF Scorecard workflow comments now describe the repository's current
   public publishing path instead of its superseded restricted-publication
   posture.

@@ -8,7 +8,9 @@
       "precision_at_k": 0.6,
       "recall_at_k": 0.75,
       "map_at_k": 0.6875,
-      "n_positives": 4
+      "n_positives": 4,
+      "n_ranked": 11,
+      "recall_discriminates": true
     },
     "popularity": {
       "model": "popularity",
@@ -16,7 +18,9 @@
       "precision_at_k": 0.2,
       "recall_at_k": 0.25,
       "map_at_k": 0.0833,
-      "n_positives": 4
+      "n_positives": 4,
+      "n_ranked": 11,
+      "recall_discriminates": true
     },
     "hybrid_decay": {
       "model": "hybrid_decay",
@@ -24,7 +28,9 @@
       "precision_at_k": 0.6,
       "recall_at_k": 0.75,
       "map_at_k": 0.6875,
-      "n_positives": 4
+      "n_positives": 4,
+      "n_ranked": 11,
+      "recall_discriminates": true
     }
   },
   "map_delta": 0.6042,
@@ -32,6 +38,7 @@
   "lift": 8.2533,
   "hybrid_beats_popularity": true,
   "verdict": "hybrid",
+  "recall_discriminates": true,
   "decay_map_at_k_delta": 0.0,
   "decay_improves_map_at_k": false,
   "multiworld": {
@@ -40,7 +47,14 @@
     "n_worlds": 5,
     "worlds_hybrid_wins": 5,
     "mean_map_delta": 0.5375,
-    "mean_recall_delta": 0.1,
+    "mean_recall_delta": 0.5,
+    "n_worlds_recall_discriminating": 1,
+    "recall_pinned_worlds": [
+      "sparse-tags",
+      "popularity-skewed",
+      "no-collaborative-signal",
+      "adversarial-near-misses"
+    ],
     "hybrid_beats_popularity": true,
     "verdict": "hybrid",
     "worlds": {
@@ -54,7 +68,9 @@
             "precision_at_k": 0.6,
             "recall_at_k": 0.75,
             "map_at_k": 0.6875,
-            "n_positives": 4
+            "n_positives": 4,
+            "n_ranked": 11,
+            "recall_discriminates": true
           },
           "popularity": {
             "model": "popularity",
@@ -62,7 +78,9 @@
             "precision_at_k": 0.2,
             "recall_at_k": 0.25,
             "map_at_k": 0.0833,
-            "n_positives": 4
+            "n_positives": 4,
+            "n_ranked": 11,
+            "recall_discriminates": true
           },
           "hybrid_decay": {
             "model": "hybrid_decay",
@@ -70,7 +88,9 @@
             "precision_at_k": 0.6,
             "recall_at_k": 0.75,
             "map_at_k": 0.6875,
-            "n_positives": 4
+            "n_positives": 4,
+            "n_ranked": 11,
+            "recall_discriminates": true
           }
         },
         "map_delta": 0.6042,
@@ -78,6 +98,7 @@
         "lift": 8.2533,
         "hybrid_beats_popularity": true,
         "verdict": "hybrid",
+        "recall_discriminates": true,
         "decay_map_at_k_delta": 0.0,
         "decay_improves_map_at_k": false
       },
@@ -91,7 +112,9 @@
             "precision_at_k": 0.5,
             "recall_at_k": 1.0,
             "map_at_k": 1.0,
-            "n_positives": 2
+            "n_positives": 2,
+            "n_ranked": 4,
+            "recall_discriminates": false
           },
           "popularity": {
             "model": "popularity",
@@ -99,7 +122,9 @@
             "precision_at_k": 0.5,
             "recall_at_k": 1.0,
             "map_at_k": 0.4167,
-            "n_positives": 2
+            "n_positives": 2,
+            "n_ranked": 4,
+            "recall_discriminates": false
           },
           "hybrid_decay": {
             "model": "hybrid_decay",
@@ -107,7 +132,9 @@
             "precision_at_k": 0.5,
             "recall_at_k": 1.0,
             "map_at_k": 1.0,
-            "n_positives": 2
+            "n_positives": 2,
+            "n_ranked": 4,
+            "recall_discriminates": false
           }
         },
         "map_delta": 0.5833,
@@ -115,6 +142,8 @@
         "lift": 2.3998,
         "hybrid_beats_popularity": true,
         "verdict": "hybrid",
+        "recall_discriminates": false,
+        "recall_note": "k=5 is not smaller than the rankable pool (4 candidates), so the top-k is the whole pool for every possible ordering and recall_at_k takes this value for any ranker, including a random or reversed one. recall_delta is pinned at 0.0 here by the fixture's size, not by the models performing equally. It is excluded from mean_recall_delta.",
         "decay_map_at_k_delta": 0.0,
         "decay_improves_map_at_k": false
       },
@@ -128,7 +157,9 @@
             "precision_at_k": 0.5,
             "recall_at_k": 1.0,
             "map_at_k": 1.0,
-            "n_positives": 2
+            "n_positives": 2,
+            "n_ranked": 4,
+            "recall_discriminates": false
           },
           "popularity": {
             "model": "popularity",
@@ -136,7 +167,9 @@
             "precision_at_k": 0.5,
             "recall_at_k": 1.0,
             "map_at_k": 0.4167,
-            "n_positives": 2
+            "n_positives": 2,
+            "n_ranked": 4,
+            "recall_discriminates": false
           },
           "hybrid_decay": {
             "model": "hybrid_decay",
@@ -144,7 +177,9 @@
             "precision_at_k": 0.5,
             "recall_at_k": 1.0,
             "map_at_k": 1.0,
-            "n_positives": 2
+            "n_positives": 2,
+            "n_ranked": 4,
+            "recall_discriminates": false
           }
         },
         "map_delta": 0.5833,
@@ -152,6 +187,8 @@
         "lift": 2.3998,
         "hybrid_beats_popularity": true,
         "verdict": "hybrid",
+        "recall_discriminates": false,
+        "recall_note": "k=5 is not smaller than the rankable pool (4 candidates), so the top-k is the whole pool for every possible ordering and recall_at_k takes this value for any ranker, including a random or reversed one. recall_delta is pinned at 0.0 here by the fixture's size, not by the models performing equally. It is excluded from mean_recall_delta.",
         "decay_map_at_k_delta": 0.0,
         "decay_improves_map_at_k": false
       },
@@ -165,7 +202,9 @@
             "precision_at_k": 0.5,
             "recall_at_k": 1.0,
             "map_at_k": 1.0,
-            "n_positives": 2
+            "n_positives": 2,
+            "n_ranked": 4,
+            "recall_discriminates": false
           },
           "popularity": {
             "model": "popularity",
@@ -173,7 +212,9 @@
             "precision_at_k": 0.5,
             "recall_at_k": 1.0,
             "map_at_k": 0.4167,
-            "n_positives": 2
+            "n_positives": 2,
+            "n_ranked": 4,
+            "recall_discriminates": false
           },
           "hybrid_decay": {
             "model": "hybrid_decay",
@@ -181,7 +222,9 @@
             "precision_at_k": 0.5,
             "recall_at_k": 1.0,
             "map_at_k": 1.0,
-            "n_positives": 2
+            "n_positives": 2,
+            "n_ranked": 4,
+            "recall_discriminates": false
           }
         },
         "map_delta": 0.5833,
@@ -189,6 +232,8 @@
         "lift": 2.3998,
         "hybrid_beats_popularity": true,
         "verdict": "hybrid",
+        "recall_discriminates": false,
+        "recall_note": "k=5 is not smaller than the rankable pool (4 candidates), so the top-k is the whole pool for every possible ordering and recall_at_k takes this value for any ranker, including a random or reversed one. recall_delta is pinned at 0.0 here by the fixture's size, not by the models performing equally. It is excluded from mean_recall_delta.",
         "decay_map_at_k_delta": 0.0,
         "decay_improves_map_at_k": false
       },
@@ -202,7 +247,9 @@
             "precision_at_k": 0.5,
             "recall_at_k": 1.0,
             "map_at_k": 0.75,
-            "n_positives": 2
+            "n_positives": 2,
+            "n_ranked": 4,
+            "recall_discriminates": false
           },
           "popularity": {
             "model": "popularity",
@@ -210,7 +257,9 @@
             "precision_at_k": 0.5,
             "recall_at_k": 1.0,
             "map_at_k": 0.4167,
-            "n_positives": 2
+            "n_positives": 2,
+            "n_ranked": 4,
+            "recall_discriminates": false
           },
           "hybrid_decay": {
             "model": "hybrid_decay",
@@ -218,7 +267,9 @@
             "precision_at_k": 0.5,
             "recall_at_k": 1.0,
             "map_at_k": 0.75,
-            "n_positives": 2
+            "n_positives": 2,
+            "n_ranked": 4,
+            "recall_discriminates": false
           }
         },
         "map_delta": 0.3333,
@@ -226,11 +277,14 @@
         "lift": 1.7999,
         "hybrid_beats_popularity": true,
         "verdict": "hybrid",
+        "recall_discriminates": false,
+        "recall_note": "k=5 is not smaller than the rankable pool (4 candidates), so the top-k is the whole pool for every possible ordering and recall_at_k takes this value for any ranker, including a random or reversed one. recall_delta is pinned at 0.0 here by the fixture's size, not by the models performing equally. It is excluded from mean_recall_delta.",
         "decay_map_at_k_delta": 0.0,
         "decay_improves_map_at_k": false
       }
     },
-    "caveats": "One world in this report ('demo-tuned-indie', from pipeline.demo) is hand-tuned so the hybrid recovers its held-out discoveries \u2014 see that module's docstring. It is included, and labelled, deliberately: hiding it would be worse than disclosing it. The other worlds (sparse-tags, popularity-skewed, no-collaborative-signal, adversarial-near-misses; see pipeline/fixtures.py) are independent synthetic fixtures NOT tuned to make the hybrid win. Treat the aggregate across all worlds \u2014 not any single world, and especially not 'demo-tuned-indie' alone \u2014 as the evidence. Even the aggregate is still synthetic data; the only fully de-circularized signal is the separate, human-gated real-data leg (eval_real / `make eval-real`), which is intentionally excluded from CI. See docs/ideation/02-large-scale-fixes.md FIX-06."
+    "caveats": "One world in this report ('demo-tuned-indie', from pipeline.demo) is hand-tuned so the hybrid recovers its held-out discoveries \u2014 see that module's docstring. It is included, and labelled, deliberately: hiding it would be worse than disclosing it. The other worlds (sparse-tags, popularity-skewed, no-collaborative-signal, adversarial-near-misses; see pipeline/fixtures.py) are independent synthetic fixtures NOT tuned to make the hybrid win. Treat the aggregate across all worlds \u2014 not any single world, and especially not 'demo-tuned-indie' alone \u2014 as the evidence. Even the aggregate is still synthetic data; the only fully de-circularized signal is the separate, human-gated real-data leg (eval_real / `make eval-real`), which is intentionally excluded from CI. See docs/ideation/02-large-scale-fixes.md FIX-06.",
+    "recall_caveat": "recall_at_k could not discriminate in 4 of 5 worlds (sparse-tags, popularity-skewed, no-collaborative-signal, adversarial-near-misses): k=5 is not smaller than those worlds' rankable pools, so every ranker scores the same recall there. mean_recall_delta is the mean over the 1 world(s) where recall could vary, not over all 5. Widen those fixtures' candidate pools past k, or lower k, if recall is meant to be evidence across worlds rather than in one."
   },
   "fairness": {
     "k": 5,

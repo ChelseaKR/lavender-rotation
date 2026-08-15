@@ -50,6 +50,16 @@ class EvalResult:
     recall_at_k: float
     map_at_k: float
     n_positives: int
+    #: How many candidates this model actually had to rank. Recorded because
+    #: ``recall_at_k`` is only a measurement of the *ranking* when there is
+    #: something to rank away: see :attr:`recall_discriminates`.
+    n_ranked: int = 0
+    #: False when ``k >= n_ranked`` — the top-k is then the entire rankable
+    #: pool for *every* possible ordering, so ``recall_at_k`` takes the same
+    #: value for a perfect ranker, a random one and a reversed one. The number
+    #: is still reported (it is not wrong), but it describes the pool, not the
+    #: model, and must not be averaged as though it discriminated.
+    recall_discriminates: bool = True
 
 
 def temporal_split(
@@ -103,6 +113,8 @@ def _score(model: str, ranked_ids: list[str], positives: set[str], k: int) -> Ev
         recall_at_k=round(recall, 4),
         map_at_k=round(average_precision_at_k(ranked_ids, positives, k), 4),
         n_positives=len(positives),
+        n_ranked=len(ranked_ids),
+        recall_discriminates=k < len(ranked_ids),
     )
 
 
@@ -240,6 +252,11 @@ class EvalComparison:
     lift: Optional[float]
     hybrid_beats_popularity: bool
     verdict: str
+    #: True only when ``k`` was smaller than the rankable pool for *both*
+    #: models, i.e. ``recall_delta`` could have come out non-zero. When False,
+    #: ``recall_delta`` is structurally pinned at 0.0 and carries no signal
+    #: about either model.
+    recall_discriminates: bool = True
 
 
 def compare(results: dict[str, EvalResult]) -> EvalComparison:
@@ -255,9 +272,14 @@ def compare(results: dict[str, EvalResult]) -> EvalComparison:
         lift = None  # baseline scored zero MAP — the ratio is unbounded/undefined
     else:
         lift = 1.0  # both zero: no measurable difference
-    beats = hybrid.map_at_k > popularity.map_at_k or (
-        hybrid.map_at_k == popularity.map_at_k and hybrid.recall_at_k >= popularity.recall_at_k
-    )
+    # A strict improvement in MAP@k. The previous rule also accepted
+    # `map_at_k == popularity.map_at_k and recall_at_k >= popularity.recall_at_k`,
+    # so two models scoring an identical 0.0 on everything returned
+    # `hybrid_beats_popularity: True` and verdict "hybrid". README describes this
+    # as the merge-blocking gate "the offline eval must beat the popularity
+    # baseline"; a draw is not a win, and in the worlds where k exceeds the
+    # rankable pool the recall half of that disjunction was pinned true anyway.
+    beats = hybrid.map_at_k > popularity.map_at_k
     return EvalComparison(
         k=hybrid.k,
         n_positives=hybrid.n_positives,
@@ -268,6 +290,7 @@ def compare(results: dict[str, EvalResult]) -> EvalComparison:
         lift=lift,
         hybrid_beats_popularity=beats,
         verdict="hybrid" if beats else "popularity",
+        recall_discriminates=hybrid.recall_discriminates and popularity.recall_discriminates,
     )
 
 
@@ -287,7 +310,17 @@ def to_report(results: dict[str, EvalResult]) -> dict[str, object]:
         "lift": comparison.lift,
         "hybrid_beats_popularity": comparison.hybrid_beats_popularity,  # back-compat
         "verdict": comparison.verdict,
+        "recall_discriminates": comparison.recall_discriminates,
     }
+    if not comparison.recall_discriminates:
+        report["recall_note"] = (
+            f"k={comparison.k} is not smaller than the rankable pool "
+            f"({comparison.hybrid.n_ranked} candidates), so the top-k is the whole pool for "
+            "every possible ordering and recall_at_k takes this value for any ranker, "
+            "including a random or reversed one. recall_delta is pinned at 0.0 here by the "
+            "fixture's size, not by the models performing equally. It is excluded from "
+            "mean_recall_delta."
+        )
     decay = results.get("hybrid_decay")
     if decay is not None:
         report["decay_map_at_k_delta"] = round(decay.map_at_k - comparison.hybrid.map_at_k, 4)
@@ -335,7 +368,11 @@ def evaluate_worlds(
     per_world: dict[str, dict[str, object]] = {}
     wins = 0
     map_deltas: list[float] = []
+    #: Only the worlds where recall could have come out differently. Averaging a
+    #: structurally-pinned 0.0 in with a measured value silently divides the one
+    #: real number by the count of worlds that could not contribute one.
     recall_deltas: list[float] = []
+    recall_pinned_worlds: list[str] = []
     for name, build in worlds.items():
         username, scrobbles, catalog, source = build()
         results = evaluate(username, scrobbles, catalog, source, k=k, train_frac=train_frac)
@@ -344,27 +381,50 @@ def evaluate_worlds(
         if report["hybrid_beats_popularity"]:
             wins += 1
         map_deltas.append(float(report["map_delta"]))  # type: ignore[arg-type]
-        recall_deltas.append(float(report["recall_delta"]))  # type: ignore[arg-type]
+        if report["recall_discriminates"]:
+            recall_deltas.append(float(report["recall_delta"]))  # type: ignore[arg-type]
+        else:
+            recall_pinned_worlds.append(name)
 
     n_worlds = len(per_world)
+    n_recall_worlds = len(recall_deltas)
     mean_map_delta = round(sum(map_deltas) / n_worlds, 4) if n_worlds else 0.0
-    mean_recall_delta = round(sum(recall_deltas) / n_worlds, 4) if n_worlds else 0.0
-    # Aggregate verdict mirrors the single-world rule, applied to the mean effect
-    # size across all worlds rather than to any one world's numbers.
-    aggregate_beats = mean_map_delta > 0 or (mean_map_delta == 0 and mean_recall_delta >= 0)
+    mean_recall_delta = round(sum(recall_deltas) / n_recall_worlds, 4) if n_recall_worlds else None
+    # Aggregate verdict: a strict improvement in mean MAP@k. The previous rule
+    # also accepted `mean_map_delta == 0 and mean_recall_delta >= 0`, which an
+    # exact tie on every metric in every world satisfies — so a draw returned
+    # verdict "hybrid" and passed the gate README describes as "the offline eval
+    # must beat the popularity baseline". Beating something requires winning.
+    aggregate_beats = mean_map_delta > 0
 
-    return {
+    aggregate: dict[str, object] = {
         "k": k,
         "train_frac": train_frac,
         "n_worlds": n_worlds,
         "worlds_hybrid_wins": wins,
         "mean_map_delta": mean_map_delta,
         "mean_recall_delta": mean_recall_delta,
+        # Named next to the mean so the denominator is never implicit. When this
+        # is smaller than n_worlds, the headline recall figure is an average over
+        # a subset and says so.
+        "n_worlds_recall_discriminating": n_recall_worlds,
+        "recall_pinned_worlds": recall_pinned_worlds,
         "hybrid_beats_popularity": aggregate_beats,
         "verdict": "hybrid" if aggregate_beats else "popularity",
         "worlds": per_world,
         "caveats": DEMO_WORLD_TUNING_CAVEAT,
     }
+    if recall_pinned_worlds:
+        aggregate["recall_caveat"] = (
+            f"recall_at_k could not discriminate in {len(recall_pinned_worlds)} of {n_worlds} "
+            f"worlds ({', '.join(recall_pinned_worlds)}): k={k} is not smaller than those "
+            "worlds' rankable pools, so every ranker scores the same recall there. "
+            f"mean_recall_delta is the mean over the {n_recall_worlds} world(s) where recall "
+            "could vary, not over all "
+            f"{n_worlds}. Widen those fixtures' candidate pools past k, or lower k, if recall "
+            "is meant to be evidence across worlds rather than in one."
+        )
+    return aggregate
 
 
 def eval_real(
