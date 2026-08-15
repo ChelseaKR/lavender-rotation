@@ -206,9 +206,14 @@ def resolve_identity(evidence: Sequence[IdentityEvidence]) -> IdentityLabel:
     """Resolve an individual's identity from permitted evidence only.
 
     Returns :data:`~pipeline.models.UNKNOWN_IDENTITY` when no permitted evidence
-    yields a mappable gender. Never raises on unknown input — unknown is a normal,
-    first-class answer.
+    yields a mappable gender. Never raises on *unknown* input — unknown is a
+    normal, first-class answer. It does raise
+    :class:`~pipeline.models.InferenceForbiddenError` on *non-permitted* input:
+    :func:`assert_permitted_only` runs first, so a source kind that is not in
+    the permitted sets fails loudly here rather than being silently skipped by
+    the filter below.
     """
+    assert_permitted_only(evidence)
     # Keep only individual-identity sources that map to a known gender. A
     # band-composition source contributes nothing to a *personal* gender claim.
     mapped: list[tuple[IdentityEvidence, Gender]] = []
@@ -273,8 +278,11 @@ def resolve_composition(
     ``fronts`` are the sourced front-people (each with their own resolved,
     possibly-unknown identity). ``evidence`` must be band-composition sources.
     Returns ``None`` when there is no sourced lineup — composition, like
-    identity, defaults to unknown rather than to a guess.
+    identity, defaults to unknown rather than to a guess. Raises
+    :class:`~pipeline.models.InferenceForbiddenError` on non-permitted evidence,
+    for the same reason :func:`resolve_identity` does.
     """
+    assert_permitted_only(evidence)
     comp_sources = tuple(ev.as_source() for ev in evidence if ev.kind in BAND_COMPOSITION_SOURCES)
     if not comp_sources or not fronts:
         return None
@@ -282,10 +290,20 @@ def resolve_composition(
 
 
 def assert_permitted_only(evidence: Sequence[IdentityEvidence]) -> None:
-    """Defensive guard: raise if any evidence carries a non-permitted kind.
+    """Raise if any evidence carries a non-permitted kind. **On the running path.**
 
-    Evidence is normally rejected earlier (at :class:`Source` construction); this
-    gives callers an explicit, early, intention-revealing check.
+    Called at the top of :func:`resolve_identity` and :func:`resolve_composition`
+    — the two entry points where untrusted evidence becomes a label — so this is
+    a guard that executes, not one that documents an intention. Until #72 it had
+    no caller outside its own test, which meant its test proved the ``if``
+    worked rather than that anything was being guarded.
+
+    Evidence is *normally* rejected earlier, at :class:`Source` construction, so
+    with today's closed :class:`~pipeline.models.SourceKind` enum this cannot
+    fire. That is exactly what it is for: if a future ``SourceKind`` member is
+    added without being added to a permitted set, the resolver's filter would
+    silently skip it and return ``UNKNOWN``. This turns that silence into a
+    raise.
     """
     for ev in evidence:
         if ev.kind not in (INDIVIDUAL_IDENTITY_SOURCES | BAND_COMPOSITION_SOURCES):

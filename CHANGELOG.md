@@ -110,6 +110,20 @@ tag, not backfilled to an earlier commit date.
   registry stay free-form, which was the original reason for the exemption.
 - The demo-citation gate walked individual identity and band composition but not the front-person
   identities nested inside composition, reaching one level short of the data it covers.
+- The no-inference AST scan now covers the code that could infer (#72). It walked a hardcoded list
+  of four function names in one file; `pipeline/identity.py` defines seven, nothing asserted the
+  list covered the module, and a helper mapping genre tags to a gender — called from
+  `resolve_identity`'s unknown fallback — passed it. The scan now walks every `def` **and
+  `async def`** in every `pipeline/*.py` module, with no allowlist to fall off. Functions that
+  legitimately handle content tags are named in `TAG_HANDLING_EXEMPTIONS` with a reason (a stale
+  entry fails, so a hole cannot be pre-drilled) and are held to a stricter taint check: no value
+  derived from a forbidden read may reach an identity constructor. The scan is extracted so it can
+  be pointed at a synthetic bypass module and asserted to **fail** — a guard never shown failing is
+  not evidence. `recommender/`, `app/`, and `export/` are now asserted to construct no identity
+  objects, so an inference path cannot be introduced by relocating it. And
+  `pipeline.identity.assert_permitted_only`, which had no caller outside its own test, is now
+  invoked at the top of `resolve_identity` and `resolve_composition`, with a test proving it fires
+  on the running path rather than only that its `if` works.
 - The values lens's published harms note and the ranking now agree (#68). The note is rendered to
   the reader and promised that anyone unaligned was "never down-ranked, never treated worse than
   an unknown-identity artist"; the re-rank pinned only *unknown* slots, so an artist sourced as
