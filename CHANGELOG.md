@@ -110,6 +110,23 @@ tag, not backfilled to an earlier commit date.
   registry stay free-form, which was the original reason for the exemption.
 - The demo-citation gate walked individual identity and band composition but not the front-person
   identities nested inside composition, reaching one level short of the data it covers.
+- The committed `docs/audits/dashboard.html` is gated against the renderer (#71). It is a
+  publicly browsable deliverable that nothing regenerated and nothing checked: `make a11y` ran
+  `python -m app.build_static`, which **overwrote** the file and then audited the fresh copy, so
+  the gate destroyed the evidence before looking, and `tests/test_e2e_a11y.py` builds into a
+  tmpdir. On `main` the page still displayed three MusicBrainz citations that locate no record and
+  their matching `/edit` links — the exact defect PR #66 fixed, on public display months later.
+  `tests/test_committed_render.py` now asserts byte-equality with a fresh render (stage 3, before
+  the a11y stage can overwrite anything), that the render is deterministic, and that every citation
+  displayed locates a record; both new assertions were verified to fail against `main`'s copy.
+  Regeneration moved out of `make a11y` into an explicit `make render` (also wired into
+  `make audit`).
+- Narrowed `[tool.coverage.run] omit` from `app/*` to `app/dashboard.py` (#71's related finding).
+  The old justification — "Streamlit UI — verified via a11y + manual walkthrough" — held for
+  neither: the a11y spec excludes the Streamlit dashboard in its own words and the walkthrough is
+  still pending. It also hid three modules that are ordinary logic and measure 82–100%. Total
+  coverage is unchanged at 97%; `app/dashboard.py`'s 0% is now recorded as an open gap in
+  `docs/audits/accessibility-2026-07-17.md` instead of described as verified.
 - `wad refresh` no longer deletes a filed pending correction when nothing upstream changed (#70).
   `corrections.reconcile` matched on `(artist_id, source_kind)` alone and never read
   `proposed_value`, while `ingest._diff_sources` emits a change when *either* the asserted value or

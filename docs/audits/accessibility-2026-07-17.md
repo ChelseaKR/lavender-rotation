@@ -3,7 +3,7 @@
 > Instantiates RESPONSIBLE-TECH-AUDITS §E (WCAG 2.2 AA). Supersedes
 > `accessibility-2026-07-09.md` for the automated gate; the manual walkthrough
 > section below remains **pending** and carries over unchanged.
-> **Last verified: 2026-07-17 · Recheck cadence: per UI change / WCAG revision.**
+> **Last verified: 2026-08-14 · Recheck cadence: per UI change / WCAG revision.**
 
 ## What changed since 2026-07-09
 
@@ -53,7 +53,29 @@ Tab-focusing (verified behaviourally), and long citation URLs wrap
   an automated floor, but the human pass remains required.
 - **Lighthouse CI** — not wired; recorded here rather than claimed.
 - **The Streamlit dashboard** — stock components; status belongs in
-  `docs/a11y/STATEMENT.md` alongside the M5 walkthrough.
+  `docs/a11y/STATEMENT.md` alongside the M5 walkthrough. That file does not
+  exist yet — this is a forward reference to where the status will live, not a
+  link to an audit that has been done. `app/dashboard.py` is also the one module
+  still in `[tool.coverage.run] omit`: 0% covered, verified by neither the a11y
+  gate (which this section excludes it from) nor the walkthrough (still pending
+  above). Recorded as an open gap rather than described as verified (#71,
+  2026-08-14). The other three `app/` modules were removed from that omit in the
+  same change and measure 82–100%.
 
-*Sign-off:* _pending_ (automated gates green as of 2026-07-17; human
+## The committed render is now gated (2026-08-14, #71)
+
+`docs/audits/dashboard.html` — the artifact this audit names as what was
+audited — is a committed, publicly browsable deliverable that nothing
+regenerated and nothing checked. `make a11y` overwrote it and then audited the
+fresh copy, so the gate could never observe that the committed page had drifted;
+on `main` it was still displaying three MusicBrainz citations that locate no
+record, and their matching `/edit` links, months after PR #66 fixed the fixture.
+
+`tests/test_committed_render.py` now asserts the committed bytes equal what
+`app/build_static.py` renders today (stage 3, before the a11y stage can
+overwrite anything), that the render is deterministic, and that every citation
+it displays locates a record. Regeneration moved out of `make a11y` into an
+explicit `make render`.
+
+*Sign-off:* _pending_ (automated gates green as of 2026-08-14; human
 walkthrough still required).

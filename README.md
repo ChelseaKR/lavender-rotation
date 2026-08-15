@@ -44,7 +44,7 @@ These are hard rules, each enforced by a merge-blocking test (see
 ## Project status
 
 The offline demo and full pipeline are implemented and gated: `make verify` runs
-formatting/lint/SAST, strict typing, 574 tests at 97% coverage, dependency and
+formatting/lint/SAST, strict typing, 577 tests at 97% coverage, dependency and
 secret scans, axe/pa11y renders plus browser-driven keyboard/reflow/reduced-motion
 specs (Playwright, required in CI), offline multiworld evaluation with
 regression/fairness gates, and the i18n declaration gate. CodeQL, zizmor, OSV,
@@ -92,7 +92,7 @@ Inherits [`/STANDARDS`](../STANDARDS/). Per-standard declarations (Documentation
 | 3 | Security & Supply-Chain | Applies — **ASVS 5.0 Level 1** | No auth / no multi-user surface, so L2 controls are N/A (no server); see `docs/RESPONSIBLE-TECH-AUDITS.md` §F |
 | 4 | CI/CD | Applies | CODEOWNERS, workflows, and the live main ruleset are configured; hosted execution restored 2026-07-19 (repo made public — free runner minutes). |
 | 5 | Release & Versioning | Applies — **release-producing, unreleased** | No tag/release exists yet; see `CHANGELOG.md` and `SECURITY.md` for the current stance |
-| 6 | Accessibility | Applies | axe gate blocking (0 violations) + Playwright keyboard/reflow/reduced-motion specs (`tests/test_e2e_a11y.py`); Lighthouse not wired; manual screen-reader + keyboard sign-offs pending the first release (`docs/audits/accessibility-2026-07-17.md`) |
+| 6 | Accessibility | Applies | axe gate blocking (0 violations) + Playwright keyboard/reflow/reduced-motion specs (`tests/test_e2e_a11y.py`); the committed render in `docs/audits/` is byte-gated against the renderer (`tests/test_committed_render.py`), so the page you can browse is the page that was audited; Lighthouse not wired; manual screen-reader + keyboard sign-offs pending the first release, and `app/dashboard.py` is covered by neither gate (`docs/audits/accessibility-2026-07-17.md`) |
 | 7 | Observability | Applies — **Tier C** | See Observability section above |
 | 8 | Internationalization | **N/A — single-user operator-only output** | Scope decision in `docs/I18N.md`, self-enforced via `scripts/i18n-gate.sh` |
 | 9 | AI Evaluation | Applies — **narrow** | See AI-evaluation status above |
