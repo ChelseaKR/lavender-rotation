@@ -85,12 +85,46 @@ _SOURCE_BASE_CONFIDENCE: dict[SourceKind, float] = {
 
 
 #: A MusicBrainz artist URL resolves by MBID, which is a UUID; a Wikidata one
-#: resolves by Q-number. Anything else is a label, not a locator.
+#: resolves by Q-number; a Discogs artist URL resolves by numeric
+#: release-database id followed by a slug. Anything else is a label, not a
+#: locator.
 _MUSICBRAINZ_ARTIST = re.compile(
     r"^https://musicbrainz\.org/artist/"
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
 _WIKIDATA_ENTITY = re.compile(r"^https://www\.wikidata\.org/wiki/Q[1-9][0-9]*$")
+_DISCOGS_ARTIST = re.compile(r"^https://www\.discogs\.com/artist/[1-9][0-9]*-\S+$")
+
+#: Host-scoped locator shapes, applied to **any** source kind. The moment a
+#: citation claims to point into one of these registries, it has to be an
+#: address that registry can actually resolve. A citation that claims no
+#: registry — an interview, a label bio, a Wikipedia section — stays free-form,
+#: which is why this is keyed on host rather than on kind: the original
+#: reasoning ("inventing a pattern for a lineup would reject honest citations")
+#: only ever held for citations that are not registry addresses.
+_REGISTRY_LOCATORS: tuple[tuple[str, str, str], ...] = (
+    (
+        "https://musicbrainz.org/artist/",
+        "musicbrainz.org",
+        "a MusicBrainz artist URL ending in an MBID (UUID)",
+    ),
+    (
+        "https://www.wikidata.org/wiki/",
+        "wikidata.org",
+        "a Wikidata entity URL ending in a Q-number",
+    ),
+    (
+        "https://www.discogs.com/artist/",
+        "discogs.com",
+        "a Discogs artist URL shaped /artist/<id>-<Slug> (Discogs addresses "
+        "artists by numeric id, never by a bare slug)",
+    ),
+)
+_REGISTRY_PATTERNS = {
+    "musicbrainz.org": _MUSICBRAINZ_ARTIST,
+    "wikidata.org": _WIKIDATA_ENTITY,
+    "discogs.com": _DISCOGS_ARTIST,
+}
 
 
 def citation_problem(kind: SourceKind, citation: str) -> Optional[str]:
@@ -103,9 +137,21 @@ def citation_problem(kind: SourceKind, citation: str) -> Optional[str]:
     shipped fixture is held to instead (``tests/test_demo_citations.py``), which
     is where the failure actually was.
 
-    Only the two sources with a machine-checkable identifier scheme are checked.
-    An artist statement or a Discogs lineup is cited by whatever URL carries it,
-    and inventing a pattern for those would reject honest citations.
+    Two layers, answering different questions:
+
+    * **By kind** — a ``MUSICBRAINZ_GENDER`` or ``WIKIDATA_P21`` claim has to cite
+      the registry it names. This is the original check.
+    * **By host** — any citation pointing into a known registry has to be an
+      address that registry can resolve. This is what catches the shape the demo
+      shipped for its two ``DISCOGS_LINEUP`` claims (``/artist/big-thief``):
+      exempt from the by-kind layer, and pointing at a registry that addresses
+      artists by numeric id.
+
+    This function checks the **shape** of an identifier, never its **subject**.
+    ``https://www.wikidata.org/wiki/Q16735549`` is a well-formed Wikidata locator
+    that resolves to a Cypriot footballer; nothing here can tell you it was cited
+    for Mitski. Subject is what ``tests/test_demo_citations.py``'s verified-subject
+    ledger is for.
     """
     text = (citation or "").strip()
     if not text:
@@ -114,6 +160,9 @@ def citation_problem(kind: SourceKind, citation: str) -> Optional[str]:
         return "is not a MusicBrainz artist URL ending in an MBID (UUID)"
     if kind is SourceKind.WIKIDATA_P21 and not _WIKIDATA_ENTITY.match(text):
         return "is not a Wikidata entity URL ending in a Q-number"
+    for prefix, host, expected in _REGISTRY_LOCATORS:
+        if text.startswith(prefix) and not _REGISTRY_PATTERNS[host].match(text):
+            return f"claims {host} but is not {expected}"
     return None
 
 
