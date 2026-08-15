@@ -2,7 +2,7 @@
 
 **A demo-first music-discovery engine that surfaces new women, nonbinary, and female-fronted artists through an explicit values lens.** It combines collaborative and content signals with a sourced-identity re-ranker. Identity is never inferred, and "unknown" is a normal, first-class answer.
 
-**Trans women are women here — explicitly.** The three terms in the tagline are not redundant; they cover three different shapes: *women* (solo artists whose sourced self-identification is woman — cis or trans, with no distinction drawn anywhere in the data model), *nonbinary* artists (represented as nonbinary, never folded into another category), and *female-fronted* (band-composition metadata: an act whose sourced lineup/role data shows a woman — cis or trans — fronting it, which is a fact about the band, never a claim about any individual). A trans woman artist whose self-identification is sourced is surfaced as a woman, full stop.
+**Trans women are women here — explicitly.** The three terms in the tagline are not redundant; they cover three different shapes: *women* (solo artists whose sourced self-identification is woman — cis or trans, with no distinction drawn anywhere in the data model), *nonbinary* artists (represented as nonbinary, never folded into another category), and *female-fronted* (band-composition metadata: an act whose sourced lineup/role data shows a woman — cis or trans — fronting it, which is a fact about that lineup, never a claim about the band's other members). A trans woman artist whose self-identification is sourced is surfaced as a woman, full stop. A band fronted by a sourced nonbinary artist is described as fronted by a nonbinary artist — the lens surfaces it, and no one is relabelled to get there.
 
 **Status:** `Beta` · **Track:** Personal (data/ML + small web app) · **License:** MIT · **Data:** personal/local
 
@@ -37,14 +37,14 @@ These are hard rules, each enforced by a merge-blocking test (see
 - **Never infer an artist's gender or identity** from name, voice, image, genre, or any heuristic — identity labels come only from cited self-identification sources (artist statement, sourced Wikidata P21 claim, MusicBrainz gender field) and must carry that citation.
 - **Woman includes trans women explicitly** — sourced self-identification is the only test, and no cis/trans distinction exists anywhere in the vocabulary.
 - **"Unknown" is first-class** and must never reduce, down-rank, or drop a recommendation; the values lens only ever boosts.
-- **"Female-fronted" is band-composition metadata** (lineup/role), sourced not guessed, and kept distinct from any individual's gender.
+- **"Female-fronted" is band-composition metadata** (lineup/role), sourced not guessed, and never widened: it means only that a front-person's *own* sourced gender is a woman's. A front-person's gender is rendered as the source stated it, never collapsed into the band-level word.
 - **Every recommendation shows its work:** why + identity basis + source.
 - **No redistribution of a scraped musician-identity dataset** — minimize, cite, keep correctable.
 
 ## Project status
 
 The offline demo and full pipeline are implemented and gated: `make verify` runs
-formatting/lint/SAST, strict typing, 514 tests at 97% coverage, dependency and
+formatting/lint/SAST, strict typing, 538 tests at 97% coverage, dependency and
 secret scans, axe/pa11y renders plus browser-driven keyboard/reflow/reduced-motion
 specs (Playwright, required in CI), offline multiworld evaluation with
 regression/fairness gates, and the i18n declaration gate. CodeQL, zizmor, OSV,

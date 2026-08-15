@@ -38,7 +38,7 @@ def _wrap_as_recommendation(artist, rank: int = 1) -> Recommendation:
     if artist.identity.is_known:
         basis = IdentityBasis.SELF_IDENTIFIED
         sources = artist.identity.sources
-    elif artist.female_fronted is True and artist.composition is not None:
+    elif artist.composition is not None and artist.sourced_front_genders:
         basis = IdentityBasis.BAND_COMPOSITION
         sources = artist.composition.sources
     else:

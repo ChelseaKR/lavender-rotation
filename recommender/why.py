@@ -159,19 +159,96 @@ def _confidence_tier(label: IdentityLabel) -> str:
     return "cited source"
 
 
+#: Display order for a band's sourced front-person genders, so the rendered
+#: phrase is deterministic regardless of lineup order.
+_FRONT_GENDER_ORDER: tuple[Gender, ...] = (
+    Gender.WOMAN,
+    Gender.NONBINARY,
+    Gender.MAN,
+    Gender.OTHER,
+)
+
+#: How each *sourced* front-person gender is named, as ``(singular, plural)``.
+#: There is deliberately no ``UNKNOWN`` entry — a front-person with no sourced
+#: gender contributes nothing to say — and deliberately no entry that widens one
+#: gender into another. ``OTHER`` describes what is sourced rather than naming a
+#: category the source did not name, because the honest label for that bucket is
+#: not knowable from here.
+_FRONT_GENDER_NOUN: dict[Gender, tuple[str, str]] = {
+    Gender.WOMAN: ("a sourced woman", "sourced women"),
+    Gender.NONBINARY: ("a sourced nonbinary artist", "sourced nonbinary artists"),
+    Gender.MAN: ("a sourced man", "sourced men"),
+    Gender.OTHER: (
+        "a front-person whose sourced self-identification is outside this vocabulary",
+        "front-people whose sourced self-identifications are outside this vocabulary",
+    ),
+}
+
+
+def _join(parts: list[str]) -> str:
+    if len(parts) == 1:
+        return parts[0]
+    if len(parts) == 2:
+        return f"{parts[0]} and {parts[1]}"
+    return f"{', '.join(parts[:-1])}, and {parts[-1]}"
+
+
+def _sourced_front_gender_counts(artist: Artist) -> dict[Gender, int]:
+    """How many front-people carry each *sourced* gender (unknown ones excluded)."""
+    if artist.composition is None or not artist.sourced_front_genders:
+        return {}
+    counts: dict[Gender, int] = {}
+    for person in artist.composition.members_fronting:
+        gender = person.identity.gender
+        if gender is not Gender.UNKNOWN:
+            counts[gender] = counts.get(gender, 0) + 1
+    return counts
+
+
+def band_front_phrase(artist: Artist) -> str:
+    """Name a band's *sourced* front-person genders, or ``""`` when none are sourced.
+
+    This is the one place a band-composition label is written, and it names the
+    genders the lineup source actually asserted. It never widens a category to
+    reach a more familiar word: a band whose only sourced front-person is
+    nonbinary reads as "fronted by a sourced nonbinary artist", never
+    "female-fronted band". The trailing clause is deliberately *not* "distinct
+    from any member's gender" — the phrase is derived from named members' own
+    sourced self-identifications, so claiming otherwise would be false; what it
+    is silent about is everyone else in the band.
+    """
+    counts = _sourced_front_gender_counts(artist)
+    if not counts:
+        return ""
+    fronts = _join(
+        [
+            _FRONT_GENDER_NOUN[gender][0 if counts[gender] == 1 else 1]
+            for gender in _FRONT_GENDER_ORDER
+            if gender in counts
+        ]
+    )
+    return (
+        f"band fronted by {fronts} (sourced lineup; each gender here is that "
+        "front-person's own sourced self-identification, and no gender is "
+        "claimed for any other member)"
+    )
+
+
 def artist_identity_phrase(artist: Artist) -> str:
     """The single sourced-or-unknown identity sentence, written in one place.
 
     Re-used by the explanation summary, the dashboard, the HTML renderer, and the
-    export so the phrasing never drifts. Honest about unknown; never inferred.
+    export so the phrasing never drifts. Honest about unknown; never inferred;
+    never a category the sources did not assert.
     """
     label = artist.identity
     if label.gender is not Gender.UNKNOWN:
         tier = _confidence_tier(label)
         suffix = f" ({tier})" if tier else ""
         return f"{label.gender}, self-identified{suffix}"
-    if artist.female_fronted is True:
-        return "female-fronted band (sourced lineup), distinct from any member's gender"
+    front = band_front_phrase(artist)
+    if front:
+        return front
     return "unknown — surfaced on musical similarity alone"
 
 

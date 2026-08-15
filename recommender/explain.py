@@ -68,7 +68,12 @@ def build_explanation(
     if artist.identity.gender is not Gender.UNKNOWN:
         basis = IdentityBasis.SELF_IDENTIFIED
         sources: tuple[Source, ...] = artist.identity.sources
-    elif artist.female_fronted is True and artist.composition is not None:
+    elif artist.composition is not None and artist.sourced_front_genders:
+        # Any sourced front-person gender — not just a woman's — is a real
+        # band-composition basis. Gating this on `female_fronted` would have
+        # made the basis (and therefore the citations shown) depend on *which*
+        # gender was sourced, which is exactly the flattening this branch has
+        # to avoid.
         basis = IdentityBasis.BAND_COMPOSITION
         sources = artist.composition.sources
     else:

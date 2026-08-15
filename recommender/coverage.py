@@ -1,7 +1,7 @@
 """Per-run identity-coverage readout — make 'unknown is first-class' *visible*.
 
 The re-rank already knows, for every pick, whether its identity is **sourced**
-(an individual self-identification, or a sourced female-fronted band composition)
+(an individual self-identification, or a sourced band lineup)
 or **unknown** (surfaced on musical similarity alone). This module turns that
 already-computed fact into one honest, render-agnostic readout —
 "N of K picks carry a sourced identity; M were surfaced on similarity alone" —
@@ -37,7 +37,7 @@ class IdentityCoverage:
 
     total: int
     self_identified: int  # sourced individual self-ID
-    band_composition: int  # sourced female-fronted lineup (distinct from gender)
+    band_composition: int  # sourced band lineup (distinct from the act's own gender)
     unknown: int  # surfaced on musical similarity alone — first-class
     women: int
     nonbinary: int
@@ -65,7 +65,7 @@ class IdentityCoverage:
         if self.self_identified:
             sourced_bits.append(f"{self.self_identified} self-identified")
         if self.band_composition:
-            sourced_bits.append(f"{self.band_composition} sourced female-fronted")
+            sourced_bits.append(f"{self.band_composition} sourced from a band lineup")
         detail = f" ({', '.join(sourced_bits)})" if sourced_bits else ""
         return (
             f"{self.sourced} of {self.total} picks carry a sourced identity{detail}; "
@@ -80,7 +80,11 @@ class IdentityCoverage:
             ("Self-identified (nonbinary)", self.nonbinary),
             ("Self-identified (man)", self.men),
             ("Self-identified (other)", self.other),
-            ("Sourced female-fronted band", self.band_composition),
+            # Deliberately not "Sourced female-fronted band": this row counts
+            # every pick whose basis is a sourced lineup, and the front-people
+            # are not all women. Naming the row after one of the genders it
+            # covers would misgender the rest.
+            ("Sourced band lineup", self.band_composition),
             ("Unknown — surfaced on similarity alone", self.unknown),
         )
 

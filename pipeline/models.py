@@ -14,6 +14,10 @@ The README guardrails are enforced *here*, in the type system, not merely in tes
 3. **"Female-fronted" is band-composition metadata**, kept distinct from any
    individual's gender. It is a *tri-state, sourced* property on
    :class:`BandComposition`, never an inference and never a claim about a person.
+   It is also **narrow**: it says only that a front-person's own sourced gender
+   is ``WOMAN``. A band fronted by a sourced nonbinary artist is *not*
+   "female-fronted" — nonbinary is never a subtype of woman here. The general,
+   category-preserving fact is :attr:`BandComposition.sourced_front_genders`.
 4. Every recommendation carries an :class:`Explanation` with non-empty signals,
    an identity basis, and the sources behind that basis.
 """
@@ -21,6 +25,7 @@ The README guardrails are enforced *here*, in the type system, not merely in tes
 from __future__ import annotations
 
 import enum
+from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from typing import Optional
 
@@ -55,7 +60,12 @@ class Gender(enum.Enum):
         return self.value
 
 
-#: Genders the values-lens is configured to surface (sourced only). This is the
+#: Genders the values-lens is configured to surface (sourced only). This is a
+#: **lens policy** set, never a fact about the world: nothing that *asserts*
+#: something (``BandComposition.female_fronted``, ``sourced_front_genders``,
+#: the rendered identity phrase) may read it, or a future edit to the lens
+#: would silently change what the data model claims. Only the lens and the
+#: re-rank consult it. This is the
 #: canonical aligned set, consumed by :class:`recommender.lens.LensSpec`
 #: (:data:`recommender.lens.VALUES_LENS`) — it lives here, not in
 #: ``recommender``, to avoid a circular import (``recommender`` already depends
@@ -238,17 +248,27 @@ class FrontPerson:
 
 @dataclass(frozen=True)
 class BandComposition:
-    """Sourced lineup/role info. ``female_fronted`` is tri-state and sourced.
+    """Sourced lineup/role info, kept strictly separate from any member's gender.
 
-    This is *band-composition metadata*, explicitly not a claim about any
-    member's gender. ``female_fronted`` is:
+    :attr:`sourced_front_genders` is the general fact this class asserts: *which
+    genders the sourced front-people are sourced as*. It preserves every
+    category exactly as the source stated it — nonbinary stays nonbinary, and
+    nothing is widened, collapsed, or defaulted on the way out.
 
-    * ``True``  — there is a sourced front-person whose own sourced identity is a
-      woman or nonbinary person;
-    * ``None``  — unknown (no sources, or no front-person with a known identity).
+    :attr:`female_fronted` is the narrow, historically-named special case of
+    that fact, and is tri-state:
 
-    It is **never** ``False`` by inference: the absence of a sourced
-    woman/nonbinary front is "unknown", not "male-fronted".
+    * ``True``  — a sourced front-person's own sourced gender is ``WOMAN``;
+    * ``None``  — unknown (no sources, no front-person, or no front-person whose
+      sourced gender is ``WOMAN``).
+
+    It is **never** ``False`` by inference: the absence of a sourced woman front
+    is "unknown", not "male-fronted". It is also **never** ``True`` for a band
+    whose only sourced front-person is nonbinary — that band is fronted by a
+    nonbinary artist, and saying "female-fronted" would misgender them on the
+    strength of the very value the source supplied. Callers that want "does this
+    band's sourced lineup match this set of genders" must ask
+    :meth:`has_sourced_front_person_in`, never re-purpose ``female_fronted``.
     """
 
     members_fronting: tuple[FrontPerson, ...] = ()
@@ -262,13 +282,34 @@ class BandComposition:
                 )
 
     @property
+    def sourced_front_genders(self) -> frozenset[Gender]:
+        """The *sourced* genders of this band's front-people. A fact, not a policy.
+
+        Empty when the lineup itself is unsourced or there is no front-person.
+        ``UNKNOWN`` is excluded because it asserts nothing: "no sourced gender
+        for this front-person" is not a gender, and including it would let an
+        absence read as a claim.
+        """
+        if not self.sources:
+            return frozenset()
+        return frozenset(
+            person.identity.gender
+            for person in self.members_fronting
+            if person.identity.gender is not Gender.UNKNOWN
+        )
+
+    def has_sourced_front_person_in(self, genders: Iterable[Gender]) -> bool:
+        """True iff some front-person's *own sourced* gender is in ``genders``.
+
+        The seam a lens asks its own question through, so a lens-policy change
+        can never alter what :attr:`female_fronted` asserts about the world.
+        """
+        return bool(self.sourced_front_genders & frozenset(genders))
+
+    @property
     def female_fronted(self) -> Optional[bool]:
-        if not self.sources or not self.members_fronting:
-            return None
-        for person in self.members_fronting:
-            if person.identity.gender in VALUES_ALIGNED_GENDERS:
-                return True
-        return None
+        """Tri-state: ``True`` iff a front-person's *own sourced* gender is ``WOMAN``."""
+        return True if Gender.WOMAN in self.sourced_front_genders else None
 
 
 @dataclass(frozen=True)
@@ -284,7 +325,13 @@ class Artist:
     playcount: int = 0
 
     @property
+    def sourced_front_genders(self) -> frozenset[Gender]:
+        """The sourced genders of this act's front-people (empty for a solo act)."""
+        return self.composition.sourced_front_genders if self.composition else frozenset()
+
+    @property
     def female_fronted(self) -> Optional[bool]:
+        """Tri-state, and narrow: ``True`` only for a sourced *woman* front-person."""
         return self.composition.female_fronted if self.composition else None
 
     @property
@@ -300,10 +347,15 @@ class Artist:
 
         Unknown returns ``False`` here — but "not aligned" must never translate
         into a penalty; it only means "received no boost". See the re-rank layer.
+
+        The composition leg asks :meth:`BandComposition.has_sourced_front_person_in`
+        rather than reading ``female_fronted``, so a band fronted only by a
+        sourced nonbinary artist is still surfaced by this lens *without* the
+        data model ever having to call that band "female-fronted".
         """
         if self.identity.gender in VALUES_ALIGNED_GENDERS:
             return True
-        return self.female_fronted is True
+        return bool(self.sourced_front_genders & VALUES_ALIGNED_GENDERS)
 
 
 @dataclass(frozen=True)

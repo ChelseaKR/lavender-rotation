@@ -32,13 +32,27 @@ from pipeline.models import Artist, Gender, Recommendation
 #: Identity segments (sourced-only; ``unknown`` is first-class and never inferred).
 WOMAN = "woman"
 NONBINARY = "nonbinary"
+#: A band whose sourced lineup is fronted by someone whose *own* sourced gender
+#: is ``WOMAN``. Strictly that, so a nonbinary front-person is never counted
+#: here — they get :data:`NONBINARY_FRONTED`.
 FEMALE_FRONTED = "female-fronted"
+#: A band whose sourced lineup is fronted by someone whose own sourced gender is
+#: ``NONBINARY`` (and by no sourced woman).
+NONBINARY_FRONTED = "nonbinary-fronted"
 MAN = "man"
 OTHER = "other"
 UNKNOWN = "unknown"
 
 #: Emitted in a fixed order for a stable, diffable report.
-SEGMENTS: tuple[str, ...] = (WOMAN, NONBINARY, FEMALE_FRONTED, MAN, OTHER, UNKNOWN)
+SEGMENTS: tuple[str, ...] = (
+    WOMAN,
+    NONBINARY,
+    FEMALE_FRONTED,
+    NONBINARY_FRONTED,
+    MAN,
+    OTHER,
+    UNKNOWN,
+)
 
 #: Popularity tiers by listener count (the allocational-risk cross-tab axis).
 TIERS: tuple[str, ...] = ("niche", "mid", "popular")
@@ -51,11 +65,22 @@ class FairnessAssertionError(AssertionError):
 
 
 def identity_segment(artist: Artist) -> str:
-    """Segment an artist by *sourced* identity, then sourced composition, else unknown.
+    """Segment an artist by *sourced* identity, then sourced lineup, else unknown.
 
-    Individual sourced gender wins; a band whose *sourced* composition is
-    female-fronted (but whose own gender is unknown) is ``female-fronted``; anything
-    left is first-class ``unknown``. No inference is ever performed here.
+    Individual sourced gender wins. Failing that, the band's *sourced* lineup is
+    read at the granularity the source actually asserted: a band fronted by a
+    sourced woman is ``female-fronted``, and a band fronted only by a sourced
+    nonbinary artist is ``nonbinary-fronted`` — never folded into
+    ``female-fronted``, which would report a person's sourced gender as a
+    different one in a document that is committed and published.
+
+    A band whose only sourced front-people are men, or are sourced outside the
+    vocabulary, stays in first-class ``unknown``: the act's own gender is
+    unsourced, it receives no boost, and it is pinned to its pure-taste slot
+    exactly like any other unknown — which is what this report measures. That
+    grouping is unchanged from before and is asserted to agree with
+    :func:`recommender.rerank.is_unknown_artist`. No inference is ever performed
+    here.
     """
     gender = artist.identity.gender
     if gender is Gender.WOMAN:
@@ -66,8 +91,13 @@ def identity_segment(artist: Artist) -> str:
         return MAN
     if gender is Gender.OTHER:
         return OTHER
-    if artist.female_fronted is True:  # sourced band composition, not a personal claim
+    # Sourced band composition — a fact about the lineup, not a personal claim
+    # about the act, and reported as the gender the source actually asserted.
+    fronts = artist.sourced_front_genders
+    if Gender.WOMAN in fronts:
         return FEMALE_FRONTED
+    if Gender.NONBINARY in fronts:
+        return NONBINARY_FRONTED
     return UNKNOWN
 
 
