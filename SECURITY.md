@@ -1,6 +1,6 @@
 # Security Policy
 
-Women-Artist Discovery is an independent personal open-source project (MIT). It is **local-first**:
+Women-Artist Discovery is an independent personal open-source project (AGPL-3.0-or-later). It is **local-first**:
 your Last.fm listening history stays on your machine, there is no auth and no server-side account,
 and the only opt-in egress is a user-initiated Spotify playlist export (artist names only). Because
 the app reads a person's listening data and asserts **sourced identity claims about real artists**,
