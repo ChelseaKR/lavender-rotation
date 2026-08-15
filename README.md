@@ -36,7 +36,7 @@ These are hard rules, each enforced by a merge-blocking test (see
 
 - **Never infer an artist's gender or identity** from name, voice, image, genre, or any heuristic — identity labels come only from cited self-identification sources (artist statement, sourced Wikidata P21 claim, MusicBrainz gender field) and must carry that citation.
 - **Woman includes trans women explicitly** — sourced self-identification is the only test, and no cis/trans distinction exists anywhere in the vocabulary.
-- **"Unknown" is first-class** and must never reduce, down-rank, or drop a recommendation; the values lens only ever boosts.
+- **"Unknown" is first-class** and must never reduce, down-rank, or drop a recommendation; the values lens only ever boosts. An artist sourced as a gender the lens does not boost (`Gender.OTHER`) holds their pure-taste position too. No artist's score is ever reduced. A sourced man's list *position* can move down — that is the one thing this lens re-allocates, and the lens's harms note says so rather than denying it.
 - **"Female-fronted" is band-composition metadata** (lineup/role), sourced not guessed, and never widened: it means only that a front-person's *own* sourced gender is a woman's. A front-person's gender is rendered as the source stated it, never collapsed into the band-level word.
 - **Every recommendation shows its work:** why + identity basis + source.
 - **No redistribution of a scraped musician-identity dataset** — minimize, cite, keep correctable.
@@ -44,7 +44,7 @@ These are hard rules, each enforced by a merge-blocking test (see
 ## Project status
 
 The offline demo and full pipeline are implemented and gated: `make verify` runs
-formatting/lint/SAST, strict typing, 538 tests at 97% coverage, dependency and
+formatting/lint/SAST, strict typing, 554 tests at 97% coverage, dependency and
 secret scans, axe/pa11y renders plus browser-driven keyboard/reflow/reduced-motion
 specs (Playwright, required in CI), offline multiworld evaluation with
 regression/fairness gates, and the i18n declaration gate. CodeQL, zizmor, OSV,

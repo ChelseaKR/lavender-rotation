@@ -24,12 +24,25 @@ that is a new manifest with its own rationale and harms note, gated on an
 identity-data-ethics review — not a silent addition to this one. See
 ``docs/audits/identity-data-ethics.md`` for the recorded decision.
 
-**This is a re-rank concern, never a penalty.** Exactly like ``UNKNOWN``,
-``Gender.OTHER`` is simply not in the aligned set: it receives zero boost and
-keeps its exact base score. It is never down-ranked, never excluded from
-results, and never treated differently from ``UNKNOWN`` by the scoring math —
-see :mod:`recommender.rerank` for the boost-only invariant that makes this
-mechanically true.
+**Not boosted, and not displaced either.** Not being in the aligned set means
+``Gender.OTHER`` receives zero boost and keeps its exact base score. It also
+keeps its exact pure-taste *position*: sourced ``OTHER`` is rank-protected
+alongside ``UNKNOWN`` (:data:`recommender.rerank.RANK_PROTECTED_GENDERS`), and
+:func:`recommender.exposure.assert_other_retained` checks that on emitted output
+at every merge. That protection was added by #68, which found this module
+promising it in text the dashboard renders while the re-rank pinned only unknown
+slots — a sourced ``OTHER`` artist could be pushed below a *lower-scoring*
+unknown one. Declining to speak for a heterogeneous sourced bucket is a reason
+not to boost it; it was never a reason to move it down.
+
+**What this lens does re-allocate, stated once.** A boosted artist that rises
+has to pass someone. Every group except sourced men is now held, so the lens's
+re-allocation lands on sourced men: their score is never reduced, their position
+can be. Pinning them too would leave aligned artists able to permute only among
+their own base slots, i.e. a lens that cannot change exposure at any strength.
+``harms_note`` says exactly this, in place of the "never down-ranked, never
+treated worse than an unknown-identity artist" wording it carried before, which
+was measurably untrue.
 """
 
 from __future__ import annotations
@@ -129,10 +142,22 @@ VALUES_LENS = LensSpec(
         "not a silent addition here."
     ),
     harms_note=(
-        "Re-rank concern, never a penalty: like UNKNOWN, an artist sourced as "
-        "Gender.OTHER (or MAN, or anyone unaligned) receives zero boost and keeps "
-        "their exact base score — never down-ranked, never dropped, never treated "
-        "worse than an unknown-identity artist. The boost-only invariant "
-        "(recommender/rerank.py) makes this mechanically true, not just a promise."
+        "What this lens does to artists it does not boost, stated exactly. "
+        "SCORE, for everyone: no artist's score is ever reduced. An unaligned "
+        "artist — sourced as Gender.OTHER or MAN, or of unknown identity — "
+        "receives a boost of exactly zero and keeps their exact base score at "
+        "every lens strength. Checked on emitted output at every merge by "
+        "recommender/exposure.py::assert_no_score_reduced. "
+        "POSITION, for two groups: artists of unknown identity, and artists "
+        "sourced as Gender.OTHER, also keep their exact pure-taste position "
+        "(assert_unknown_retained / assert_other_retained). "
+        "POSITION, for sourced men: not held. A boosted artist that rises has "
+        "to pass someone, and everyone else is held, so this lens's whole "
+        "re-allocation is exposure moving from sourced men to sourced women and "
+        "nonbinary artists. Their scores are untouched; their list positions "
+        "can move down. That is the value judgement, and this note states it "
+        "rather than denying it: until #68 this paragraph promised that nobody "
+        "unaligned was ever down-ranked or treated worse than an "
+        "unknown-identity artist, and the ranking did not do that."
     ),
 )

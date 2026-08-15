@@ -304,6 +304,13 @@
       "0.75": 1.0,
       "1.00": 1.0
     },
+    "other_retention": {
+      "0.00": 1.0,
+      "0.25": 1.0,
+      "0.50": 1.0,
+      "0.75": 1.0,
+      "1.00": 1.0
+    },
     "mean_rank_shift": {
       "0.25": {
         "woman": -0.2,
@@ -374,7 +381,11 @@
     "guarantees": {
       "unknown_retention_all_lenses": true,
       "min_unknown_retention": 1.0,
-      "unknown_downranked_count": 0
+      "unknown_downranked_count": 0,
+      "other_retention_all_lenses": true,
+      "min_other_retention": 1.0,
+      "other_downranked_count": 0,
+      "no_score_reduced_any_artist": true
     }
   },
   "regression_vs_baseline": {

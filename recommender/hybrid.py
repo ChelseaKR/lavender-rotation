@@ -6,9 +6,10 @@ Optional, artist-scoped thumbs feedback applies a bounded nudge to that base
 score; it never reads or generalises across identity.
 The values lens is then applied **boost-only** (see :mod:`recommender.rerank`),
 followed by an optional identity-blind serendipity/diversification pass over the
-movable non-unknown candidates (see :mod:`recommender.diversify`). The full list
-is reconstructed around protected unknown slots before top-k is selected, and
-every result is explained.
+movable candidates (see :mod:`recommender.diversify`). The full list is
+reconstructed around the rank-protected slots — unknown and sourced-``OTHER``
+artists, see :data:`recommender.rerank.RANK_PROTECTED_GENDERS` — before top-k is
+selected, and every result is explained.
 
 At ``lens_strength = 0`` and ``explore = 0`` (both defaults) the output is the
 pure-taste hybrid ranking — which is what the offline eval compares against
@@ -31,7 +32,7 @@ from recommender.content import ContentResult, content_scores
 from recommender.diversify import diversify
 from recommender.explain import build_explanation
 from recommender.feedback import Feedback, feedback_adjustment
-from recommender.rerank import is_unknown_artist, rerank, values_boost_for_artist
+from recommender.rerank import is_rank_protected, rerank, values_boost_for_artist
 
 
 def _normalise(value: float, peak: float) -> float:
@@ -108,10 +109,11 @@ def recommend(
 
     # Serendipity remains identity-blind inside diversify(). At this orchestration
     # boundary, pass it only the movable candidates, then reconstruct the full list
-    # around the unknown slots already protected by rerank(). Otherwise an MMR pass
-    # after reranking can silently undo the absolute top-k/rank guarantee.
-    movable = [rec for rec in ranked if not is_unknown_artist(rec.artist)]
+    # around the slots already protected by rerank(). Otherwise an MMR pass
+    # after reranking can silently undo the absolute top-k/rank guarantee — for
+    # sourced-OTHER artists as well as unknown ones (#68).
+    movable = [rec for rec in ranked if not is_rank_protected(rec.artist)]
     diversified = iter(diversify(movable, explore))
-    protected = [rec if is_unknown_artist(rec.artist) else next(diversified) for rec in ranked]
+    protected = [rec if is_rank_protected(rec.artist) else next(diversified) for rec in ranked]
     limit = max(0, min(k, len(protected)))
     return [rec.with_rank(i + 1) for i, rec in enumerate(protected[:limit])]

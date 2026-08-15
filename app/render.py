@@ -25,6 +25,7 @@ from typing import cast
 
 from pipeline.models import Recommendation
 from recommender.coverage import IdentityCoverage, identity_coverage
+from recommender.rerank import is_rank_protected
 from recommender.upstream import upstream_edit_url
 from recommender.why import ProvenanceItem, WhyThisArtist, why_this_artist
 
@@ -123,12 +124,25 @@ def _card_html(rec: Recommendation) -> str:
     )
 
 
+#: Wording for the "how was this position decided" column. Rank is *not* a pure
+#: function of total score — protected rows hold their pure-taste slot — and a
+#: reader looking at the table used to see a higher-scoring pick below a
+#: lower-scoring one with nothing to explain it (#68).
+POSITION_HELD = "held — pure-taste position"
+POSITION_LENS_ORDERED = "lens-ordered by total"
+
+
+def position_basis(r: Recommendation) -> str:
+    return POSITION_HELD if is_rank_protected(r.artist) else POSITION_LENS_ORDERED
+
+
 def _row_html(r: Recommendation) -> str:
     return (
         f"<tr><td>{r.rank}</td>"
         f'<th scope="row">{escape(r.artist.name)}</th>'
         f"<td>{r.base_score:.3f}</td><td>{r.rerank_delta:.3f}</td>"
         f"<td>{r.score:.3f}</td>"
+        f"<td>{escape(position_basis(r))}</td>"
         f"<td>{escape(str(r.explanation.identity_basis))}</td></tr>"
     )
 
@@ -155,10 +169,15 @@ def _table_html(recs: Sequence[Recommendation]) -> str:
     return _scroll_region(
         "Recommendation scores table (scrolls sideways on narrow screens)",
         "<table><caption>Recommendation scores (data-table equivalent of "
-        "the score chart)</caption><thead><tr>"
+        "the score chart). Rank is not a pure function of total: rows marked "
+        f"“{escape(POSITION_HELD)}” keep the position they had before the values "
+        "lens was applied, so a higher-scoring pick can sit below them. The lens "
+        "only ever adds to a score; it never subtracts from one."
+        "</caption><thead><tr>"
         '<th scope="col">Rank</th><th scope="col">Artist</th>'
         '<th scope="col">Taste score</th><th scope="col">Values boost</th>'
-        '<th scope="col">Total</th><th scope="col">Identity basis</th>'
+        '<th scope="col">Total</th><th scope="col">Position</th>'
+        '<th scope="col">Identity basis</th>'
         f"</tr></thead><tbody>{rows}</tbody></table>",
     )
 
@@ -176,14 +195,24 @@ def _exposure_panel_html(panel: dict[str, object] | None) -> str:
         f"<td>{cast(float, row['current_share']):.0%}</td></tr>"
         for row in rows
     )
-    retention = cast("dict[str, object]", panel["retention_row"])
-    by_lens = cast("dict[str, float]", retention["by_lens"])
-    retention_headers = "".join(f'<th scope="col">Lens {escape(key)}</th>' for key in by_lens)
-    retention_cells = "".join(f"<td>{value:.0%}</td>" for value in by_lens.values())
+    retention_rows = cast("list[dict[str, object]]", panel["retention_rows"])
+    first_by_lens = cast("dict[str, float]", retention_rows[0]["by_lens"])
+    retention_headers = "".join(f'<th scope="col">Lens {escape(key)}</th>' for key in first_by_lens)
+    retention_body = "".join(
+        f'<tr><th scope="row">{escape(str(row["segment"]))}</th>'
+        + "".join(
+            f"<td>{value:.0%}</td>" for value in cast("dict[str, float]", row["by_lens"]).values()
+        )
+        + "</tr>"
+        for row in retention_rows
+    )
     return (
         "<h2>Fairness observability</h2>"
-        "<p>Exposure changes are shown alongside the merge-blocking "
-        "unknown-retention guarantee.</p>"
+        "<p>Exposure changes are shown alongside the merge-blocking retention "
+        "guarantees. Two segments keep their pure-taste position as well as "
+        "their score: unknown-identity artists, and artists sourced as "
+        "Gender.OTHER. Sourced men keep their exact score but can move down the "
+        "list — that is the whole of what this lens re-allocates.</p>"
         + _scroll_region(
             "Exposure share table (scrolls sideways on narrow screens)",
             f"<table><caption>Top-{k} exposure share by identity segment — base lens "
@@ -192,11 +221,11 @@ def _exposure_panel_html(panel: dict[str, object] | None) -> str:
             f'<th scope="col">Current share</th></tr></thead><tbody>{body}</tbody></table>',
         )
         + _scroll_region(
-            "Unknown-identity retention table (scrolls sideways on narrow screens)",
-            "<table><caption>Unknown-identity retention across the lens</caption><thead><tr>"
-            f'<th scope="col">Identity segment</th>{retention_headers}</tr></thead><tbody><tr>'
-            f'<th scope="row">{escape(str(retention["segment"]))}</th>{retention_cells}'
-            "</tr></tbody></table>",
+            "Rank-protected retention table (scrolls sideways on narrow screens)",
+            "<table><caption>Rank-protected retention across the lens (score, "
+            "top-k presence, and position all preserved)</caption><thead><tr>"
+            f'<th scope="col">Identity segment</th>{retention_headers}</tr></thead>'
+            f"<tbody>{retention_body}</tbody></table>",
         )
     )
 

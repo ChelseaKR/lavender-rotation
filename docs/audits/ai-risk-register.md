@@ -36,8 +36,15 @@ consent to being included in its candidate pool:
 - **Who is affected.** Any artist enriched from MusicBrainz/Wikidata/Discogs during a user's
   session — a much larger and less-controllable population than "users of the app."
 - **What decision is made about them.** Whether they carry a sourced gender/composition label at
-  all, and (if the values lens is on) a bounded, positive-only boost. No artist is ever penalized,
-  excluded, or down-ranked *because of* an identity label or its absence.
+  all, and (if the values lens is on) a bounded, positive-only boost. No artist's *score* is ever
+  reduced, for any identity or its absence (`assert_no_score_reduced`, checked on emitted output).
+  *List position* is not equally protected, and saying so is the point: unknown-identity artists
+  and artists sourced as `Gender.OTHER` hold their pure-taste position
+  (`assert_unknown_retained` / `assert_other_retained`); a sourced man's position can move down,
+  because a boosted artist that rises has to pass someone. That single re-allocation is the lens's
+  value judgement and is stated in `VALUES_LENS.harms_note`. This bullet previously read "No
+  artist is ever penalized, excluded, or down-ranked because of an identity label or its absence",
+  which was not true of position (#68).
 - **Worst-case harm if the mitigations failed.** Misgendering a real person publicly (reputational
   and dignity harm) or building a queryable "gender of musicians" database that could be reused
   for purposes this project never intended (the "worst misuse" scenario named in

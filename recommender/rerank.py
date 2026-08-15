@@ -1,14 +1,29 @@
-"""The values-aware re-rank — **boost-only**, so unknown is never penalised.
+"""The values-aware re-rank — **boost-only**, with an explicit protected set.
 
-This is where the project's central fairness guarantee is implemented and made
-mechanically true: the lens can only *add* a non-negative boost to artists whose
-*sourced* identity or *sourced* composition aligns with the lens. It can never
-subtract. Therefore:
+Two different guarantees live here, and this module keeps them apart because
+conflating them is what made the lens's published harms note untrue (#68):
 
-* an artist with an UNKNOWN identity keeps its exact base score and base rank;
-* a sourced woman/nonbinary/female-fronted artist may move *up*;
-* aligned artists re-order only the non-unknown slots, so an unknown artist can
-  never fall below the pure-taste position or disappear at a top-k boundary.
+**Score.** The lens can only *add* a non-negative boost to artists whose
+*sourced* identity or *sourced* composition aligns with it. It can never
+subtract. Every artist — aligned or not — keeps at least its exact base score at
+every lens strength. This one holds for everybody, without exception, and is
+checked on emitted output by
+:func:`recommender.exposure.assert_no_score_reduced`.
+
+**Position.** Score does not determine position on its own, because some slots
+are *pinned*. :data:`RANK_PROTECTED_GENDERS` names who keeps their exact
+pure-taste position: artists of ``UNKNOWN`` identity, and artists sourced as
+``Gender.OTHER``. Aligned artists re-order only the remaining slots, so a
+protected artist can never fall below its pure-taste position or disappear at a
+top-k boundary (:func:`recommender.exposure.assert_unknown_retained`,
+:func:`~recommender.exposure.assert_other_retained`).
+
+A boosted artist that rises has to pass *someone*, so position cannot be held
+for everyone at once while the lens still does anything. The artists it is not
+held for are **sourced men**: their score is untouched, their position can move
+down. That is this lens's value judgement, and ``VALUES_LENS.harms_note`` states
+it in those words rather than promising a protection that is arithmetically
+unavailable.
 
 ``lens_strength`` ∈ [0, 1] is surfaced in the UI and explained. At 0 the ranking
 is identical to the pure hybrid ranking. The maximum boost is bounded so the lens
@@ -54,21 +69,51 @@ def sort_and_rank(recs: list[Recommendation]) -> list[Recommendation]:
     return [rec.with_rank(i + 1) for i, rec in enumerate(ordered)]
 
 
+#: Genders whose **pure-taste position** the re-rank holds, not merely whose
+#: score it leaves alone.
+#:
+#: * ``UNKNOWN`` — "unknown is first-class and never down-ranked" is a README
+#:   guardrail with its own merge-blocking check.
+#: * ``OTHER`` — the lens declined to *boost* this bucket on the recorded
+#:   grounds that it could not responsibly speak for a heterogeneous set of
+#:   sourced self-identifications (see :mod:`recommender.lens`). That is a
+#:   reason not to boost them. It was never a reason to displace them, and
+#:   before #68 they were displaced — an artist who told the project who they
+#:   are was ranked below a lower-scoring artist who had not, purely because
+#:   the latter was in the protected set. Holding their slot costs the lens
+#:   nothing it is entitled to.
+#:
+#: ``MAN`` is deliberately absent, and this is the whole of the lens's
+#: re-allocation: pinning every unaligned artist would leave aligned artists
+#: able to permute only among their own base slots, which makes the lens a
+#: no-op — exposure@k could not change at any strength. See ``harms_note``.
+RANK_PROTECTED_GENDERS: frozenset[Gender] = frozenset({Gender.UNKNOWN, Gender.OTHER})
+
+
 def is_unknown_artist(artist: Artist) -> bool:
-    """Match the fairness report's sourced-identity segmentation without a cycle.
+    """Match the fairness report's ``unknown`` segmentation without a cycle.
 
     Reads ``values_aligned`` rather than ``female_fronted`` so that a band whose
     sourced lineup is fronted only by a nonbinary artist — which *does* receive
-    a boost — is movable rather than pinned. Pinning a boosted artist to its
-    pure-taste slot would silently discard the boost.
-    ``tests/test_exposure.py`` asserts this stays equivalent to
-    ``identity_segment(artist) == UNKNOWN``.
+    a boost — is not counted as unknown. ``tests/test_exposure.py`` asserts this
+    stays equivalent to ``identity_segment(artist) == UNKNOWN``.
     """
     return artist.identity.gender is Gender.UNKNOWN and not artist.values_aligned
 
 
+def is_rank_protected(artist: Artist) -> bool:
+    """True iff this artist keeps its exact pure-taste position under the lens.
+
+    An artist the lens *boosts* is never protected: pinning a boosted artist to
+    its pure-taste slot would silently discard the boost. So an ``OTHER``-sourced
+    solo artist is protected, while an ``OTHER``-sourced artist fronting an
+    aligned band is movable — it is being paid, not displaced.
+    """
+    return artist.identity.gender in RANK_PROTECTED_GENDERS and not artist.values_aligned
+
+
 def rerank(recs: list[Recommendation], lens_strength: float) -> list[Recommendation]:
-    """Apply the boost-only lens while protecting every unknown artist's base slot.
+    """Apply the boost-only lens while holding every rank-protected artist's base slot.
 
     Raises ``ValueError`` for a lens strength outside [0, 1].
     """
@@ -83,10 +128,10 @@ def rerank(recs: list[Recommendation], lens_strength: float) -> list[Recommendat
         boosted.append(replace(rec, rerank_delta=delta))
 
     movable = sorted(
-        (rec for rec in boosted if not is_unknown_artist(rec.artist)),
+        (rec for rec in boosted if not is_rank_protected(rec.artist)),
         key=lambda r: (-r.score, r.artist.artist_id),
     )
     movable_iter = iter(movable)
-    ordered = [rec if is_unknown_artist(rec.artist) else next(movable_iter) for rec in boosted]
+    ordered = [rec if is_rank_protected(rec.artist) else next(movable_iter) for rec in boosted]
 
     return [rec.with_rank(i + 1) for i, rec in enumerate(ordered)]

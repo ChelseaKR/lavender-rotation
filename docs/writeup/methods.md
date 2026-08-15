@@ -99,16 +99,27 @@ sourced, at the granularity the source stated.
 
 ## 3. Boost-only proof
 
-The values lens re-ranks, it never penalizes. That's implemented in
+The values lens never reduces a score, for anyone. That's implemented in
 [`recommender/rerank.py`](../../recommender/rerank.py):
 `values_boost_for_artist` returns `0.0` for any artist that isn't
 *sourced*-aligned (including every `UNKNOWN` artist) and a non-negative boost
-otherwise; `rerank()` asserts `delta >= 0.0`, sorts only the non-unknown
-candidates by boosted score, then reinserts unknown artists in their pure-taste
-slots. By construction, an `UNKNOWN`-identity artist's score and rank are
-invariant to `lens_strength`. The optional identity-blind MMR pass receives only
-the movable candidates; `hybrid.recommend()` reconstructs them around those same
-unknown slots before slicing top-k, so exploration cannot undo the guarantee.
+otherwise; `rerank()` asserts `delta >= 0.0`, sorts only the *unpinned*
+candidates by boosted score, then reinserts the pinned ones in their pure-taste
+slots. The pinned set is `RANK_PROTECTED_GENDERS` = {`UNKNOWN`, `OTHER`}, so
+both an unknown-identity artist's and a sourced-`OTHER` artist's score *and*
+rank are invariant to `lens_strength`. The optional identity-blind MMR pass
+receives only the movable candidates; `hybrid.recommend()` reconstructs them
+around those same pinned slots before slicing top-k, so exploration cannot undo
+the guarantee.
+
+Position is not held for everyone, and the honest statement of that is short: a
+boosted artist that rises has to pass someone, and everyone except sourced men
+is pinned, so the lens's entire re-allocation is exposure moving from sourced
+men to sourced women and nonbinary artists. Pinning men as well would leave
+aligned artists able to permute only among their own base slots — a lens that
+cannot change exposure at any strength. `VALUES_LENS.harms_note` says this in
+those words; until #68 it instead promised that nobody unaligned was ever
+down-ranked, which the ranking did not do.
 
 "True by construction" is a claim about the code. It is only a credible claim
 about the *product* once it's checked against what the pipeline actually emits —
@@ -126,6 +137,11 @@ top-k check as a number:
 > asserted in prose, every time `make audit` runs the test suite. The guard
 > itself is tested too: hostile rank-shift and top-k-drop tests build synthetic violations and confirm
 > `FairnessAssertionError` actually fires — the check isn't a rubber stamp.
+
+`assert_other_retained()` is the identical check over the `OTHER` segment, and
+`assert_no_score_reduced()` is the score half over *every* artist, unscoped to
+any segment or to the top-k. Both were added by #68, which found the lens
+promising them in text the dashboard renders with nothing checking either.
 
 This is the same guarantee `docs/audits/fairness-identity.md` names as "metric
 *down-ranked-for-unknown = 0*" (finding 2) — `exposure.py` is what turns that

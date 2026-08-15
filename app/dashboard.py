@@ -49,6 +49,8 @@ from recommender.hybrid import recommend
 from recommender.lens import VALUES_LENS
 from recommender.why import why_this_artist
 
+from app.render import POSITION_HELD, position_basis
+
 
 def _load_demo() -> tuple[list[Scrobble], dict[str, Artist], ScrobbleSource]:
     return demo_scrobbles(), demo_catalog(), demo_source()
@@ -298,8 +300,16 @@ def main() -> None:  # pragma: no cover - exercised via the live Streamlit runti
             "Taste": [round(r.base_score, 3) for r in recs],
             "Values boost": [round(r.rerank_delta, 3) for r in recs],
             "Total": [round(r.score, 3) for r in recs],
+            "Position": [position_basis(r) for r in recs],
             "Identity basis": [str(r.explanation.identity_basis) for r in recs],
         }
+    )
+    st.caption(
+        "Rank is not a pure function of Total. Rows marked "
+        f"“{POSITION_HELD}” keep the position they had before the lens was "
+        "applied — unknown-identity artists and artists sourced as "
+        "Gender.OTHER — so a higher-scoring pick can sit below them. The lens "
+        "only ever adds to a score; it never subtracts from one."
     )
 
     recs_by_lens = {
@@ -308,8 +318,8 @@ def main() -> None:  # pragma: no cover - exercised via the live Streamlit runti
     }
     panel = observability_panel(recs_by_lens, current_lens=lens, k=OBSERVABILITY_K)
     exposure_rows = cast("list[dict[str, object]]", panel["exposure_rows"])
-    retention_row = cast("dict[str, object]", panel["retention_row"])
-    by_lens = cast("dict[str, float]", retention_row["by_lens"])
+    retention_rows = cast("list[dict[str, object]]", panel["retention_rows"])
+    lens_keys = list(cast("dict[str, float]", retention_rows[0]["by_lens"]))
     st.subheader(f"Fairness observability (top {OBSERVABILITY_K})")
     st.table(
         {
@@ -320,9 +330,21 @@ def main() -> None:  # pragma: no cover - exercised via the live Streamlit runti
     )
     st.table(
         {
-            "Identity segment": [retention_row["segment"]],
-            **{f"Lens {key}": [f"{value:.0%}"] for key, value in by_lens.items()},
+            "Identity segment": [row["segment"] for row in retention_rows],
+            **{
+                f"Lens {key}": [
+                    f"{cast('dict[str, float]', row['by_lens'])[key]:.0%}" for row in retention_rows
+                ]
+                for key in lens_keys
+            },
         }
+    )
+    st.caption(
+        "Retention covers score, top-k presence, and list position, and it is "
+        "checked on emitted output at every merge. It applies to the two "
+        "rank-protected segments. Sourced men keep their exact score but can "
+        "move down the list — that is the whole of this lens's re-allocation, "
+        "and it is stated in the harms note above rather than denied."
     )
 
     st.subheader("Recommendations")
