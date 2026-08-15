@@ -41,6 +41,12 @@ source kind for a name, voice, image, or genre. Code: `pipeline/identity.py`.
   correction can override a stale claim. Automated re-reading of a corrected
   upstream source is not shipped because the CLI has no live enricher; corrupt
   rows that violate a guardrail still fail closed (`tests/test_cache_serde.py`).
+  A *pending* correction — a person's filed note that a source has them wrong — is
+  never removed without evidence: reconciliation requires an upstream source to
+  have been consulted and to now assert the value that was proposed, a date-only
+  change clears nothing, and a change to some other value marks the row superseded
+  rather than deleting it (#70, 2026-08-14; before that, an ordinary demo refresh
+  deleted the row and reported success).
 - **Confidence is a tier, never a percentage.** `IdentityLabel.confidence` is an
   internal float used only to order/prioritise sources
   (`pipeline/identity.py::_SOURCE_BASE_CONFIDENCE`: 0.95 artist statement, 0.80

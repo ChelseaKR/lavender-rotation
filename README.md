@@ -44,7 +44,7 @@ These are hard rules, each enforced by a merge-blocking test (see
 ## Project status
 
 The offline demo and full pipeline are implemented and gated: `make verify` runs
-formatting/lint/SAST, strict typing, 563 tests at 97% coverage, dependency and
+formatting/lint/SAST, strict typing, 574 tests at 97% coverage, dependency and
 secret scans, axe/pa11y renders plus browser-driven keyboard/reflow/reduced-motion
 specs (Playwright, required in CI), offline multiworld evaluation with
 regression/fairness gates, and the i18n declaration gate. CodeQL, zizmor, OSV,
@@ -56,7 +56,11 @@ review-gated manual screen-reader/keyboard sign-offs — see
 `wad refresh` is deliberately labeled **demo-only**: it exercises cache expiry and
 before/after reporting with the committed fixture catalog, but it does not query an
 upstream identity provider. Real correction fold-back remains open with the deferred
-live-enrichment work; the command prints this limitation on every run.
+live-enrichment work; the command prints this limitation on every run. Because it
+queries no upstream, it **reconciles nothing** — a filed correction survives every
+refresh until a real upstream source is observed asserting the value that was
+proposed. A refresh that moves only a retrieval date is not evidence of an edit, and
+a change to some *other* value marks the row superseded rather than deleting it.
 
 This project is built in the open: [`docs/RESEARCH-ROADMAP.md`](./docs/RESEARCH-ROADMAP.md),
 [`docs/ideation/`](./docs/ideation/), and [`docs/USER-RESEARCH.md`](./docs/USER-RESEARCH.md)

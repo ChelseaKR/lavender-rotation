@@ -202,6 +202,19 @@ def _map_value(kind: SourceKind, value: str) -> Optional[Gender]:
     return _FREEFORM_VOCAB.get(raw.lower())
 
 
+def normalise_asserted_value(kind: SourceKind, value: str) -> Optional[Gender]:
+    """Public name for :func:`_map_value` — what gender a raw asserted value means.
+
+    Callers outside the resolver need this to compare two *asserted* values
+    without re-implementing the vocabulary: ``"female"`` and ``"woman"`` are the
+    same claim, and ``"Q6581072"`` is that claim again from Wikidata. The
+    corrections ledger uses it to decide whether an observed upstream value is
+    the one a person proposed (:mod:`pipeline.corrections`). Returns ``None``
+    for anything the controlled vocabulary does not cover — never a guess.
+    """
+    return _map_value(kind, value)
+
+
 def resolve_identity(evidence: Sequence[IdentityEvidence]) -> IdentityLabel:
     """Resolve an individual's identity from permitted evidence only.
 
