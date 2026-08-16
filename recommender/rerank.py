@@ -41,7 +41,7 @@ from dataclasses import replace
 
 from pipeline.models import Artist, Gender, Recommendation
 
-from recommender.lens import VALUES_LENS
+from recommender.lens import VALUES_LENS, LensSpec
 
 #: Backward-compatible alias for :data:`recommender.lens.VALUES_LENS`'s boost
 #: bound. Prefer importing ``VALUES_LENS`` directly for new code — this stays
@@ -49,13 +49,15 @@ from recommender.lens import VALUES_LENS
 MAX_BOOST = VALUES_LENS.max_boost
 
 
-def values_boost_for_artist(artist: Artist, lens_strength: float) -> float:
+def values_boost_for_artist(
+    artist: Artist, lens_strength: float, lens: LensSpec = VALUES_LENS
+) -> float:
     """The non-negative boost for an artist. Zero unless *sourced*-aligned.
 
     Delegates to :meth:`recommender.lens.LensSpec.boost` on the default
     :data:`~recommender.lens.VALUES_LENS`.
     """
-    return VALUES_LENS.boost(artist, lens_strength)
+    return lens.boost(artist, lens_strength)
 
 
 def values_boost(rec: Recommendation, lens_strength: float) -> float:

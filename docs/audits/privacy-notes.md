@@ -1,7 +1,12 @@
 # Privacy Notes (DPIA-style)
 
 > Instantiates RESPONSIBLE-TECH-AUDITS §C.
-> **Last verified: 2026-08-15 · Recheck cadence: per data-flow change.**
+> **Last verified: 2026-08-16 · Recheck cadence: per data-flow change.**
+>
+> *2026-08-16 — re-verified for ADR 0011 (queer lens).* A second sourced axis is
+> now stored. No new egress: the P91 claim is read from the Wikidata entity
+> already fetched for P21, so the request count is unchanged and no new question
+> is asked of anyone. See "Special-category data" below.
 >
 > *2026-08-15 — re-verified for FIX-01 (live identity enrichment).* One egress
 > module was added (`pipeline/http.py`); one data flow changed from "not shipped"
@@ -15,12 +20,24 @@
 |------|-------------|---------------|---------|-----------|
 | Last.fm username | low (personal) | identifies whose history to fetch | in-memory / local cache | until cache cleared |
 | Scrobbles (plays) | personal | the recommendation ground truth | `data/cache.db` (local) | until `make clean` |
-| Enriched artist metadata | public | identity + tags + similarity | `data/cache.db` (local) | re-fetched past the `--ttl-days` horizon; fixture-rewritten on demand |
+| Enriched artist metadata | public, **incl. Art. 9 special-category** (orientation, trans self-identification — ADR 0011) | identity + tags + similarity | `data/cache.db` (local) | re-fetched past the `--ttl-days` horizon; fixture-rewritten on demand |
 | API responses | public | rate-limit-respecting cache | `data/cache.db` (local) | overwritten on refetch |
 | Playlist export (opt-in) | personal | user-initiated push of the recommended artist names to Spotify | none (sent, not stored) | n/a — only on click |
 
-No special-category data is *inferred*; identity is only ever **sourced** about
-public figures (artists), never about the user.
+**Special-category data, stated plainly (ADR 0011).** This document used to say
+none was stored. That is no longer true and the change is deliberate: sexual
+orientation is GDPR Art. 9 special-category data outright, and the queer lens
+records it — together with a trans self-identification where a permitted source
+asserted one — about public figures (artists), never about the user, and never
+inferred. What has *not* changed: every claim carries a citation, `unknown` is
+the answer for almost everyone and is never a negative claim about them, nothing
+identity-bearing is ever exported (`tests/test_export_schema.py`), and the cache
+is local-only.
+
+The honest consequence is that one defence got weaker. Before, "this repo cannot
+produce a list of who is trans" was true of the type system — the vocabulary
+could not express it. It is now true of the *process* (no export path, local
+cache, no redistribution), which is a real defence but a weaker kind.
 
 ## Outbound data flows
 

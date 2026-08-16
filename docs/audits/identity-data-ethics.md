@@ -3,7 +3,16 @@
 > Instantiates RESPONSIBLE-TECH-AUDITS §A/§B for the distinctive risk of this
 > project: doing values-aware recommendation without inferring, essentializing,
 > or building a misusable gender database.
-> **Last verified: 2026-05-31 · Recheck cadence: per identity-source API change.**
+> **Last verified: 2026-08-16 · Recheck cadence: per identity-source API change.**
+>
+> *2026-08-16 — ADR 0011 added a second sourced axis (sexual orientation via
+> Wikidata P91 or a cited statement, plus trans self-identification read from
+> values a gender source already asserted). This is a step-change in
+> sensitivity and the commitments below now carry more weight than they did:
+> the worst-case artifact is no longer "a gender-of-musicians dataset" but a
+> list of who is queer or trans, which is dangerous for real people in much of
+> the world. Non-redistribution, no-export, local-only, and correct-at-source
+> are unchanged and are now load-bearing rather than precautionary.*
 
 ## Permitted identity sources (the *only* ones)
 
@@ -115,9 +124,12 @@ This is a deliberate, documented decision, not an oversight:
 
 ## Non-redistribution
 
-This repo ships **no** bulk musician-identity dataset. Identity is resolved
-on-demand from upstream sources and cached locally only (`data/cache.db`, git-
-ignored). MusicBrainz/Wikidata content is CC0 (attribution given); Discogs is used
+This repo ships **no** bulk musician-identity dataset. Identity — on both axes —
+is resolved on-demand from upstream sources and cached locally only
+(`data/cache.db`, git-ignored). The second axis does not change the shape of
+this commitment, but it raises the stakes: a local cache of who is queer or
+trans is exactly the artifact that must never be published, shared, or exported,
+and nothing in the codebase provides a path to do so. MusicBrainz/Wikidata content is CC0 (attribution given); Discogs is used
 under its API terms. The worst-case misuse — a scraped "gender of musicians"
 dataset — is structurally prevented: there is no export of identity data and the
 cache is personal/local. See `LICENSE` (data note) and `privacy-notes.md`.

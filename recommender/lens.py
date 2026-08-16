@@ -49,7 +49,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pipeline.models import VALUES_ALIGNED_GENDERS, Artist, Gender
+from pipeline.models import QUEER_ORIENTATIONS, VALUES_ALIGNED_GENDERS, Artist, Gender, Orientation
 
 
 def _clamp01(value: float) -> float:
@@ -75,6 +75,16 @@ class LensSpec:
     rationale: str
     harms_note: str
 
+    #: Optional second-axis policy (ADR 0011). When set, an artist also aligns
+    #: if their *sourced* orientation is in this set, or — when
+    #: ``include_trans_self_identified`` — a permitted source asserted a trans
+    #: self-identification. Both legs are gated by ``queer_gate_genders`` so a
+    #: lens scoped to "queer women and nonbinary people" does not silently widen
+    #: to everyone queer.
+    aligned_orientations: frozenset[Orientation] = frozenset()
+    include_trans_self_identified: bool = False
+    queer_gate_genders: frozenset[Gender] = frozenset()
+
     def aligned(self, artist: Artist) -> bool:
         """True iff *sourced* identity or *sourced* composition aligns with this lens.
 
@@ -98,7 +108,27 @@ class LensSpec:
         """
         if artist.identity.gender in self.aligned_genders:
             return True
+        if self._queer_aligned(artist):
+            return True
         return bool(artist.sourced_front_genders & self.aligned_genders)
+
+    def _queer_aligned(self, artist: Artist) -> bool:
+        """The second axis (ADR 0011), gated on gender so the scope stays stated.
+
+        ``queer_gate_genders`` is what keeps "queer *women* and nonbinary
+        people" from quietly becoming "everyone queer": a sourced queer claim
+        only aligns an artist whose sourced gender is in the gate. An artist of
+        unknown gender is not gated *into* the lens — we cannot establish they
+        are a woman — and, as everywhere else, is never penalised for it: they
+        keep their pure-taste score and their rank-protected position.
+        """
+        if not self.queer_gate_genders:
+            return False
+        if artist.identity.gender not in self.queer_gate_genders:
+            return False
+        if artist.queer.orientation in self.aligned_orientations:
+            return True
+        return bool(self.include_trans_self_identified and artist.queer.trans_self_identified)
 
     def boost(self, artist: Artist, strength: float) -> float:
         """The non-negative boost for ``artist`` at lens ``strength`` ∈ [0, 1].
@@ -170,3 +200,59 @@ VALUES_LENS = LensSpec(
         "positive sourced claim, never an unknown artist."
     ),
 )
+
+
+#: The queer lens (ADR 0011): sourced queer women, and sourced nonbinary artists.
+#:
+#: Two legs, deliberately asymmetric. **Nonbinary artists align on gender
+#: alone** — they are the most sparsely documented group here, and demanding a
+#: second, rarer disclosure of them would surface the fewest of exactly the
+#: people the lens exists for. **Women align on a sourced queer claim**: an
+#: orientation in :data:`~pipeline.models.QUEER_ORIENTATIONS`, or a sourced
+#: trans self-identification.
+#:
+#: Sourced men are out of scope by design, not by oversight — a gay man is not
+#: what "queer women and nonbinary people" names. Nothing about that is a
+#: judgement on him, and like every other unaligned artist he keeps his exact
+#: score.
+QUEER_LENS = LensSpec(
+    name="Sourced queer women & nonbinary artists",
+    aligned_genders=frozenset({Gender.NONBINARY}),
+    aligned_orientations=QUEER_ORIENTATIONS,
+    include_trans_self_identified=True,
+    queer_gate_genders=frozenset({Gender.WOMAN}),
+    max_boost=0.5,
+    rationale=(
+        "Surfaces artists whose own sourced self-identification is nonbinary, or "
+        "is a woman together with a sourced queer orientation or trans "
+        "self-identification. Every claim is cited and shown with the raw value "
+        "its source asserted, and the card says whether the artist stated it or a "
+        "registry recorded it — Wikidata's P91 is admitted for coverage but is "
+        "more often a biographer's characterisation than someone's own words. "
+        "Asexuality and demisexuality are recorded and not boosted: whether the "
+        "ace spectrum sits under a queer lens is contested among ace people, and "
+        "answering that silently would speak for them (revisable, ADR 0011)."
+    ),
+    harms_note=(
+        "This lens reads the most sensitive data this project holds, and the "
+        "honest statement is that the protection is now procedural rather than "
+        "structural. SCORE, for everyone: unchanged — no artist's score is ever "
+        "reduced, and an unaligned or unknown artist keeps their exact base "
+        "score at every strength. UNKNOWN: almost every artist is unknown on "
+        "this axis and always will be, because most people have never made a "
+        "public statement a registry recorded. Unknown here must never be read "
+        "as 'not queer' — it means nobody sourced it, and unknown artists keep "
+        "their rank-protected pure-taste position. OUTING: a cache that records "
+        "who is queer or trans is dangerous for real people in much of the "
+        "world; identity never leaves the machine (no export carries it, "
+        "tests/test_export_schema.py), it is local-only, and every claim is "
+        "correctable at its source. COVERAGE SKEW: sourced queerness skews "
+        "toward the already-famous, Anglophone, living and out, which is the "
+        "opposite of who a discovery tool should favour — so this lens boosts "
+        "rather than filters, and a listener seeing few picks is looking at a "
+        "gap in the world's records, not at the world."
+    ),
+)
+
+#: Every shipped lens, by the name a caller selects it with.
+LENSES: dict[str, LensSpec] = {"women-nonbinary": VALUES_LENS, "queer": QUEER_LENS}

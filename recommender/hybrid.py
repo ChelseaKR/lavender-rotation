@@ -33,6 +33,7 @@ from recommender.diversify import diversify
 from recommender.explain import build_explanation
 from recommender.feedback import Feedback, feedback_adjustment
 from recommender.filters import is_sourced_man_only
+from recommender.lens import VALUES_LENS, LensSpec
 from recommender.rerank import is_rank_protected, rerank, values_boost_for_artist
 
 
@@ -52,6 +53,7 @@ def recommend(
     feedbacks: list[Feedback] | None = None,
     feedback_strength: float = 1.0,
     hide_sourced_men: bool = False,
+    lens: LensSpec = VALUES_LENS,
 ) -> list[Recommendation]:
     """Produce the top-``k`` explained recommendations.
 
@@ -63,6 +65,8 @@ def recommend(
     popularity baseline), 1 = maximum tag-space diversity.
     ``feedbacks`` contains the listener's current per-artist votes. The bounded
     adjustment is part of the taste-side base score, before the values lens.
+    ``lens`` selects which declared :class:`~recommender.lens.LensSpec` boosts —
+    the shipped women/nonbinary one by default, or the queer lens (ADR 0011).
     ``hide_sourced_men`` is the listener's opt-in output filter — off by default,
     so the eval and every existing caller are unaffected. It is deliberately not
     the lens: see :mod:`recommender.filters` for why it removes only a positive
@@ -102,7 +106,7 @@ def recommend(
         base += feedback_adjustment(
             artist, feedbacks or (), feedback_strength, username=profile.username
         )
-        delta = values_boost_for_artist(artist, lens_strength)
+        delta = values_boost_for_artist(artist, lens_strength, lens)
         explanation = build_explanation(artist, c_res, t_res, delta, lens_strength)
         recs.append(
             Recommendation(

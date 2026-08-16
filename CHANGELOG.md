@@ -26,6 +26,35 @@ tag, not backfilled to an earlier commit date.
   as a minimal, separately-committed companion change rather than folded into that PR's diff.
 
 ### Added
+- **A queer lens, and the guardrail amendment it required** — `--lens-name queer` boosts sourced
+  queer women and sourced nonbinary artists, alongside the unchanged default lens. Recorded as
+  [ADR 0011](docs/adr/0011-queer-lens-and-the-trans-vocabulary-amendment.md), which **amends a
+  guardrail `CLAUDE.md` and `README.md` both marked binding** and should be read before touching
+  either identity axis.
+
+  "Queer" is not a new `Gender` value; it is a second sourced axis (`QueerIdentity`): an
+  `Orientation` from Wikidata P91 or a cited statement, plus a trans self-identification. Two
+  properties do the safety work. The axis is **read, not collected** — the raw value each source
+  asserted has always been stored for provenance, so a P21 claim of `Q1052281` (*trans woman*) was
+  already in every cache this project ever wrote; P91 comes out of the entity document already
+  fetched for P21, so the request count is unchanged and nobody is asked anything new. And
+  `trans_self_identified` is **tri-state, never `False`** — the model refuses to express "this
+  person is not trans", exactly as `female_fronted` refuses to express "not female-fronted".
+  `Gender` itself is untouched: a trans woman is still `Gender.WOMAN`, with no cis/trans
+  distinction in the gender vocabulary.
+
+  Scope decisions, all stated rather than assumed: nonbinary artists align on gender alone (no
+  second, rarer disclosure demanded of the least-documented group); sourced men are out of scope
+  by design and lose nothing by it; asexuality and demisexuality are recorded and not boosted, on
+  the `Gender.OTHER` precedent, because whether the ace spectrum sits under a queer lens is
+  contested among ace people and answering it silently would speak for them. Every Wikidata QID in
+  the vocabulary was verified against live Wikidata rather than guessed — `Q43455`, the obvious
+  guess for "queer", is *ethnology*.
+
+  `privacy-notes.md` can no longer claim no special-category data is stored, and now says so:
+  orientation is GDPR Art. 9 outright. The honest cost is recorded in the ADR — "this repo cannot
+  produce a list of who is trans" used to be true of the type system, and is now true only of the
+  process.
 - **`--hide-sourced-men`, an opt-in output filter** (`recommender/filters.py`), on
   `recommend`/`report`/`export`. The values lens is boost-only and bounded, so a sourced man with a
   high enough taste score survives it at any strength — that is what boost-only means, not a

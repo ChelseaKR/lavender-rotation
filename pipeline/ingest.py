@@ -19,7 +19,7 @@ from typing import Optional, overload
 
 from pipeline.cache import Cache
 from pipeline.enrich import EnrichmentSource
-from pipeline.identity import resolve_composition, resolve_identity
+from pipeline.identity import resolve_composition, resolve_identity, resolve_queer_identity
 from pipeline.lastfm import NamedSimilaritySource, ScrobbleSource
 from pipeline.models import Artist, IdentityLabel, ListeningProfile, Scrobble, Source
 
@@ -100,9 +100,14 @@ def enrich_artist(
     """
     tags = source.artist_tags(artist_id)
     evidence = list(enricher.gender_evidence(artist_id))
+    evidence.extend(enricher.orientation_evidence(artist_id))
     if cache is not None:
         evidence.extend(cache.get_corrections(artist_id))
     identity = resolve_identity(evidence)
+    # The same evidence, read for the second axis (ADR 0011). Both resolvers
+    # filter to the source kinds *they* accept, so a P91 claim can never move a
+    # gender label and a P21 claim can never move an orientation.
+    queer = resolve_queer_identity(evidence)
     fronts, comp_evidence = enricher.composition_evidence(artist_id)
     composition = resolve_composition(fronts, comp_evidence)
     return Artist(
@@ -110,6 +115,7 @@ def enrich_artist(
         name=name,
         tags=tags,
         identity=identity,
+        queer=queer,
         composition=composition,
         listeners=listeners,
         playcount=playcount,

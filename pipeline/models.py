@@ -104,6 +104,8 @@ class SourceKind(enum.Enum):
     WIKIDATA_P21 = "wikidata-p21"  # "sex or gender" claim
     MUSICBRAINZ_GENDER = "musicbrainz-gender"  # editorial / self-reported field
     ARTIST_STATEMENT = "artist-statement"  # a cited public self-identification
+    # --- About an individual's sexual orientation (ADR 0011) ------------------
+    WIKIDATA_P91 = "wikidata-p91"  # "sexual orientation" claim
     # --- About band lineup / role (composition only, NOT individual gender) ---
     DISCOGS_LINEUP = "discogs-lineup"
     MUSICBRAINZ_RELATIONSHIP = "musicbrainz-relationship"
@@ -116,12 +118,70 @@ class SourceKind(enum.Enum):
 INDIVIDUAL_IDENTITY_SOURCES: frozenset[SourceKind] = frozenset(
     {SourceKind.WIKIDATA_P21, SourceKind.MUSICBRAINZ_GENDER, SourceKind.ARTIST_STATEMENT}
 )
+#: Sources that may establish an individual's *sexual orientation* (ADR 0011).
+#: Deliberately disjoint from the gender set in what it may conclude: a P91 claim
+#: says nothing about anyone's gender, and a P21 claim says nothing about their
+#: orientation. Keeping the sets separate is what stops one axis leaking into the
+#: other the way a single "identity sources" bag would have allowed.
+ORIENTATION_SOURCES: frozenset[SourceKind] = frozenset(
+    {SourceKind.WIKIDATA_P91, SourceKind.ARTIST_STATEMENT}
+)
 #: Sources that may establish *band composition / lineup*.
 BAND_COMPOSITION_SOURCES: frozenset[SourceKind] = frozenset(
     {SourceKind.DISCOGS_LINEUP, SourceKind.MUSICBRAINZ_RELATIONSHIP, SourceKind.ARTIST_STATEMENT}
 )
 #: Every permitted source kind. Equal to the enum's members, by construction.
-PERMITTED_SOURCES: frozenset[SourceKind] = INDIVIDUAL_IDENTITY_SOURCES | BAND_COMPOSITION_SOURCES
+PERMITTED_SOURCES: frozenset[SourceKind] = (
+    INDIVIDUAL_IDENTITY_SOURCES | ORIENTATION_SOURCES | BAND_COMPOSITION_SOURCES
+)
+
+
+class Orientation(enum.Enum):
+    """Controlled sexual-orientation vocabulary. ``UNKNOWN`` is first-class.
+
+    Values are recorded as the source stated them and are never widened:
+    ``HOMOSEXUAL`` is kept distinct from ``LESBIAN`` and ``GAY`` because
+    deciding which of those a homosexuality claim means would require reading
+    the person's gender into their orientation — a small inference, but exactly
+    the kind this project does not make.
+    """
+
+    LESBIAN = "lesbian"
+    GAY = "gay"
+    HOMOSEXUAL = "homosexual"
+    BISEXUAL = "bisexual"
+    PANSEXUAL = "pansexual"
+    QUEER = "queer"  # stated as "queer", without further specificity
+    ASEXUAL = "asexual"
+    DEMISEXUAL = "demisexual"
+    HETEROSEXUAL = "heterosexual"
+    UNKNOWN = "unknown"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+#: Orientations the queer lens is configured to surface. A **lens policy** set,
+#: never a fact about the world — the same rule that governs
+#: :data:`VALUES_ALIGNED_GENDERS`: nothing that *asserts* something may read it.
+#:
+#: ``ASEXUAL`` and ``DEMISEXUAL`` are deliberately absent, on the
+#: :data:`VALUES_ALIGNED_GENDERS`/``Gender.OTHER`` precedent: whether the ace
+#: spectrum sits under a "queer" lens is genuinely contested among ace people
+#: themselves, so a lens that silently answered it would be making an unstated
+#: claim on their behalf. They are recorded faithfully and simply receive no
+#: boost. ``HETEROSEXUAL`` is likewise recorded and unaligned. Both are revisable
+#: with a stated rationale (ADR 0011), never by a quiet edit.
+QUEER_ORIENTATIONS: frozenset[Orientation] = frozenset(
+    {
+        Orientation.LESBIAN,
+        Orientation.GAY,
+        Orientation.HOMOSEXUAL,
+        Orientation.BISEXUAL,
+        Orientation.PANSEXUAL,
+        Orientation.QUEER,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -233,6 +293,79 @@ class IdentityLabel:
 UNKNOWN_IDENTITY = IdentityLabel()
 
 
+def _validate_orientation_sources(sources: tuple[Source, ...]) -> None:
+    for source in sources:
+        if source.kind not in ORIENTATION_SOURCES:
+            raise InferenceForbiddenError(
+                f"{source.kind} cannot establish an individual's sexual orientation"
+            )
+
+
+@dataclass(frozen=True)
+class QueerIdentity:
+    """The second sourced axis (ADR 0011): orientation, and trans self-identification.
+
+    Deliberately a separate object from :class:`IdentityLabel` rather than two
+    more fields on it. Gender and orientation are different claims from
+    different sources with different failure modes, and keeping them apart is
+    what makes "a P91 claim can never move a gender label, and a P21 claim can
+    never move an orientation" true by construction instead of by care.
+
+    :attr:`trans_self_identified` is **tri-state and never ``False``**, exactly
+    like :attr:`BandComposition.female_fronted`: ``True`` when a permitted
+    source asserted a trans self-identification, ``None`` otherwise. "Not
+    recorded as trans" is not "recorded as cis", and nothing here may be read
+    that way. Note what this does *not* change: :class:`Gender` still draws no
+    cis/trans distinction, and a trans woman's label is still exactly
+    ``Gender.WOMAN``.
+
+    Nothing is collected to populate this that was not already stored. The raw
+    value each source asserted has always been kept for provenance
+    (:attr:`Source.detail`), so a P21 claim of ``Q1052281`` was already in every
+    cache this project wrote; this reads it rather than fetching it.
+    """
+
+    orientation: Orientation = Orientation.UNKNOWN
+    orientation_sources: tuple[Source, ...] = ()
+    trans_self_identified: Optional[bool] = None
+    trans_sources: tuple[Source, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.orientation is Orientation.UNKNOWN:
+            if self.orientation_sources:
+                raise IdentityError("an unknown orientation cannot carry sources")
+        elif not self.orientation_sources:
+            raise UnsourcedIdentityError(
+                f"orientation {self.orientation} has no source — identity is never inferred"
+            )
+        _validate_orientation_sources(self.orientation_sources)
+        if self.trans_self_identified is False:
+            raise IdentityError(
+                "trans_self_identified is tri-state: True when sourced, otherwise None. "
+                "False would assert someone is not trans, which no source here establishes"
+            )
+        if self.trans_self_identified and not self.trans_sources:
+            raise UnsourcedIdentityError(
+                "a trans self-identification has no source — identity is never inferred"
+            )
+        if self.trans_sources:
+            _validate_individual_sources(self.trans_sources)
+
+    @property
+    def is_known(self) -> bool:
+        """True if *either* axis carries a sourced claim."""
+        return self.orientation is not Orientation.UNKNOWN or bool(self.trans_self_identified)
+
+    @property
+    def sources(self) -> tuple[Source, ...]:
+        """Every citation behind this object, for the why-card's provenance list."""
+        return self.orientation_sources + self.trans_sources
+
+
+#: The singleton "no sourced queer claim, and that is a normal answer" object.
+UNKNOWN_QUEER_IDENTITY = QueerIdentity()
+
+
 @dataclass(frozen=True)
 class FrontPerson:
     """A sourced member of a band's fronting lineup.
@@ -320,6 +453,9 @@ class Artist:
     name: str
     tags: tuple[str, ...] = ()
     identity: IdentityLabel = field(default_factory=IdentityLabel)
+    #: The second sourced axis (ADR 0011). Defaults to unknown on both halves,
+    #: which is what every artist enriched before that ADR carries.
+    queer: QueerIdentity = field(default_factory=QueerIdentity)
     composition: Optional[BandComposition] = None
     listeners: int = 0  # popularity proxy, for the baseline + debias check
     playcount: int = 0
