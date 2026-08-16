@@ -124,16 +124,18 @@ def recommend(
     base_rank_of = {r.artist.artist_id: i + 1 for i, r in enumerate(base_ordered)}
     recs = [rec.with_base_rank(base_rank_of[rec.artist.artist_id]) for rec in recs]
 
-    ranked = rerank(recs, lens_strength)
+    ranked = rerank(recs, lens_strength, lens)
 
     # Serendipity remains identity-blind inside diversify(). At this orchestration
     # boundary, pass it only the movable candidates, then reconstruct the full list
     # around the slots already protected by rerank(). Otherwise an MMR pass
     # after reranking can silently undo the absolute top-k/rank guarantee — for
     # sourced-OTHER artists as well as unknown ones (#68).
-    movable = [rec for rec in ranked if not is_rank_protected(rec.artist)]
+    movable = [rec for rec in ranked if not is_rank_protected(rec.artist, lens)]
     diversified = iter(diversify(movable, explore))
-    protected = [rec if is_rank_protected(rec.artist) else next(diversified) for rec in ranked]
+    protected = [
+        rec if is_rank_protected(rec.artist, lens) else next(diversified) for rec in ranked
+    ]
 
     # The listener's own opt-in subtraction, applied last — after ranking, after
     # rank protection, and after `base_rank` was recorded. Doing it here rather

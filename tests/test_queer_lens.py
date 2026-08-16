@@ -246,6 +246,74 @@ def test_the_lens_never_returns_a_negative_boost() -> None:
             assert 0.0 <= QUEER_LENS.boost(artist, strength) <= QUEER_LENS.max_boost
 
 
+# --- end to end, because the unit tests missed a lens that did nothing ------
+
+
+def test_the_chosen_lens_actually_reaches_the_ranking() -> None:
+    """Regression: `rerank()` recomputed every boost with the *default* lens.
+
+    Every assertion above passed while `--lens-name queer` was a no-op, because
+    they all called `LensSpec.aligned()` directly and never went through
+    `recommend()`. On real data it showed up immediately — the "queer lens"
+    surfaced women with no sourced queer claim at all.
+    """
+    from pipeline.lastfm import FixtureLastfm
+    from pipeline.models import ListeningProfile
+    from recommender.hybrid import recommend
+
+    catalog = {
+        "queer_woman": _artist("queer_woman", "Q6581072", orientation="Q6649"),
+        "woman": _artist("woman", "Q6581072"),
+    }
+    profile = ListeningProfile(
+        username="l",
+        play_counts={"seed": 1.0},
+        artist_names={"seed": "Seed"},
+        tags={"seed": ("folk",)},
+    )
+    source = FixtureLastfm({}, {}, {"seed": [("queer_woman", 0.5), ("woman", 0.5)]})
+
+    by_id = {
+        r.artist.artist_id: r
+        for r in recommend(profile, catalog, source, k=10, lens_strength=1.0, lens=QUEER_LENS)
+    }
+
+    assert by_id["queer_woman"].rerank_delta == QUEER_LENS.max_boost
+    assert by_id["woman"].rerank_delta == 0.0, "a woman with no sourced queer claim is not boosted"
+
+
+def test_the_default_lens_still_ranks_exactly_as_before() -> None:
+    """The threading must not have changed the shipped lens's behaviour."""
+    from pipeline.lastfm import FixtureLastfm
+    from pipeline.models import ListeningProfile
+    from recommender.hybrid import recommend
+
+    catalog = {"woman": _artist("woman", "Q6581072"), "man": _artist("man", "Q6581097")}
+    profile = ListeningProfile(
+        username="l", play_counts={"seed": 1.0}, artist_names={"seed": "S"}, tags={"seed": ("f",)}
+    )
+    source = FixtureLastfm({}, {}, {"seed": [("woman", 0.5), ("man", 0.5)]})
+
+    by_id = {
+        r.artist.artist_id: r for r in recommend(profile, catalog, source, k=10, lens_strength=1.0)
+    }
+    assert by_id["woman"].rerank_delta > 0.0
+    assert by_id["man"].rerank_delta == 0.0
+
+
+def _artist(artist_id: str, gender_qid: str, orientation: str | None = None) -> Artist:
+    evidence = [ev(SourceKind.WIKIDATA_P21, gender_qid)]
+    if orientation:
+        evidence.append(ev(SourceKind.WIKIDATA_P91, orientation))
+    return Artist(
+        artist_id=artist_id,
+        name=artist_id.title(),
+        tags=("folk",),
+        identity=resolve_identity(evidence),
+        queer=resolve_queer_identity(evidence),
+    )
+
+
 # --- plumbing ---------------------------------------------------------------
 
 
