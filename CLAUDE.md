@@ -1,4 +1,4 @@
-# Claude Code guide — women-artist-discovery
+# Claude Code guide — lavender-rotation
 
 - **Build entrypoint:** [`docs/ROADMAP.md`](./docs/ROADMAP.md) → *Implementation Plan*.
 - **Hard guardrails:** the [Guardrails section of the README](./README.md#guardrails)

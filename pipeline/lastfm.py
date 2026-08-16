@@ -31,7 +31,7 @@ from typing import Optional, Protocol, runtime_checkable
 from pipeline.cache import Cache
 from pipeline.models import Scrobble
 
-log = logging.getLogger("wad.lastfm")
+log = logging.getLogger("lavender.lastfm")
 
 #: An artist key is an MBID when Last.fm supplied one and the display name
 #: otherwise (see :func:`parse_recent_tracks`), so every downstream caller needs
@@ -200,7 +200,7 @@ def cache_key(params: Mapping[str, str]) -> str:
     rows) and :class:`CachedLastfm` (which reads them back with no credential to
     hand) have to agree on it exactly. Changing the key shape invalidates rows
     an earlier build wrote; that is the intended cost. Those rows simply miss
-    and are re-fetched (or aged out by ``wad refresh --ttl-days``).
+    and are re-fetched (or aged out by ``lavender refresh --ttl-days``).
     """
     query = urllib.parse.urlencode({**params, "format": "json"})
     return f"{LASTFM_API_ROOT}?{query}"
@@ -242,7 +242,7 @@ class FixtureLastfm:
 class CachedLastfm:
     """Replay-only :class:`ScrobbleSource`: answers from the local cache, never the network.
 
-    What ``wad recommend --user`` reads. Once ``wad ingest`` has run, every tag
+    What ``lavender recommend --user`` reads. Once ``lavender ingest`` has run, every tag
     and similarity response the recommender walks is already stored, so the read
     path needs no API key and opens no socket — which is the local-first posture
     taken literally: a cache miss is an empty answer, not a fetch.

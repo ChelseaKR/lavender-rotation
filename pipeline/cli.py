@@ -1,12 +1,12 @@
-"""Command-line entry point: ``wad ingest|eval|recommend|export|refresh``.
+"""Command-line entry point: ``lavender ingest|eval|recommend|export|refresh``.
 
 Argparse glue over the library; omitted from coverage accounting, but the gate
-behaviour of ``wad eval`` (exit codes, regression/fairness blocks) and ``wad
+behaviour of ``lavender eval`` (exit codes, regression/fairness blocks) and ``wad
 refresh`` is exercised directly by ``tests/test_eval.py`` and
 ``tests/test_cache_lifecycle.py``.
 
 Every product command still defaults to the offline demo world, and everything
-that reaches upstream is opt-in and named: ``wad ingest --user <you>`` is the
+that reaches upstream is opt-in and named: ``lavender ingest --user <you>`` is the
 one command that fetches a real listening history and resolves identity against
 MusicBrainz/Wikidata, and ``--user`` on the recommendation surfaces then reads
 back what it cached. Without ``--user`` nothing here opens a socket.
@@ -77,10 +77,10 @@ class LiveModeError(RuntimeError):
 
 
 def _require_api_key() -> str:
-    key = os.environ.get("WAD_LASTFM_API_KEY", "").strip()
+    key = os.environ.get("LAVENDER_LASTFM_API_KEY", "").strip()
     if not key:
         raise LiveModeError(
-            "live mode needs a Last.fm API key. Set WAD_LASTFM_API_KEY "
+            "live mode needs a Last.fm API key. Set LAVENDER_LASTFM_API_KEY "
             "(get one at https://www.last.fm/api/account/create), or omit --user "
             "to use the offline demo world."
         )
@@ -91,7 +91,7 @@ def _live_enricher(cache: Cache, *, retrieved_at: str, ttl_days: int) -> MusicBr
     """The live identity enricher, wired to the one allowlisted HTTP seam."""
     fetcher = CachedHttpFetcher(
         cache,
-        user_agent=build_user_agent(os.environ.get("WAD_CONTACT", "")),
+        user_agent=build_user_agent(os.environ.get("LAVENDER_CONTACT", "")),
         ttl_days=ttl_days,
     )
     return MusicBrainzEnricher(fetcher, retrieved_at=retrieved_at)
@@ -102,7 +102,7 @@ def _load_world(
 ) -> tuple[ListeningProfile, dict[str, Artist], ScrobbleSource]:
     """The demo world, or the operator's own cached one when ``--user`` is given.
 
-    Both branches are offline. ``wad ingest`` is the command that reaches
+    Both branches are offline. ``lavender ingest`` is the command that reaches
     upstream; everything it fetched — scrobbles, tags, the similar-artist graph
     the collaborative signal walks — is in the cache by the time a
     recommendation surface runs, so reading it back needs no credential and
@@ -116,7 +116,7 @@ def _load_world(
     if not profile.play_counts:
         raise LiveModeError(
             f"no listening history cached for {username!r} — run "
-            f"`wad ingest --user {username}` first"
+            f"`lavender ingest --user {username}` first"
         )
     return profile, catalog_from_cache(cache), source
 
@@ -146,7 +146,7 @@ def _add_world_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--user",
         default=DEMO_USER,
-        help=f"Last.fm username previously synced with `wad ingest` (default: the "
+        help=f"Last.fm username previously synced with `lavender ingest` (default: the "
         f"offline {DEMO_USER!r} world)",
     )
     parser.add_argument("--db", default=str(DEFAULT_DB_PATH), help="cache database path")
@@ -213,7 +213,7 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     report["fairness"] = fairness
 
     # AIEV-26/27: regression-vs-baseline, not just beats-popularity. A missing
-    # baseline file is a warning, not a failure — the first `wad eval` run on a
+    # baseline file is a warning, not a failure — the first `lavender eval` run on a
     # fresh clone (or before docs/audits/eval-baseline.json is ever created)
     # must still pass.
     baseline_path = Path(args.baseline)
@@ -349,7 +349,7 @@ def _cmd_refresh(args: argparse.Namespace) -> int:
                 #   only constructible from at least one cited, SELF_IDENTIFIED
                 #   source (``pipeline/models.py``), and showing it alongside that
                 #   basis and those sources is the product's stated purpose (README
-                #   "Guardrails"). ``wad recommend`` prints the same fact, and the
+                #   "Guardrails"). ``lavender recommend`` prints the same fact, and the
                 #   dashboard renders it.
                 # * This subcommand is DEMO ONLY (see the banner printed above):
                 #   ``new`` comes from the fixture catalog committed to this repo and
@@ -499,7 +499,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
         f"{len(catalog) - sourced} unknown"
     )
     print("  (unknown is first-class here — it never down-ranks anyone)")  # noqa: T201
-    print(f"next: wad recommend --user {args.user}")  # noqa: T201
+    print(f"next: lavender recommend --user {args.user}")  # noqa: T201
     return 0
 
 
@@ -552,7 +552,7 @@ def _cmd_export(args: argparse.Namespace) -> int:
             lens=LENSES[args.lens_name],
         )
     tracks = recommendations_to_tracks(recs)
-    text = render(tracks, ExportFormat(args.format), playlist_name="Women-Artist Discovery")
+    text = render(tracks, ExportFormat(args.format), playlist_name="Lavender Rotation")
     if args.out:
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -627,7 +627,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="wad", description=__doc__)
+    parser = argparse.ArgumentParser(prog="lavender", description=__doc__)
     parser.add_argument(
         "--log-format",
         choices=LOG_FORMATS,

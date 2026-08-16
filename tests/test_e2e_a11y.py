@@ -20,7 +20,7 @@ sign-off (M5, human-only), the Streamlit dashboard (stock components, recorded
 for M5), and Lighthouse CI (still absent — see docs/audits/accessibility notes).
 
 The specs need a real Chrome/Chromium. When none is reachable they *skip* with
-an actionable message; CI exports ``WAD_E2E_REQUIRE=1`` so a missing browser
+an actionable message; CI exports ``LAVENDER_E2E_REQUIRE=1`` so a missing browser
 there is a hard failure instead of a silent gate-weakening skip (the A11Y-03
 "local and CI diverge in strictness" lesson).
 """
@@ -41,7 +41,7 @@ if TYPE_CHECKING:  # playwright is an optional (e2e group) dependency
 
 pytestmark = pytest.mark.e2e
 
-_REQUIRE = os.environ.get("WAD_E2E_REQUIRE") == "1"
+_REQUIRE = os.environ.get("LAVENDER_E2E_REQUIRE") == "1"
 
 #: Focus outline contract from ``app/render.py``'s stylesheet: 3px solid, both
 #: schemes ≥ 3:1 against the background (see ``tests/test_contrast.py``).
@@ -50,7 +50,7 @@ _MIN_OUTLINE_PX = 3.0
 
 def _unavailable(reason: str) -> None:
     if _REQUIRE:
-        pytest.fail(f"WAD_E2E_REQUIRE=1 but {reason}", pytrace=False)
+        pytest.fail(f"LAVENDER_E2E_REQUIRE=1 but {reason}", pytrace=False)
     pytest.skip(reason)
 
 

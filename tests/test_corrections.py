@@ -136,7 +136,7 @@ def test_cache_schema_migration_is_idempotent_on_reopen(tmp_path) -> None:
 
 
 def test_corrections_survive_refresh(mem_cache) -> None:
-    """`wad refresh` only expires http_cache — corrections are untouched."""
+    """`lavender refresh` only expires http_cache — corrections are untouched."""
     correction = IdentityEvidence(
         kind=SourceKind.ARTIST_STATEMENT,
         value="woman",

@@ -26,7 +26,7 @@ import logging
 import sys
 import time
 
-_NAMESPACE = "wad"
+_NAMESPACE = "lavender"
 _CONFIGURED_LOGGERS: set[int] = set()
 _OUR_HANDLERS: dict[int, logging.Handler] = {}
 

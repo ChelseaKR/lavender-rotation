@@ -595,6 +595,56 @@ wheels = [
 ]
 
 [[package]]
+name = "lavender-rotation"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "requests" },
+]
+
+[package.optional-dependencies]
+app = [
+    { name = "pandas" },
+    { name = "pillow" },
+    { name = "streamlit" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "hypothesis" },
+    { name = "mypy" },
+    { name = "pip-audit" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+    { name = "types-requests" },
+]
+e2e = [
+    { name = "playwright" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pandas", marker = "extra == 'app'", specifier = ">=2.0" },
+    { name = "pillow", marker = "extra == 'app'", specifier = ">=12.3" },
+    { name = "requests", specifier = ">=2.33" },
+    { name = "streamlit", marker = "extra == 'app'", specifier = ">=1.54" },
+]
+provides-extras = ["app"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "hypothesis", specifier = ">=6" },
+    { name = "mypy", specifier = ">=1.18" },
+    { name = "pip-audit", specifier = ">=2.7" },
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "pytest-cov", specifier = ">=6" },
+    { name = "ruff", specifier = ">=0.15" },
+    { name = "types-requests" },
+]
+e2e = [{ name = "playwright", specifier = ">=1.55" }]
+
+[[package]]
 name = "librt"
 version = "0.12.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1747,53 +1797,3 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/9f/3e/28135a24e384493fa804216b79a6a6759a38cc4ff59118787b9fb693df93/websockets-16.0-cp314-cp314t-win_amd64.whl", hash = "sha256:b14dc141ed6d2dde437cddb216004bcac6a1df0935d79656387bd41632ba0bbd", size = 178531, upload-time = "2026-01-10T09:23:35.016Z" },
     { url = "https://files.pythonhosted.org/packages/6f/28/258ebab549c2bf3e64d2b0217b973467394a9cea8c42f70418ca2c5d0d2e/websockets-16.0-py3-none-any.whl", hash = "sha256:1637db62fad1dc833276dded54215f2c7fa46912301a24bd94d45d46a011ceec", size = 171598, upload-time = "2026-01-10T09:23:45.395Z" },
 ]
-
-[[package]]
-name = "women-artist-discovery"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "requests" },
-]
-
-[package.optional-dependencies]
-app = [
-    { name = "pandas" },
-    { name = "pillow" },
-    { name = "streamlit" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "hypothesis" },
-    { name = "mypy" },
-    { name = "pip-audit" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-    { name = "types-requests" },
-]
-e2e = [
-    { name = "playwright" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "pandas", marker = "extra == 'app'", specifier = ">=2.0" },
-    { name = "pillow", marker = "extra == 'app'", specifier = ">=12.3" },
-    { name = "requests", specifier = ">=2.33" },
-    { name = "streamlit", marker = "extra == 'app'", specifier = ">=1.54" },
-]
-provides-extras = ["app"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "hypothesis", specifier = ">=6" },
-    { name = "mypy", specifier = ">=1.18" },
-    { name = "pip-audit", specifier = ">=2.7" },
-    { name = "pytest", specifier = ">=9.0.3" },
-    { name = "pytest-cov", specifier = ">=6" },
-    { name = "ruff", specifier = ">=0.15" },
-    { name = "types-requests" },
-]
-e2e = [{ name = "playwright", specifier = ">=1.55" }]

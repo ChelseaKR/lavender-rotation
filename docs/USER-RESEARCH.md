@@ -131,7 +131,7 @@ Full citation list and the high-stakes cross-checks are in
 
 #### A1 — Chelsea, owner using it as a listener
 - **Goal.** Lean into a taste that already skews toward women and female-fronted bands — *on purpose*, without a tool that either ignores identity or guesses it.
-- **Values today.** The hybrid `wad recommend --lens 0.5` set; the always-visible, explained lens slider; the per-pick "Why this artist" card (signals + identity basis + provenance); local-first, no account. *(the core value prop — [shipped])*
+- **Values today.** The hybrid `lavender recommend --lens 0.5` set; the always-visible, explained lens slider; the per-pick "Why this artist" card (signals + identity basis + provenance); local-first, no account. *(the core value prop — [shipped])*
 - **Gets stuck.** On a 10-pick run she can't see *how much* of it is sourced-women vs "unknown surfaced on similarity" — the proportion is implicit, so the values lens feels like it's working without proof.
 - **Wants next.** A one-line coverage readout per run ("6 of 10 picks have a sourced identity; 4 surfaced on taste alone"); a saved "discovery report" she can revisit.
 - **Adopts if.** Each session shows the values lens *and* taste are both honored. **Walks if.** It starts to feel like it's hiding men or padding with already-famous women.
@@ -159,7 +159,7 @@ Full citation list and the high-stakes cross-checks are in
 
 #### A5 — Theo, Spotify-export user
 - **Goal.** Push a generated set into Spotify, his daily driver, in one click.
-- **Values today.** `wad export` + dashboard download; **credential-free** formats (plain text / CSV / M3U / JSPF) that need no account and stay fully local; live Spotify via env-only OAuth that sends **only artist names**, never listening history or identity data. *(export package — [shipped])*
+- **Values today.** `lavender export` + dashboard download; **credential-free** formats (plain text / CSV / M3U / JSPF) that need no account and stay fully local; live Spotify via env-only OAuth that sends **only artist names**, never listening history or identity data. *(export package — [shipped])*
 - **Gets stuck.** Live export needs his own Spotify app + a browser consent (the `RequestsTransport` path is the one uncovered, live-network surface); the exported playlist loses the *why* and the identity basis — it's just names.
 - **Wants next.** A clearer first-run OAuth walkthrough; an optional sidecar (CSV/JSPF) that carries the *sourced* identity basis + provenance so the values context survives the export — without ever emitting an inferred field.
 - **Adopts if.** Export is one consent away and keeps the provenance. **Walks if.** Setup is opaque or the export quietly drops the "unknown"/sourced distinction. *(playlist/export was roadmap "Should" — [shipped]; identity sidecar — [new])*

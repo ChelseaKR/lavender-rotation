@@ -44,7 +44,7 @@ from pipeline.identity import IdentityEvidence, resolve_identity
 from pipeline.lastfm import looks_like_mbid
 from pipeline.models import FrontPerson, IdentityLabel, SourceKind
 
-log = logging.getLogger("wad.enrich")
+log = logging.getLogger("lavender.enrich")
 
 # MusicBrainz gender field — the only values we accept; anything else is ignored
 # (treated as unknown) rather than coerced.
@@ -452,7 +452,7 @@ class MusicBrainzEnricher:
         live path can offer exactly one source here. An artist's own cited
         words are the higher-trust source, but nothing publishes them in a
         machine-readable form; they reach the resolver through the corrections
-        ledger (``wad corrections --artist … --value queer --citation …``),
+        ledger (``lavender corrections --artist … --value queer --citation …``),
         which is also the route by which a person can get their own entry
         right when a registry has it wrong.
         """

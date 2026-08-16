@@ -128,10 +128,10 @@ a11y: ## Stage 5 — audit the COMMITTED render plus pinned light/dark renders (
 
 # The specs also run inside `make test` (they auto-skip when no Chrome/Chromium
 # is reachable); this dedicated entry point makes a missing browser a hard
-# failure, which is exactly how CI runs them (WAD_E2E_REQUIRE=1 on `make
+# failure, which is exactly how CI runs them (LAVENDER_E2E_REQUIRE=1 on `make
 # verify`), so local and server strictness cannot silently diverge (A11Y-03).
 a11y-e2e: ## Stage 5b — browser-driven keyboard/reflow/reduced-motion specs (Playwright + Chrome)
-	WAD_E2E_REQUIRE=1 $(PYTHON) -m pytest tests/test_e2e_a11y.py -m e2e --no-cov -q
+	LAVENDER_E2E_REQUIRE=1 $(PYTHON) -m pytest tests/test_e2e_a11y.py -m e2e --no-cov -q
 
 eval: ## Stage 7 — multi-world offline eval; fails unless hybrid beats baseline on aggregate (FIX-06)
 	$(PYTHON) -m pipeline.cli eval --k 5 --out docs/audits/eval-report.json

@@ -1,4 +1,4 @@
-# Research-Backed Roadmap — Women-Artist Discovery
+# Research-Backed Roadmap — Lavender Rotation
 
 Last verified: 2026-07-11
 

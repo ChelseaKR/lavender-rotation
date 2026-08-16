@@ -6,8 +6,8 @@
     "timestamp": "2026-06-30T00:00:00Z",
     "component": {
       "type": "application",
-      "name": "women-artist-discovery",
-      "bom-ref": "pkg:pypi/women-artist-discovery@0.1.0",
+      "name": "lavender-rotation",
+      "bom-ref": "pkg:pypi/lavender-rotation@0.1.0",
       "version": "0.1.0"
     },
     "properties": [

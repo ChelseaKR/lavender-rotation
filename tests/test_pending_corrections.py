@@ -196,7 +196,7 @@ def test_reconcile_with_no_changes_at_all_is_a_noop(tmp_path: Path) -> None:
 
 
 def test_nothing_reconciles_when_no_upstream_was_queried(tmp_path: Path) -> None:
-    """The shipped ``wad refresh`` queries nothing, so it may reconcile nothing.
+    """The shipped ``lavender refresh`` queries nothing, so it may reconcile nothing.
 
     Even handed a change that *would* match, the demo path must not clear a row:
     with no upstream consulted, no upstream edit could have landed.

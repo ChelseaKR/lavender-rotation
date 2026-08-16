@@ -26,8 +26,8 @@ from export.models import ExportError
 from recommender.hybrid import recommend
 
 _ENV = {
-    "WAD_TIDAL_CLIENT_ID": "cid",
-    "WAD_TIDAL_REDIRECT_URI": "http://127.0.0.1:8080/callback",
+    "LAVENDER_TIDAL_CLIENT_ID": "cid",
+    "LAVENDER_TIDAL_REDIRECT_URI": "http://127.0.0.1:8080/callback",
 }
 
 
@@ -107,8 +107,8 @@ def _authorized_client(
 
 def test_credentials_come_from_env_and_name_what_is_missing() -> None:
     with pytest.raises(ExportError) as excinfo:
-        td.TidalCredentials.from_env({"WAD_TIDAL_CLIENT_ID": "cid"})
-    assert "WAD_TIDAL_REDIRECT_URI" in str(excinfo.value)
+        td.TidalCredentials.from_env({"LAVENDER_TIDAL_CLIENT_ID": "cid"})
+    assert "LAVENDER_TIDAL_REDIRECT_URI" in str(excinfo.value)
 
 
 def test_client_secret_is_optional_for_a_public_pkce_client() -> None:
@@ -120,7 +120,7 @@ def test_client_secret_is_optional_for_a_public_pkce_client() -> None:
 
 
 def test_client_secret_when_present_becomes_basic_auth() -> None:
-    creds = td.TidalCredentials.from_env({**_ENV, "WAD_TIDAL_CLIENT_SECRET": "shh"})
+    creds = td.TidalCredentials.from_env({**_ENV, "LAVENDER_TIDAL_CLIENT_SECRET": "shh"})
     header = creds.token_auth_header()
     assert header is not None and header.startswith("Basic ")
 

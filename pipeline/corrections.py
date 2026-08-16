@@ -3,7 +3,7 @@
 EXP-05's round-trip is: a provenance item is wrong or stale -> the reader
 opens the pre-filled upstream edit link (:mod:`recommender.upstream`) ->
 they file a *local* note of what they proposed here -> they make the real
-edit on Wikidata/MusicBrainz themselves -> the next ``wad refresh`` re-fetches
+edit on Wikidata/MusicBrainz themselves -> the next ``lavender refresh`` re-fetches
 and reports the change (:class:`~pipeline.ingest.IdentityLabelChange`) ->
 :func:`reconcile` clears the matching pending row.
 
@@ -25,7 +25,7 @@ deleted it while reporting success. Now:
 * a change to some *other* value marks the row **superseded** — it stays in the
   file, carrying what upstream now says, and is reported. Nothing vanishes;
 * reconciliation runs only when an upstream source was actually consulted. The
-  shipped ``wad refresh`` is demo-only and queries nothing, so it reconciles
+  shipped ``lavender refresh`` is demo-only and queries nothing, so it reconciles
   nothing and says so, instead of reporting "reconciled N pending upstream
   correction(s)" with no upstream behind the word.
 """
@@ -289,7 +289,7 @@ def reconcile_after_refresh(
 ) -> ReconcileOutcome:
     """Reconcile only if an upstream source was actually consulted.
 
-    The shipped ``wad refresh`` rewrites the committed fixture catalog and
+    The shipped ``lavender refresh`` rewrites the committed fixture catalog and
     performs no network fetch (``pipeline.ingest.refresh_catalog``'s dict
     branch), so it passes ``upstream_queried=False`` and nothing is reconciled —
     no upstream edit *could* have landed. When the deferred live-enrichment work

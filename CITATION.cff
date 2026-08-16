@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: Women-Artist Discovery
+title: Lavender Rotation
 message: >-
   If you use this work, please cite it. This is unreleased pre-1.0 development
   software: no git tag or GitHub release exists yet, so cite by commit hash
@@ -11,4 +11,4 @@ authors:
 version: 0.1.0
 date-released: 2026-07-17
 license: MIT
-repository-code: "https://github.com/ChelseaKR/women-artist-discovery"
+repository-code: "https://github.com/ChelseaKR/lavender-rotation"

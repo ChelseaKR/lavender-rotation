@@ -43,7 +43,7 @@ DEFAULT_DB_PATH = default_db_path()
 CACHE_SCHEMA_VERSION = 4
 
 #: Default staleness horizon for cached HTTP responses / identity claims, in days.
-#: Applied by callers that pass ``ttl_days`` (or ``wad refresh``); the default is
+#: Applied by callers that pass ``ttl_days`` (or ``lavender refresh``); the default is
 #: conservative and re-checks on a cadence matching ``identity-data-ethics.md``'s
 #: "recheck per identity-source API change".
 DEFAULT_HTTP_TTL_DAYS = 30
@@ -177,7 +177,7 @@ class Cache:
             self.conn.close()
             raise CacheSchemaError(
                 f"cache schema v{current} is newer than supported v{CACHE_SCHEMA_VERSION}; "
-                "upgrade women-artist-discovery or start from a fresh cache"
+                "upgrade lavender-rotation or start from a fresh cache"
             )
         with closing(self.conn.cursor()) as cur:
             for target in range(current + 1, CACHE_SCHEMA_VERSION + 1):
@@ -315,7 +315,7 @@ class Cache:
         """Delete cached responses older than ``ttl_days``. Returns the number removed.
 
         This makes a subsequent live client call miss the cache. The shipped
-        ``wad refresh`` command is fixture-only and does not make that client call.
+        ``lavender refresh`` command is fixture-only and does not make that client call.
         """
         rows = self.conn.execute("SELECT url, fetched_at FROM http_cache").fetchall()
         stale = [r["url"] for r in rows if self._is_stale(r["fetched_at"], ttl_days, now)]

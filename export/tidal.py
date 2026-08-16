@@ -12,9 +12,9 @@ Qobuz. See ``docs/PROJECT-SCOPE.md`` for where those two stand.
 
 To run live you need a TIDAL app and these env vars::
 
-    WAD_TIDAL_CLIENT_ID=...
-    WAD_TIDAL_CLIENT_SECRET=...        # optional: public clients use PKCE alone
-    WAD_TIDAL_REDIRECT_URI=http://127.0.0.1:8080/callback
+    LAVENDER_TIDAL_CLIENT_ID=...
+    LAVENDER_TIDAL_CLIENT_SECRET=...        # optional: public clients use PKCE alone
+    LAVENDER_TIDAL_REDIRECT_URI=http://127.0.0.1:8080/callback
 
 OAuth steps the caller drives, identical in shape to the Spotify flow:
 
@@ -86,14 +86,14 @@ class TidalCredentials:
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> TidalCredentials:
         """Build credentials from ``env``; raise :class:`ExportError` if incomplete."""
-        client_id = env.get("WAD_TIDAL_CLIENT_ID", "").strip()
-        redirect_uri = env.get("WAD_TIDAL_REDIRECT_URI", "").strip()
-        client_secret = env.get("WAD_TIDAL_CLIENT_SECRET", "").strip()
+        client_id = env.get("LAVENDER_TIDAL_CLIENT_ID", "").strip()
+        redirect_uri = env.get("LAVENDER_TIDAL_REDIRECT_URI", "").strip()
+        client_secret = env.get("LAVENDER_TIDAL_CLIENT_SECRET", "").strip()
         missing = [
             name
             for name, value in (
-                ("WAD_TIDAL_CLIENT_ID", client_id),
-                ("WAD_TIDAL_REDIRECT_URI", redirect_uri),
+                ("LAVENDER_TIDAL_CLIENT_ID", client_id),
+                ("LAVENDER_TIDAL_REDIRECT_URI", redirect_uri),
             )
             if not value
         ]
@@ -353,7 +353,7 @@ def export_recommendations(
     if not tracks:
         raise ExportError("nothing to export: the recommendation set is empty")
 
-    name = playlist_name or f"Women-Artist Discovery — {username}"
+    name = playlist_name or f"Lavender Rotation — {username}"
     description = (
         "Values-aware discovery: women, nonbinary, and sourced female-fronted "
         "artists surfaced from your listening. Identity is sourced, never inferred."

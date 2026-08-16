@@ -1,4 +1,4 @@
-"""``wad doctor`` diagnostics (FIX-12 — operability pass).
+"""``lavender doctor`` diagnostics (FIX-12 — operability pass).
 
 All the actual checking logic lives here, pure and unit-testable; the CLI
 (``pipeline/cli.py``, excluded from the coverage gate) is thin argparse +
@@ -14,12 +14,12 @@ Checks:
   :data:`pipeline.cache.CACHE_SCHEMA_VERSION`, and its on-disk size. Hard
   checks: a cache that won't open or is on the wrong schema version is
   exactly the kind of silent failure this command exists to surface. Size is
-  informational — it's the one signal `wad doctor` gives an operator for
-  *when* to reach for `wad refresh --ttl-days`, since nothing else in the
+  informational — it's the one signal `lavender doctor` gives an operator for
+  *when* to reach for `lavender refresh --ttl-days`, since nothing else in the
   CLI reports cache footprint.
 * **upstream** — opt-in only (``--check-upstream``); pings the four external
   APIs this project talks to. Never runs by default, and its own failures are
-  never hard (a bad network shouldn't make ``wad doctor`` non-zero on a
+  never hard (a bad network shouldn't make ``lavender doctor`` non-zero on a
   perfectly healthy local install).
 """
 
@@ -33,20 +33,20 @@ from pipeline.cache import CACHE_SCHEMA_VERSION, Cache, CacheSchemaError
 from pipeline.paths import default_db_path, resolve_data_dir
 
 # Environment variables the pipeline reads. None are strictly required for
-# demo mode; WAD_LASTFM_API_KEY enables live ingest, WAD_CONTACT supplies the
+# demo mode; LAVENDER_LASTFM_API_KEY enables live ingest, LAVENDER_CONTACT supplies the
 # contact detail MusicBrainz's rate-limit policy asks live enrichment to send in
-# its User-Agent, and the WAD_SPOTIFY_* / WAD_TIDAL_* sets each enable one
-# playlist-export provider. A new exporter belongs here so `wad doctor` can tell
+# its User-Agent, and the LAVENDER_SPOTIFY_* / LAVENDER_TIDAL_* sets each enable one
+# playlist-export provider. A new exporter belongs here so `lavender doctor` can tell
 # the operator what is configured. Report presence only — never the value.
 ENV_KEYS: tuple[str, ...] = (
-    "WAD_LASTFM_API_KEY",
-    "WAD_CONTACT",
-    "WAD_SPOTIFY_CLIENT_ID",
-    "WAD_SPOTIFY_CLIENT_SECRET",
-    "WAD_SPOTIFY_REDIRECT_URI",
-    "WAD_TIDAL_CLIENT_ID",
-    "WAD_TIDAL_CLIENT_SECRET",
-    "WAD_TIDAL_REDIRECT_URI",
+    "LAVENDER_LASTFM_API_KEY",
+    "LAVENDER_CONTACT",
+    "LAVENDER_SPOTIFY_CLIENT_ID",
+    "LAVENDER_SPOTIFY_CLIENT_SECRET",
+    "LAVENDER_SPOTIFY_REDIRECT_URI",
+    "LAVENDER_TIDAL_CLIENT_ID",
+    "LAVENDER_TIDAL_CLIENT_SECRET",
+    "LAVENDER_TIDAL_REDIRECT_URI",
 )
 
 # (human label, host) — used only by the opt-in upstream reachability check.
@@ -62,7 +62,7 @@ UPSTREAM_APIS: tuple[tuple[str, str], ...] = (
 class Check:
     """One diagnostic result.
 
-    ``hard`` marks whether a failure should make ``wad doctor`` exit non-zero;
+    ``hard`` marks whether a failure should make ``lavender doctor`` exit non-zero;
     informational checks (env presence, opt-in upstream reachability) are
     reported but never fail the run on their own.
     """

@@ -1,7 +1,7 @@
 """FIX-04: cache lifecycle — dedupe, TTL, schema versioning/migrations, refresh.
 
 The cache backs *identity claims*, so its lifecycle is a responsible-tech surface:
-a stale cached claim must be re-checkable (TTL / ``wad refresh``), re-ingesting the
+a stale cached claim must be re-checkable (TTL / ``lavender refresh``), re-ingesting the
 same history must not double play weights (dedupe), and a schema mismatch must fail
 loudly rather than silently misread (versioning).
 """
@@ -151,7 +151,7 @@ def test_refresh_is_silent_for_unchanged_and_new_artists(mem_cache) -> None:
     assert mem_cache.get_artist("new-artist") is not None  # but the new artist is stored
 
 
-# -- `wad refresh` CLI -------------------------------------------------------------
+# -- `lavender refresh` CLI -------------------------------------------------------------
 
 
 def test_cli_refresh_populates_a_fresh_cache_and_exits_zero(tmp_path, capsys) -> None:
@@ -177,7 +177,7 @@ def test_cli_refresh_rejects_negative_ttl(tmp_path) -> None:
     assert exc.value.code == 2
 
 
-# -- #70: `wad refresh` must not delete a filed correction ------------------------
+# -- #70: `lavender refresh` must not delete a filed correction ------------------------
 
 
 def _seed_stale_only_in_retrieved_at(db, artist_id: str) -> str:

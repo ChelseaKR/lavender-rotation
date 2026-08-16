@@ -1,4 +1,4 @@
-# Women-Artist Discovery
+# Lavender Rotation
 
 **A demo-first music-discovery engine that surfaces new women, nonbinary, and female-fronted artists through an explicit values lens — including a queer lens for sourced queer women and nonbinary artists.** It combines collaborative and content signals with a sourced-identity re-ranker. Identity is never inferred, and "unknown" is a normal, first-class answer.
 
@@ -21,14 +21,14 @@ To run it against your own listening history instead, sync once and then point a
 recommendation surface at your username:
 
 ```sh
-export WAD_LASTFM_API_KEY=...     # https://www.last.fm/api/account/create
-export WAD_CONTACT=you@example.org  # sent in the User-Agent MusicBrainz asks for
-wad ingest --user <your-lastfm-username>
-wad recommend --user <your-lastfm-username>
-wad recommend --user <you> --lens 1.0 --hide-sourced-men   # strongest lens, plus the filter
+export LAVENDER_LASTFM_API_KEY=...     # https://www.last.fm/api/account/create
+export LAVENDER_CONTACT=you@example.org  # sent in the User-Agent MusicBrainz asks for
+lavender ingest --user <your-lastfm-username>
+lavender recommend --user <your-lastfm-username>
+lavender recommend --user <you> --lens 1.0 --hide-sourced-men   # strongest lens, plus the filter
 ```
 
-`wad ingest` is the **only** command that reaches upstream: it syncs your scrobbles
+`lavender ingest` is the **only** command that reaches upstream: it syncs your scrobbles
 from Last.fm (incrementally — a second run fetches only what is new), resolves
 identity for the artists it caches against MusicBrainz and Wikidata, and enriches
 the candidates it can reach from your taste. Expect the first run to take a few
@@ -46,7 +46,7 @@ Your library leans toward women and female-fronted bands by taste, but no recomm
 - **Two declared lenses,** chosen per run with `--lens-name`: `women-nonbinary` (the default) and `queer` — sourced queer women plus sourced nonbinary artists ([ADR 0011](./docs/adr/0011-queer-lens-and-the-trans-vocabulary-amendment.md)). Each is a `LensSpec` manifest carrying its own aligned set, boost bound, rationale, and honest harms note. Sourced queerness is sparse and skews toward the already-famous, Anglophone, living and out, so the queer lens boosts rather than filters and `unknown` never reads as "not queer".
 - **Sourced identity, never inferred:** identity basis is shown and cited; woman means woman, cis or trans, with no distinction drawn; nonbinary is represented properly; unknown artists are surfaced on musical merit alone.
 - **Explains every pick:** a shared "Why this artist" view — why (which signals) + identity basis + provenance (the *raw value each source asserted*, never inferred).
-- **Export your picks:** push the current set to a **Spotify** or **TIDAL** playlist (env-configured OAuth, PKCE, user-initiated), or download a portable, account-free track list (plain text / CSV / M3U / JSPF). The portable file is the today-path for *any* platform without a native adapter: it imports directly into most players and into transfer tools such as Soundiiz or TuneMyMusic, and it needs no account and no credentials from you. Apple Music (paid Developer Program membership) and Qobuz (partner approval) are externally gated — [#54](https://github.com/ChelseaKR/women-artist-discovery/issues/54). Every exporter sends artist and track names only; nothing from your listening profile goes with them.
+- **Export your picks:** push the current set to a **Spotify** or **TIDAL** playlist (env-configured OAuth, PKCE, user-initiated), or download a portable, account-free track list (plain text / CSV / M3U / JSPF). The portable file is the today-path for *any* platform without a native adapter: it imports directly into most players and into transfer tools such as Soundiiz or TuneMyMusic, and it needs no account and no credentials from you. Apple Music (paid Developer Program membership) and Qobuz (partner approval) are externally gated — [#54](https://github.com/ChelseaKR/lavender-rotation/issues/54). Every exporter sends artist and track names only; nothing from your listening profile goes with them.
 - **Local-first:** your listening history stays yours. Sanctioned egress is limited to explicit Last.fm fetches, per-artist identity lookups against MusicBrainz/Wikidata (which receive an artist name or MBID and learn nothing about who asked or what they played), opt-in upstream diagnostics, and user-initiated playlist export (artist/track names only).
 
 ## Guardrails
@@ -64,13 +64,13 @@ These are hard rules, each enforced by a merge-blocking test (see
 ## Project status
 
 The offline demo and full pipeline are implemented and gated: `make verify` runs
-formatting/lint/SAST, strict typing, 708 tests at 96% coverage, dependency and
+formatting/lint/SAST, strict typing, 715 tests at 96% coverage, dependency and
 secret scans, axe/pa11y renders plus browser-driven keyboard/reflow/reduced-motion
 specs (Playwright, required in CI), offline multiworld evaluation with
 regression/fairness gates, and the i18n declaration gate. CodeQL, zizmor, OSV,
 Scorecard, release, and CI workflows all run hosted.
 
-Live username-to-recommendation orchestration **closed with FIX-01**: `wad ingest
+Live username-to-recommendation orchestration **closed with FIX-01**: `lavender ingest
 --user <you>` syncs a real history and resolves identity from MusicBrainz/Wikidata
 through one allowlisted HTTP seam, and `--user` on `recommend`/`report`/`export`
 reads that cached world back. The live path is unit-gated offline against recorded
@@ -78,7 +78,7 @@ payloads (`tests/test_live_enrichment.py`) rather than against the network, so t
 suite still opens no socket. Still open: review-gated manual screen-reader/keyboard
 sign-offs, and the two live-mode limits below — see [`docs/audits/`](./docs/audits/).
 
-`wad refresh` is still deliberately labeled **demo-only**. A live `EnrichmentSource`
+`lavender refresh` is still deliberately labeled **demo-only**. A live `EnrichmentSource`
 now exists, and `refresh_catalog` has always had a branch that would use it, but the
 shipped command still walks the fixture catalog and prints that limitation on every
 run. Wiring the two together is a separate change from ingest, because it is what
@@ -102,7 +102,7 @@ user-research personas are synthetic, and say so at the top).
 
 ## Observability
 **Tier C** — OTel tracing is out of scope for this local tool. The CLI configures
-structured stage/timing logs, supports `--log-format json`, and `wad doctor`
+structured stage/timing logs, supports `--log-format json`, and `lavender doctor`
 reports local configuration/cache health with opt-in upstream probes.
 
 ## AI-evaluation status

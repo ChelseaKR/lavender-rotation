@@ -14,7 +14,7 @@
 | **Preprocessing / cleaning** | Identity resolution is a strict, sourced-only mapping (`pipeline/identity.py`) — no cleaning step ever infers or corrects a label without a new citation; unrecognised/ambiguous values resolve to `unknown` (fail-safe, not fail-open). |
 | **Uses** | Ranking and re-ranking artists for one listener; explaining each recommendation's identity basis. Explicitly **not** used to build, export, or redistribute a standalone identity dataset. |
 | **Distribution** | Never distributed. Listening history and the resolved-identity cache are local-only (`data/cache.db`, git-ignored) — see `docs/audits/privacy-notes.md`. |
-| **Maintenance** | The cache supplies TTL expiry and `refresh_catalog` supports a dependency-injected source/enricher, but `wad refresh` currently replays demo fixtures and performs no upstream request. Automated correction fold-back remains open with FIX-01; citations/fetch dates make stale rows visible in the meantime. |
+| **Maintenance** | The cache supplies TTL expiry and `refresh_catalog` supports a dependency-injected source/enricher, but `lavender refresh` currently replays demo fixtures and performs no upstream request. Automated correction fold-back remains open with FIX-01; citations/fetch dates make stale rows visible in the meantime. |
 
 ## Known limits (restated from `identity-data-ethics.md`)
 
