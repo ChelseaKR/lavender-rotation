@@ -33,12 +33,14 @@ from pipeline.cache import CACHE_SCHEMA_VERSION, Cache, CacheSchemaError
 from pipeline.paths import default_db_path, resolve_data_dir
 
 # Environment variables the pipeline reads. None are strictly required for
-# demo mode; WAD_LASTFM_API_KEY enables live ingest, and the WAD_SPOTIFY_* /
-# WAD_TIDAL_* sets each enable one playlist-export provider. A new exporter
-# belongs here so `wad doctor` can tell the operator what is configured.
-# Report presence only — never the value.
+# demo mode; WAD_LASTFM_API_KEY enables live ingest, WAD_CONTACT supplies the
+# contact detail MusicBrainz's rate-limit policy asks live enrichment to send in
+# its User-Agent, and the WAD_SPOTIFY_* / WAD_TIDAL_* sets each enable one
+# playlist-export provider. A new exporter belongs here so `wad doctor` can tell
+# the operator what is configured. Report presence only — never the value.
 ENV_KEYS: tuple[str, ...] = (
     "WAD_LASTFM_API_KEY",
+    "WAD_CONTACT",
     "WAD_SPOTIFY_CLIENT_ID",
     "WAD_SPOTIFY_CLIENT_SECRET",
     "WAD_SPOTIFY_REDIRECT_URI",

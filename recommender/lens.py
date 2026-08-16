@@ -158,6 +158,15 @@ VALUES_LENS = LensSpec(
         "can move down. That is the value judgement, and this note states it "
         "rather than denying it: until #68 this paragraph promised that nobody "
         "unaligned was ever down-ranked or treated worse than an "
-        "unknown-identity artist, and the ranking did not do that."
+        "unknown-identity artist, and the ranking did not do that. "
+        "WHAT THIS LENS CANNOT DO, since a listener will ask: it cannot remove "
+        "anyone. The boost is bounded, so a sourced man with a high enough "
+        "taste score survives it at any strength — which is not a defect, it is "
+        "what boost-only means. A listener who wants them gone entirely is "
+        "asking for a filter, and that is a separate, opt-in mechanism they "
+        "choose per run (recommender/filters.py), never something this lens "
+        "does on their behalf. That separation is load-bearing: a filter can "
+        "make an artist disappear, and the one built here removes only a "
+        "positive sourced claim, never an unknown artist."
     ),
 )

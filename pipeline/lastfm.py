@@ -20,13 +20,52 @@ and an exception message (see :class:`LastfmRequestError`). Both are asserted by
 
 from __future__ import annotations
 
+import logging
+import re
 import time
 import urllib.parse
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Optional, Protocol, runtime_checkable
 
 from pipeline.cache import Cache
 from pipeline.models import Scrobble
+
+log = logging.getLogger("wad.lastfm")
+
+#: An artist key is an MBID when Last.fm supplied one and the display name
+#: otherwise (see :func:`parse_recent_tracks`), so every downstream caller needs
+#: to tell the two apart — to pick a query parameter here, and to decide whether
+#: a MusicBrainz lookup needs a search first (:mod:`pipeline.enrich`).
+_MBID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+
+
+def looks_like_mbid(value: str) -> bool:
+    """True if an artist key is a MusicBrainz identifier rather than a name."""
+    return bool(_MBID.match(value.strip()))
+
+
+def artist_query(artist_id: str) -> dict[str, str]:
+    """Identify an artist to Last.fm by MBID when we have one, by name otherwise.
+
+    Last.fm's ``artist.*`` methods reject an ``mbid`` that is not one, with a
+    400 — which, before this existed, turned every MBID-less scrobble (a large
+    share of a real listening history) into a failed request that aborted the
+    whole ingest. ``autocorrect=0`` keeps the key we asked about identical to
+    the key the answer is stored under; the name came from Last.fm's own
+    scrobble data, so there is nothing to correct.
+    """
+    key = artist_id.strip()
+    return {"mbid": key} if looks_like_mbid(key) else {"artist": key, "autocorrect": "0"}
+
+
+@dataclass(frozen=True)
+class SimilarArtist:
+    """One similar-artist edge, with the display name the id alone does not carry."""
+
+    artist_id: str
+    name: str
+    match: float
 
 
 class LastfmRequestError(RuntimeError):
@@ -43,6 +82,31 @@ class LastfmRequestError(RuntimeError):
     So the live client catches them and re-raises this instead, ``from None`` so
     the leaking original is not chained into the rendered traceback either.
     """
+
+
+#: Attempts per request. Two, not more: this client is rate-limited and runs
+#: inside a job that already tolerates a failed artist, so the job of a retry
+#: here is to absorb a single blip, not to keep trying until something answers.
+MAX_ATTEMPTS = 2
+
+#: ``requests`` exception classes that mean "the request never got an answer".
+_TRANSIENT_EXCEPTIONS = frozenset(
+    {"ConnectionError", "Timeout", "ReadTimeout", "ConnectTimeout", "ChunkedEncodingError"}
+)
+
+
+def is_transient_failure(status: Optional[int], exc_name: str) -> bool:
+    """Whether a failed request is worth exactly one more attempt.
+
+    A timeout or a dropped connection is a blip — nothing about it says the
+    request was wrong. A 4xx is an *answer*: the artist is unknown to Last.fm,
+    or the key is bad. Re-sending it spends a rate-limit slot to be told the
+    same thing. 429 is deliberately absent too: being told to slow down is not
+    an invitation to immediately retry, and the fix for it is the limiter.
+    """
+    if status is None:
+        return exc_name in _TRANSIENT_EXCEPTIONS
+    return status >= 500
 
 
 def redacted_failure_message(method: str, status: Optional[int], exc_name: str) -> str:
@@ -79,6 +143,19 @@ class ScrobbleSource(Protocol):
     def similar_artists(self, artist_id: str) -> list[tuple[str, float]]: ...
 
 
+class NamedSimilaritySource(Protocol):
+    """A similarity source that also carries display names.
+
+    Kept separate from :class:`ScrobbleSource` rather than widened into it: the
+    recommender only ever needs the edges, and only candidate discovery
+    (:func:`pipeline.ingest.discover_candidates`) needs a name to show for an
+    artist nobody has played yet. Splitting it keeps the offline fixture free of
+    a method the offline world has no use for.
+    """
+
+    def similar_artists_named(self, artist_id: str) -> list[SimilarArtist]: ...
+
+
 class RateLimiter:
     """Minimum-interval limiter. Clock + sleeper are injectable for testing.
 
@@ -104,6 +181,29 @@ class RateLimiter:
             self._sleeper(wait)
             now = now + wait
         self._next_allowed = now + self.min_interval
+
+
+#: Every Last.fm read goes to this one endpoint, distinguished by ``method``.
+LASTFM_API_ROOT = "https://ws.audioscrobbler.com/2.0/"
+
+
+def cache_key(params: Mapping[str, str]) -> str:
+    """The cache identity of a Last.fm request — deliberately *without* the API key.
+
+    The key is a credential, not part of what makes two requests the same
+    request: the same method and arguments return the same response whoever
+    asks. Including it would have written the secret into the ``http_cache``
+    table in clear text, where it would outlive the process, the rotation of
+    the key, and any log the operator thought to scrub.
+
+    It lives at module scope because both the live client (which writes these
+    rows) and :class:`CachedLastfm` (which reads them back with no credential to
+    hand) have to agree on it exactly. Changing the key shape invalidates rows
+    an earlier build wrote; that is the intended cost. Those rows simply miss
+    and are re-fetched (or aged out by ``wad refresh --ttl-days``).
+    """
+    query = urllib.parse.urlencode({**params, "format": "json"})
+    return f"{LASTFM_API_ROOT}?{query}"
 
 
 class FixtureLastfm:
@@ -139,10 +239,56 @@ class FixtureLastfm:
         return list(self._similar.get(artist_id, []))
 
 
+class CachedLastfm:
+    """Replay-only :class:`ScrobbleSource`: answers from the local cache, never the network.
+
+    What ``wad recommend --user`` reads. Once ``wad ingest`` has run, every tag
+    and similarity response the recommender walks is already stored, so the read
+    path needs no API key and opens no socket — which is the local-first posture
+    taken literally: a cache miss is an empty answer, not a fetch.
+
+    An empty answer is safe by construction. A missing similarity response
+    contributes no collaborative edges and missing tags contribute no content
+    signal, so an artist the cache never learned about simply does not surface;
+    nothing is scored on a guess in its absence.
+    """
+
+    def __init__(self, cache: Cache) -> None:
+        self.cache = cache
+
+    def _replay(self, params: dict[str, str]) -> Optional[object]:
+        import json
+
+        body = self.cache.get_cached_response(cache_key(params))
+        if body is None:
+            return None
+        try:
+            payload: object = json.loads(body)
+        except json.JSONDecodeError:
+            return None
+        return payload
+
+    def recent_scrobbles(self, username: str, limit: int = 200) -> list[Scrobble]:
+        return self.cache.get_scrobbles(username)[-limit:]
+
+    def scrobbles_since(
+        self, username: str, since_ts: int = 0, page_size: int = 200
+    ) -> list[Scrobble]:
+        return [s for s in self.cache.get_scrobbles(username) if s.ts > since_ts]
+
+    def artist_tags(self, artist_id: str) -> tuple[str, ...]:
+        payload = self._replay({"method": "artist.gettoptags", **artist_query(artist_id)})
+        return () if payload is None else parse_top_tags(payload)
+
+    def similar_artists(self, artist_id: str) -> list[tuple[str, float]]:
+        payload = self._replay({"method": "artist.getsimilar", **artist_query(artist_id)})
+        return [] if payload is None else parse_similar(payload)
+
+
 class LastfmClient:  # pragma: no cover - live network path, verified via integration
     """Live Last.fm client. Network calls are integration-tested, not unit-gated."""
 
-    API_ROOT = "https://ws.audioscrobbler.com/2.0/"
+    API_ROOT = LASTFM_API_ROOT
 
     def __init__(
         self,
@@ -159,49 +305,49 @@ class LastfmClient:  # pragma: no cover - live network path, verified via integr
         self._now = now_fn
 
     def cache_key(self, params: Mapping[str, str]) -> str:
-        """The cache identity of a request — deliberately *without* the API key.
-
-        The key is a credential, not part of what makes two requests the same
-        request: the same method and arguments return the same response whoever
-        asks. Including it would have written the secret into the ``http_cache``
-        table in clear text, where it would outlive the process, the rotation of
-        the key, and any log the operator thought to scrub.
-
-        Changing the key shape invalidates rows an earlier build wrote; that is
-        the intended cost. Those rows simply miss and are re-fetched (or aged
-        out by ``wad refresh --ttl-days``).
-        """
-        query = urllib.parse.urlencode({**params, "format": "json"})
-        return f"{self.API_ROOT}?{query}"
+        """This client's view of :func:`cache_key` — see there for why the key is absent."""
+        return cache_key(params)
 
     def _get(self, params: dict[str, str]) -> str:
-        import requests
-
         key = self.cache_key(params)
         cached = self.cache.get_cached_response(key)
         if cached is not None:
             return cached
-        self.limiter.acquire()
-        # The key travels as a query parameter because that is what Last.fm's
-        # REST docs specify for a read service — there is no header auth, and
-        # POST is documented only for write services. It is handed to `requests`
-        # at call time and never interpolated into a string this module holds,
-        # stores, or renders; see `LastfmRequestError` for the other half.
-        try:
-            resp = requests.get(
-                self.API_ROOT,
-                params={**params, "api_key": self.api_key, "format": "json"},
-                timeout=15,
-            )
-            resp.raise_for_status()
-            body = resp.text
-        except requests.RequestException as exc:
-            status = getattr(getattr(exc, "response", None), "status_code", None)
-            raise LastfmRequestError(
-                redacted_failure_message(params.get("method", "?"), status, type(exc).__name__)
-            ) from None
+        body = self._request(params)
         self.cache.put_cached_response(key, body, self._now())
         return body
+
+    def _request(self, params: dict[str, str]) -> str:
+        """One request, retried once if it never got an answer."""
+        import requests
+
+        method = params.get("method", "?")
+        for attempt in range(MAX_ATTEMPTS):
+            self.limiter.acquire()
+            # The key travels as a query parameter because that is what Last.fm's
+            # REST docs specify for a read service — there is no header auth, and
+            # POST is documented only for write services. It is handed to `requests`
+            # at call time and never interpolated into a string this module holds,
+            # stores, or renders; see `LastfmRequestError` for the other half.
+            try:
+                resp = requests.get(
+                    self.API_ROOT,
+                    params={**params, "api_key": self.api_key, "format": "json"},
+                    timeout=15,
+                )
+                resp.raise_for_status()
+                return resp.text
+            except requests.RequestException as exc:
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                exc_name = type(exc).__name__
+                if attempt + 1 >= MAX_ATTEMPTS or not is_transient_failure(status, exc_name):
+                    raise LastfmRequestError(
+                        redacted_failure_message(method, status, exc_name)
+                    ) from None
+                log.warning("stage=lastfm event=retrying method=%s", method)
+        raise LastfmRequestError(  # pragma: no cover - the loop returns or raises
+            redacted_failure_message(method, None, "RetriesExhausted")
+        )
 
     def recent_scrobbles(self, username: str, limit: int = 200) -> list[Scrobble]:
         import json
@@ -249,14 +395,17 @@ class LastfmClient:  # pragma: no cover - live network path, verified via integr
     def artist_tags(self, artist_id: str) -> tuple[str, ...]:
         import json
 
-        body = self._get({"method": "artist.gettoptags", "mbid": artist_id})
+        body = self._get({"method": "artist.gettoptags", **artist_query(artist_id)})
         return parse_top_tags(json.loads(body))
 
     def similar_artists(self, artist_id: str) -> list[tuple[str, float]]:
+        return [(s.artist_id, s.match) for s in self.similar_artists_named(artist_id)]
+
+    def similar_artists_named(self, artist_id: str) -> list[SimilarArtist]:
         import json
 
-        body = self._get({"method": "artist.getsimilar", "mbid": artist_id})
-        return parse_similar(json.loads(body))
+        body = self._get({"method": "artist.getsimilar", **artist_query(artist_id)})
+        return parse_similar_named(json.loads(body))
 
 
 # --- Pure parsers with input validation (security: untrusted external data) ---
@@ -318,22 +467,36 @@ def parse_top_tags(payload: object, max_tags: int = 10) -> tuple[str, ...]:
 
 
 def parse_similar(payload: object) -> list[tuple[str, float]]:
+    """The similarity edges alone — what :class:`ScrobbleSource` promises."""
+    return [(s.artist_id, s.match) for s in parse_similar_named(payload)]
+
+
+def parse_similar_named(payload: object) -> list[SimilarArtist]:
+    """Similarity edges *with* display names, for candidate discovery.
+
+    ``similar_artists`` keys candidates the same way scrobbles are keyed — MBID
+    when there is one, name otherwise — so a discovered candidate's key is not
+    something a person can read. The name travels alongside rather than
+    replacing the key, because the key is what the catalog and the cache agree
+    on and changing it would break that join.
+    """
     if not isinstance(payload, dict):
         raise ValueError("similar payload must be an object")
     container = payload.get("similarartists", {})
     artists = container.get("artist", []) if isinstance(container, dict) else []
     if isinstance(artists, dict):
         artists = [artists]
-    out: list[tuple[str, float]] = []
+    out: list[SimilarArtist] = []
     for a in artists:
         if not isinstance(a, dict):
             continue
-        key = str(a.get("mbid") or a.get("name", "")).strip()
+        display = str(a.get("name", "")).strip()
+        key = str(a.get("mbid") or display).strip()
         if not key:
             continue
         try:
             match = float(a.get("match", 0.0))
         except (TypeError, ValueError):
             match = 0.0
-        out.append((key, max(0.0, min(1.0, match))))
+        out.append(SimilarArtist(key, display or key, max(0.0, min(1.0, match))))
     return out

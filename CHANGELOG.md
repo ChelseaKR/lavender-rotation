@@ -26,6 +26,61 @@ tag, not backfilled to an earlier commit date.
   as a minimal, separately-committed companion change rather than folded into that PR's diff.
 
 ### Added
+- **`--hide-sourced-men`, an opt-in output filter** (`recommender/filters.py`), on
+  `recommend`/`report`/`export`. The values lens is boost-only and bounded, so a sourced man with a
+  high enough taste score survives it at any strength — that is what boost-only means, not a
+  defect, and `LensSpec.harms_note` now says so. A listener who wants them gone is asking for a
+  different mechanism, and it is kept in a separate module for that reason: a filter is the only
+  thing here that can make an artist disappear.
+
+  It removes only a *positive* sourced claim — an artist sourced as a man, or an act whose sourced
+  fronting lineup is entirely sourced men (so a band fronted by a sourced woman *and* a sourced man
+  is kept). The obvious implementation, keeping only what the lens boosts, was rejected: it deletes
+  every unknown artist, since `values_aligned` is `False` for an absent claim exactly as for a
+  man's. On the history this was written against that would have been 4 of 10 picks and 57 of 88
+  catalogued artists — not men, but artists nobody has sourced, disproportionately the
+  less-documented ones. Off by default, so the eval and every existing caller are unaffected, and
+  applied after ranking so each surviving pick's "the lens moved this from #19 to #7" still refers
+  to the real pure-taste ordering rather than a counterfactual over a pre-filtered world.
+- **Live username-to-recommendation orchestration (FIX-01)** — the deferral the README's
+  "Project status" and the roadmap ledger both carried. `wad ingest --user <you>` syncs a real
+  Last.fm history (incremental, resumable, unchanged fetch semantics), resolves identity against
+  MusicBrainz and, where the record links to it, Wikidata's P21 claim, and enriches the candidates
+  reachable from that taste; `--user` on `recommend`/`report`/`export` then reads that cached
+  world back. Four parts made it work:
+  - `MusicBrainzEnricher` (`pipeline/enrich.py`) — the first concrete `EnrichmentSource` besides
+    the fixture one. It takes its fetcher as a constructor argument, so the entire parse → resolve
+    → label chain is unit-gated offline against recorded payloads (`tests/test_live_enrichment.py`)
+    and the suite still opens no socket.
+  - `pipeline/http.py` — one rate-limited (1 req/s), cache-first, `User-Agent`-bearing transport
+    for identity sources, added to the egress allowlist in the same change as the code that uses
+    it, per the registry's own instructions (`docs/audits/privacy-notes.md`).
+  - Candidate discovery (`pipeline.ingest.discover_candidates`). Enriching only the artists someone
+    already plays cannot produce a recommendation — `recommend()` excludes known artists by
+    construction, so a catalog built from a listening history alone yields an empty list. This is
+    the step the demo world got for free from its fixture catalog.
+  - `pipeline.lastfm.artist_query` — Last.fm rejects an `mbid=` parameter that is not one with a
+    400. Since `parse_recent_tracks` falls back to the artist *name* whenever Last.fm supplies no
+    MBID (a large share of a real history), every such artist previously turned `artist.gettoptags`
+    into a failed request that aborted the whole ingest.
+
+  **Resilience, learned the hard way on the first real run.** `ingest()` re-raised on any
+  enrichment failure, so a single `ReadTimeout` on one artist's `artist.gettoptags` discarded a
+  nine-minute ingest of 95k scrobbles and 48 enriched artists. A failed artist is now skipped and
+  counted, not fatal — it stays in the profile, so it is still excluded from recommendation, and
+  contributes no tags. Both HTTP paths also retry once, and only for a request that never got an
+  answer (`is_transient_failure`): a 4xx is an answer, and re-sending it spends a rate-limit slot
+  to hear it again. The retry matters more on the identity path, where the failure is *quiet* — a
+  timed-out lookup leaves an artist `unknown`, indistinguishable in the output from an artist
+  upstream genuinely has no claim about.
+
+  Two limits are deliberate and documented rather than papered over. **Entity resolution is gated
+  like the guardrail it is:** a name resolves only when exactly one MusicBrainz record matches it
+  exactly, because attaching a stranger's sourced gender to an artist is the harm the no-inference
+  rule exists to prevent, arriving by a different road. **An upstream failure resolves to
+  `unknown`,** not to an exception and not to a retry-until-something-answers: a label here is
+  either sourced or absent. Both mean a real history produces more `unknown` artists than the demo
+  world does — which costs them nothing, unknown being first-class in the ranking.
 - Verified-subject ledger for every identity citation the demo ships
   (`tests/test_demo_citations.py`): each citation is pinned to the subject a human read off the
   live registry, with the date. `citation_problem()` can only check that an identifier is

@@ -172,7 +172,7 @@ docs/
 
 ## 11. Operations & sustainability
 - **Hosting/cost.** Runs locally or on a small host; cheap; the cache cuts API load.
-- **Maintenance.** Cache TTL/diff primitives exist; periodic live re-enrichment and automatic source-correction fold-back remain deferred with FIX-01.
+- **Maintenance.** Cache TTL/diff primitives exist and live enrichment now uses them (`wad ingest --ttl-days`, FIX-01). What remains deferred is *periodic* re-enrichment (there is no scheduler; a re-check is an operator running the command again) and automatic source-correction fold-back — `wad refresh` still walks the fixture catalog rather than the live enricher, so a filed correction is still reconciled by nothing.
 - **Sustainability.** Single-user, low cost, open methodology survives the maintainer.
 
 ## 12. Responsible-tech summary

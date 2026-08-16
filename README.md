@@ -15,19 +15,38 @@ make verify                # run the full merge gate locally
 
 Demo mode ships a clearly-labeled synthetic world (`pipeline/demo.py`), so you can
 explore recommendations, the fairness/exposure panel, and per-pick explanations
-without an account anywhere. Wiring a real Last.fm username through live
-enrichment is the next milestone (see [Project status](#project-status)).
+without an account anywhere.
+
+To run it against your own listening history instead, sync once and then point any
+recommendation surface at your username:
+
+```sh
+export WAD_LASTFM_API_KEY=...     # https://www.last.fm/api/account/create
+export WAD_CONTACT=you@example.org  # sent in the User-Agent MusicBrainz asks for
+wad ingest --user <your-lastfm-username>
+wad recommend --user <your-lastfm-username>
+wad recommend --user <you> --lens 1.0 --hide-sourced-men   # strongest lens, plus the filter
+```
+
+`wad ingest` is the **only** command that reaches upstream: it syncs your scrobbles
+from Last.fm (incrementally — a second run fetches only what is new), resolves
+identity for the artists it caches against MusicBrainz and Wikidata, and enriches
+the candidates it can reach from your taste. Expect the first run to take a few
+minutes; it paces itself to one request per second and caches every response, so
+later runs are fast and cost the registries nothing. Everything it learns stays in
+your local cache. Artists it cannot resolve to exactly one upstream record stay
+`unknown`, which costs them nothing in the ranking.
 
 ## Why it matters
 Your library leans toward women and female-fronted bands by taste, but no recommender helps you lean into that on purpose without either ignoring identity entirely or guessing it crudely. Doing this *well* — sourced, transparent, non-essentialist — is the whole point and the interesting part.
 
 ## What it does
-- **Builds listening profiles** from Last.fm-shaped scrobbles and tags; paginated/incremental client and cache paths are tested, while live app orchestration is still deferred.
+- **Builds listening profiles** from your Last.fm history — paginated, incremental, and resumable — or from the offline demo world when you have no account to hand.
 - **Hybrid recommendations:** collaborative similarity + content/tags, then a values-aware re-rank.
 - **Sourced identity, never inferred:** identity basis is shown and cited; woman means woman, cis or trans, with no distinction drawn; nonbinary is represented properly; unknown artists are surfaced on musical merit alone.
 - **Explains every pick:** a shared "Why this artist" view — why (which signals) + identity basis + provenance (the *raw value each source asserted*, never inferred).
 - **Export your picks:** push the current set to a **Spotify** or **TIDAL** playlist (env-configured OAuth, PKCE, user-initiated), or download a portable, account-free track list (plain text / CSV / M3U / JSPF). The portable file is the today-path for *any* platform without a native adapter: it imports directly into most players and into transfer tools such as Soundiiz or TuneMyMusic, and it needs no account and no credentials from you. Apple Music (paid Developer Program membership) and Qobuz (partner approval) are externally gated — [#54](https://github.com/ChelseaKR/women-artist-discovery/issues/54). Every exporter sends artist and track names only; nothing from your listening profile goes with them.
-- **Local-first:** your listening history stays yours. Sanctioned egress is limited to explicit Last.fm fetches, opt-in upstream diagnostics, and user-initiated playlist export (artist/track names only).
+- **Local-first:** your listening history stays yours. Sanctioned egress is limited to explicit Last.fm fetches, per-artist identity lookups against MusicBrainz/Wikidata (which receive an artist name or MBID and learn nothing about who asked or what they played), opt-in upstream diagnostics, and user-initiated playlist export (artist/track names only).
 
 ## Guardrails
 
@@ -36,7 +55,7 @@ These are hard rules, each enforced by a merge-blocking test (see
 
 - **Never infer an artist's gender or identity** from name, voice, image, genre, or any heuristic — identity labels come only from cited self-identification sources (artist statement, sourced Wikidata P21 claim, MusicBrainz gender field) and must carry that citation. The AST leg of the guardrail test walks **every** function in **every** `pipeline/` module, not a named subset; the few that legitimately handle content tags are listed with a reason and held to a stricter check; and `recommender/`, `app/`, and `export/` are asserted to construct no identity objects at all, so an inference path cannot be introduced by moving it out of scope.
 - **Woman includes trans women explicitly** — sourced self-identification is the only test, and no cis/trans distinction exists anywhere in the vocabulary.
-- **"Unknown" is first-class** and must never reduce, down-rank, or drop a recommendation; the values lens only ever boosts. An artist sourced as a gender the lens does not boost (`Gender.OTHER`) holds their pure-taste position too. No artist's score is ever reduced. A sourced man's list *position* can move down — that is the one thing this lens re-allocates, and the lens's harms note says so rather than denying it.
+- **"Unknown" is first-class** and must never reduce, down-rank, or drop a recommendation; the values lens only ever boosts. This binds the opt-in `--hide-sourced-men` filter too — the one mechanism here that can make an artist disappear. It removes only a *positive* sourced claim (an artist sourced as a man, or an act whose sourced fronting lineup is entirely sourced men) and never an absent one, because filtering on "not values-aligned" would delete every unknown artist — disproportionately the less-documented ones, which on a gender-imbalanced upstream skews against exactly the artists the lens is for. An artist sourced as a gender the lens does not boost (`Gender.OTHER`) holds their pure-taste position too. No artist's score is ever reduced. A sourced man's list *position* can move down — that is the one thing this lens re-allocates, and the lens's harms note says so rather than denying it.
 - **"Female-fronted" is band-composition metadata** (lineup/role), sourced not guessed, and never widened: it means only that a front-person's *own* sourced gender is a woman's. A front-person's gender is rendered as the source stated it, never collapsed into the band-level word.
 - **Every recommendation shows its work:** why + identity basis + source.
 - **No redistribution of a scraped musician-identity dataset** — minimize, cite, keep correctable.
@@ -44,23 +63,36 @@ These are hard rules, each enforced by a merge-blocking test (see
 ## Project status
 
 The offline demo and full pipeline are implemented and gated: `make verify` runs
-formatting/lint/SAST, strict typing, 585 tests at 97% coverage, dependency and
+formatting/lint/SAST, strict typing, 664 tests at 96% coverage, dependency and
 secret scans, axe/pa11y renders plus browser-driven keyboard/reflow/reduced-motion
 specs (Playwright, required in CI), offline multiworld evaluation with
 regression/fairness gates, and the i18n declaration gate. CodeQL, zizmor, OSV,
-Scorecard, release, and CI workflows all run hosted. Still open: live
-username-to-recommendation orchestration (deferred in the roadmap ledger), and
-review-gated manual screen-reader/keyboard sign-offs — see
-[`docs/audits/`](./docs/audits/).
+Scorecard, release, and CI workflows all run hosted.
 
-`wad refresh` is deliberately labeled **demo-only**: it exercises cache expiry and
-before/after reporting with the committed fixture catalog, but it does not query an
-upstream identity provider. Real correction fold-back remains open with the deferred
-live-enrichment work; the command prints this limitation on every run. Because it
-queries no upstream, it **reconciles nothing** — a filed correction survives every
-refresh until a real upstream source is observed asserting the value that was
-proposed. A refresh that moves only a retrieval date is not evidence of an edit, and
-a change to some *other* value marks the row superseded rather than deleting it.
+Live username-to-recommendation orchestration **closed with FIX-01**: `wad ingest
+--user <you>` syncs a real history and resolves identity from MusicBrainz/Wikidata
+through one allowlisted HTTP seam, and `--user` on `recommend`/`report`/`export`
+reads that cached world back. The live path is unit-gated offline against recorded
+payloads (`tests/test_live_enrichment.py`) rather than against the network, so the
+suite still opens no socket. Still open: review-gated manual screen-reader/keyboard
+sign-offs, and the two live-mode limits below — see [`docs/audits/`](./docs/audits/).
+
+`wad refresh` is still deliberately labeled **demo-only**. A live `EnrichmentSource`
+now exists, and `refresh_catalog` has always had a branch that would use it, but the
+shipped command still walks the fixture catalog and prints that limitation on every
+run. Wiring the two together is a separate change from ingest, because it is what
+makes the corrections ledger start *acting* on upstream observations. Until then it
+**reconciles nothing** — a filed correction survives every refresh until a real
+upstream source is observed asserting the value that was proposed. A refresh that
+moves only a retrieval date is not evidence of an edit, and a change to some *other*
+value marks the row superseded rather than deleting it.
+
+The second live-mode limit is coverage of *your* upstream data, not of this code:
+Last.fm supplies an MBID for only some artists, and a name that matches two
+MusicBrainz records — or none exactly — resolves to `unknown` rather than to a
+guess. That is the guardrail working, and `unknown` artists are still recommended on
+musical merit; expect a real listening history to produce more of them than the demo
+world does.
 
 This project is built in the open: [`docs/RESEARCH-ROADMAP.md`](./docs/RESEARCH-ROADMAP.md),
 [`docs/ideation/`](./docs/ideation/), and [`docs/USER-RESEARCH.md`](./docs/USER-RESEARCH.md)
