@@ -214,9 +214,11 @@ def main() -> None:  # pragma: no cover - exercised via the live Streamlit runti
         step=0.05,
         help=(
             "How strongly to boost artists whose identity is sourced as a woman "
-            "(cis or trans — no distinction is drawn), nonbinary person, or "
-            "sourced female-fronted band. The lens only ever boosts — it never "
-            "lowers anyone's score, and never penalises unknown."
+            "(cis or trans — no distinction is drawn) or a nonbinary person, and "
+            "bands whose sourced lineup is fronted by one of them. Each "
+            "front-person's gender is shown as their source stated it. The lens "
+            "only ever boosts — it never lowers anyone's score, and never "
+            "penalises unknown."
         ),
     )
     st.caption(f"Active lens: **{VALUES_LENS.name}**")

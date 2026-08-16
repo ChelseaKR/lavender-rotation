@@ -62,12 +62,26 @@ def test_unknown_is_first_class_and_honest(profile, catalog, source) -> None:
     assert "surfaced on merit" in why.to_markdown().lower()
 
 
-def test_female_fronted_is_band_composition_not_member_gender(profile, catalog, source) -> None:
+def test_band_lineup_is_composition_basis_and_names_the_sourced_genders(
+    profile, catalog, source
+) -> None:
+    """A woman-fronted band names *women*, and says what it is silent about.
+
+    The old wording ("female-fronted band ... distinct from any member's
+    gender") was doubly wrong: it asserted a category the source had not
+    asserted for every front-person, and the trailing clause denied the very
+    derivation the label came from. #69.
+    """
     rec = _rec_for(profile, catalog, source, "boygenius")
     why = why_this_artist(rec)
     assert why.identity_basis is IdentityBasis.BAND_COMPOSITION
-    assert "female-fronted" in why.identity_statement.lower()
-    assert "distinct from any member" in why.identity_statement.lower()
+    statement = why.identity_statement.lower()
+    assert "sourced women" in statement  # boygenius: two sourced women fronting
+    assert "sourced lineup" in statement
+    assert "no gender is claimed for any other member" in statement
+    # The clause that told the reader the label was not about a person, while
+    # being derived entirely from people's sourced genders, is gone.
+    assert "distinct from any member" not in statement
     assert why.provenance  # sourced lineup citation present
 
 

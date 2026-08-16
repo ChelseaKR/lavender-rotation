@@ -67,16 +67,25 @@ class LensSpec:
 
         Reads **sourced fields only** — ``artist.identity.gender`` (never
         inferred; see :class:`pipeline.models.IdentityLabel`) and
-        ``artist.female_fronted`` (never inferred; see
+        ``artist.sourced_front_genders`` (never inferred; see
         :class:`pipeline.models.BandComposition`). Never raises: an ``UNKNOWN``
         or unaligned gender, or a band with no sourced front-person, simply
         evaluates to ``False`` — never a penalty, just "no boost". See the
         module docstring for why ``Gender.OTHER`` is excluded from
         ``aligned_genders`` by default.
+
+        The composition leg intersects this lens's *own* aligned set with the
+        genders the lineup source actually asserted, rather than reading
+        ``female_fronted``. That keeps the question the lens asks ("is a front
+        person aligned with me?") separate from the claim the data model makes
+        ("a front person is a sourced woman"), so widening or narrowing this
+        lens can never change what the model asserts — and a band fronted only
+        by a sourced nonbinary artist is aligned here without ever being
+        described as "female-fronted".
         """
         if artist.identity.gender in self.aligned_genders:
             return True
-        return artist.female_fronted is True
+        return bool(artist.sourced_front_genders & self.aligned_genders)
 
     def boost(self, artist: Artist, strength: float) -> float:
         """The non-negative boost for ``artist`` at lens ``strength`` ∈ [0, 1].
@@ -97,7 +106,10 @@ VALUES_LENS = LensSpec(
     max_boost=0.5,
     rationale=(
         "Boosts artists whose gender is *sourced* (never inferred) as a woman or "
-        "nonbinary person, or whose band composition is sourced as female-fronted. "
+        "nonbinary person, and bands whose sourced lineup is fronted by someone "
+        "whose own sourced gender is one of those. A band fronted only by a "
+        "sourced nonbinary artist is boosted as such; it is never relabelled "
+        "'female-fronted' to get there. "
         "Purpose: counteract the well-documented under-exposure of women and "
         "nonbinary musicians in popularity-driven recommendation, without ever "
         "penalising anyone — including artists whose identity is unknown or "

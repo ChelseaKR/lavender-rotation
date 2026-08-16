@@ -44,6 +44,8 @@ the guess is on average:
   member's inferred gender (or worse, inferring it from timbre) turns a
   composition fact into a claim about a person. This project keeps
   `female_fronted` as sourced, tri-state *band* metadata, never a personal label
+  — and never a *widened* one: the sourced genders of a band's front-people are
+  carried as themselves, so no one is renamed to fit the band-level word
   — see [`identity-data-ethics.md`](../audits/identity-data-ethics.md).
 
 The response is not to avoid identity-aware recommendation — a values lens is the
@@ -75,17 +77,25 @@ not just at review time:
   singleton. Nothing downstream branches on "missing data"; it branches on a
   real enum value that every exhaustive match must handle.
 - **Composition kept separate from personal identity.** `BandComposition
-  .female_fronted` is a sourced, tri-state (`True` / `None`) property of a
-  *band*, built from `FrontPerson` entries whose *own* `identity` is itself a
-  full `IdentityLabel` — never a shortcut that infers a member's gender from the
-  fact that the band is described as female-fronted, or vice versa.
+  .sourced_front_genders` is a sourced set of the genders a band's front-people
+  are *themselves* sourced as, built from `FrontPerson` entries whose own
+  `identity` is a full `IdentityLabel` — never a shortcut that infers a member's
+  gender from a band-level label, or vice versa. `BandComposition
+  .female_fronted` is the narrow, tri-state (`True` / `None`) special case of
+  that set: `True` only when a front-person's own sourced gender is `WOMAN`. A
+  band fronted only by a sourced nonbinary artist is *not* female-fronted; it is
+  nonbinary-fronted, and every surface says so (#69). The lens asks its own
+  question through `has_sourced_front_person_in()`, so widening or narrowing the
+  lens can never change what the model asserts about a band.
 
 The segmentation vocabulary that the rest of this piece reports against —
-`WOMAN` / `NONBINARY` / `FEMALE_FRONTED` / `MAN` / `OTHER` / `UNKNOWN` — is
+`WOMAN` / `NONBINARY` / `FEMALE_FRONTED` / `NONBINARY_FRONTED` / `MAN` /
+`OTHER` / `UNKNOWN` — is
 defined once, in [`recommender/exposure.py`](../../recommender/exposure.py)
 (`SEGMENTS`), and derived purely from `Artist.identity` and `Artist
-.female_fronted` — i.e., purely from the sourced fields above. Segmenting never
-adds a new way to guess; it only reads what §2's guardrails already sourced.
+.sourced_front_genders` — i.e., purely from the sourced fields above. Segmenting
+never adds a new way to guess; it only reads what §2's guardrails already
+sourced, at the granularity the source stated.
 
 ## 3. Boost-only proof
 

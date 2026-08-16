@@ -55,8 +55,16 @@ def sort_and_rank(recs: list[Recommendation]) -> list[Recommendation]:
 
 
 def is_unknown_artist(artist: Artist) -> bool:
-    """Match the fairness report's sourced-identity segmentation without a cycle."""
-    return artist.identity.gender is Gender.UNKNOWN and artist.female_fronted is not True
+    """Match the fairness report's sourced-identity segmentation without a cycle.
+
+    Reads ``values_aligned`` rather than ``female_fronted`` so that a band whose
+    sourced lineup is fronted only by a nonbinary artist — which *does* receive
+    a boost — is movable rather than pinned. Pinning a boosted artist to its
+    pure-taste slot would silently discard the boost.
+    ``tests/test_exposure.py`` asserts this stays equivalent to
+    ``identity_segment(artist) == UNKNOWN``.
+    """
+    return artist.identity.gender is Gender.UNKNOWN and not artist.values_aligned
 
 
 def rerank(recs: list[Recommendation], lens_strength: float) -> list[Recommendation]:

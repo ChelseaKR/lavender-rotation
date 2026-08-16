@@ -245,6 +245,7 @@
       "woman",
       "nonbinary",
       "female-fronted",
+      "nonbinary-fronted",
       "man",
       "other",
       "unknown"
@@ -254,6 +255,7 @@
         "woman": 0.8,
         "nonbinary": 0.0,
         "female-fronted": 0.0,
+        "nonbinary-fronted": 0.0,
         "man": 0.0,
         "other": 0.0,
         "unknown": 0.2
@@ -262,6 +264,7 @@
         "woman": 0.8,
         "nonbinary": 0.0,
         "female-fronted": 0.0,
+        "nonbinary-fronted": 0.0,
         "man": 0.0,
         "other": 0.0,
         "unknown": 0.2
@@ -270,6 +273,7 @@
         "woman": 0.8,
         "nonbinary": 0.0,
         "female-fronted": 0.0,
+        "nonbinary-fronted": 0.0,
         "man": 0.0,
         "other": 0.0,
         "unknown": 0.2
@@ -278,6 +282,7 @@
         "woman": 0.8,
         "nonbinary": 0.0,
         "female-fronted": 0.0,
+        "nonbinary-fronted": 0.0,
         "man": 0.0,
         "other": 0.0,
         "unknown": 0.2
@@ -286,6 +291,7 @@
         "woman": 0.8,
         "nonbinary": 0.0,
         "female-fronted": 0.0,
+        "nonbinary-fronted": 0.0,
         "man": 0.0,
         "other": 0.0,
         "unknown": 0.2
@@ -303,6 +309,7 @@
         "woman": -0.2,
         "nonbinary": -1.0,
         "female-fronted": 0.0,
+        "nonbinary-fronted": 0.0,
         "man": 1.0,
         "other": 0.0,
         "unknown": 0.0
@@ -311,6 +318,7 @@
         "woman": -0.6,
         "nonbinary": -1.0,
         "female-fronted": 0.0,
+        "nonbinary-fronted": 0.0,
         "man": 2.0,
         "other": 0.0,
         "unknown": 0.0
@@ -319,6 +327,7 @@
         "woman": -0.6,
         "nonbinary": -1.0,
         "female-fronted": 0.0,
+        "nonbinary-fronted": 0.0,
         "man": 2.0,
         "other": 0.0,
         "unknown": 0.0
@@ -327,6 +336,7 @@
         "woman": -0.6,
         "nonbinary": -1.0,
         "female-fronted": 0.0,
+        "nonbinary-fronted": 0.0,
         "man": 2.0,
         "other": 0.0,
         "unknown": 0.0
@@ -337,6 +347,7 @@
         "woman": 0,
         "nonbinary": 0,
         "female-fronted": 0,
+        "nonbinary-fronted": 0,
         "man": 0,
         "other": 0,
         "unknown": 1
@@ -345,6 +356,7 @@
         "woman": 5,
         "nonbinary": 1,
         "female-fronted": 1,
+        "nonbinary-fronted": 0,
         "man": 1,
         "other": 0,
         "unknown": 0
@@ -353,6 +365,7 @@
         "woman": 0,
         "nonbinary": 0,
         "female-fronted": 0,
+        "nonbinary-fronted": 0,
         "man": 1,
         "other": 0,
         "unknown": 1

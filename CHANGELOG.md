@@ -110,6 +110,15 @@ tag, not backfilled to an earlier commit date.
   registry stay free-form, which was the original reason for the exemption.
 - The demo-citation gate walked individual identity and band composition but not the front-person
   identities nested inside composition, reaching one level short of the data it covers.
+- A band whose only sourced front-person is a nonbinary artist is no longer described as a
+  "female-fronted band" (#69). `BandComposition.female_fronted` now means only "a front-person's
+  own sourced gender is `WOMAN`" and no longer reads the lens's `VALUES_ALIGNED_GENDERS`, so lens
+  policy can never change what the data model asserts; the unflattened fact is the new
+  `BandComposition.sourced_front_genders`, which every rendered label, the identity-coverage
+  readout, and the fairness segmentation (new `nonbinary-fronted` segment) are written from. The
+  lens keeps boosting such bands by intersecting its own aligned set with the sourced front
+  genders, so no artist loses exposure to the fix. `tests/test_front_person_labels.py` asserts
+  the absence of the harm across every surface `recommender/why.py` feeds.
 - OpenSSF Scorecard workflow comments now describe the repository's current
   public publishing path instead of its superseded restricted-publication
   posture.

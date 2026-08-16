@@ -27,9 +27,14 @@ source kind for a name, voice, image, or genre. Code: `pipeline/identity.py`.
   `fairness-identity.md` and `tests/test_unknown_first_class.py`.
 - **Provenance is mandatory.** Every known label carries its citations + fetch
   date. `tests/test_provenance.py`. → metric *Labels with a cited source = 100%*.
-- **Female-fronted ≠ a member's gender.** It is a sourced, tri-state band property
-  (`BandComposition.female_fronted`), kept separate from any individual's label.
-  `tests/test_identity_model.py::test_female_fronted_is_distinct_from_member_gender`.
+- **Female-fronted ≠ a member's gender, and ≠ any other gender.** It is a sourced,
+  tri-state band property (`BandComposition.female_fronted`), kept separate from any
+  individual's label, and narrow: `True` only when a front-person's *own* sourced
+  gender is `WOMAN`. The unflattened fact is `BandComposition.sourced_front_genders`,
+  which every rendered label is written from, so a band fronted only by a sourced
+  nonbinary artist is described as such rather than as "female-fronted" (#69).
+  `tests/test_identity_model.py::test_female_fronted_is_distinct_from_member_gender`,
+  `tests/test_front_person_labels.py`.
 - **Trans inclusion.** Trans women are women; trans men are men (Wikidata QID map
   in `pipeline/identity.py`). Intersex/third-gender are represented, not flattened.
 - **Correctability.** Labels are cache rows keyed to a citation, and a cited local
@@ -58,8 +63,10 @@ The values lens is not a loose set of constants; it is a declared, inspectable
 object: `recommender.lens.LensSpec` (fields: `name`, `aligned_genders`,
 `max_boost`, `rationale`, `harms_note`), instantiated once as
 `recommender.lens.VALUES_LENS`. `LensSpec.aligned()` evaluates the aligned
-predicate over *sourced* fields only (an artist's sourced gender, or a sourced
-female-fronted band composition) and `LensSpec.boost()` returns a bound,
+predicate over *sourced* fields only (an artist's sourced gender, or the sourced
+genders of a band's front-people, intersected with the lens's own aligned set —
+never via `female_fronted`, so lens policy can never rewrite a band's sourced
+description) and `LensSpec.boost()` returns a bound,
 non-negative boost — never a penalty. The dashboard renders the active lens's
 `name` and `rationale` directly (`app/dashboard.py`), so "what does this lens
 boost, and why" is answerable from the UI, not just from reading code.
