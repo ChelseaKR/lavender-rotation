@@ -110,6 +110,22 @@ tag, not backfilled to an earlier commit date.
   registry stay free-form, which was the original reason for the exemption.
 - The demo-citation gate walked individual identity and band composition but not the front-person
   identities nested inside composition, reaching one level short of the data it covers.
+- `wad refresh` no longer deletes a filed pending correction when nothing upstream changed (#70).
+  `corrections.reconcile` matched on `(artist_id, source_kind)` alone and never read
+  `proposed_value`, while `ingest._diff_sources` emits a change when *either* the asserted value or
+  the retrieval date moves — so a pure date refresh silently removed a person's note and printed
+  "reconciled 1 pending upstream correction(s)". Reconciliation now requires the observed value to
+  be the proposed one, compared through the controlled vocabulary (`identity.normalise_asserted_value`,
+  so `"female"` reconciles a `"woman"` proposal); date-only changes reconcile nothing; a change to
+  any other value marks the row **superseded** and keeps it on file with what upstream now asserts;
+  and reconciliation only runs when an upstream source was actually queried, so the demo-only
+  command reports `reconciled 0 … no upstream identity source was queried` instead of claiming an
+  upstream that was never contacted. `reconcile` now returns a `ReconcileOutcome` naming every row
+  it reconciled, superseded, or left open, and writes the operator summary itself — `pipeline/cli.py`
+  is coverage-omitted as thin argparse glue, which is where the wrong status line was hiding.
+  `tests/test_pending_corrections.py::test_reconcile_drops_matching_row_and_keeps_others`, which
+  asserted the deletion was correct using a change whose old and new values were identical, is
+  replaced by absence-of-harm tests plus an end-to-end CLI regression.
 - The no-inference AST scan now covers the code that could infer (#72). It walked a hardcoded list
   of four function names in one file; `pipeline/identity.py` defines seven, nothing asserted the
   list covered the module, and a helper mapping genre tags to a gender — called from

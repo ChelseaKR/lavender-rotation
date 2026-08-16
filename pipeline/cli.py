@@ -222,7 +222,16 @@ def _cmd_refresh(args: argparse.Namespace) -> int:
     pending_path = getattr(args, "pending_corrections", None) or pending_corrections.default_path(
         args.db
     )
-    reconciled = pending_corrections.reconcile(pending_path, source_changes)
+    # DEMO ONLY: the dict branch of refresh_catalog above performs no network
+    # fetch, so no upstream edit could have landed and nothing may be
+    # reconciled. Flipping this to True is FIX-01's job, once a real
+    # EnrichmentSource exists to make the word "upstream" mean something (#70).
+    outcome = pending_corrections.reconcile_after_refresh(
+        pending_path,
+        source_changes,
+        upstream_queried=False,
+        observed_at=today,
+    )
     if changes:
         for change in changes:
             print(  # noqa: T201
@@ -258,7 +267,8 @@ def _cmd_refresh(args: argparse.Namespace) -> int:
     else:
         print("no identity-label changes")  # noqa: T201
     print(f"expired {expired} stale http-cache row(s)")  # noqa: T201
-    print(f"reconciled {reconciled} pending upstream correction(s)")  # noqa: T201
+    for line in outcome.report_lines():
+        print(line)  # noqa: T201
     return 0
 
 
@@ -325,10 +335,7 @@ def _cmd_pending_corrections(args: argparse.Namespace) -> int:
         print("no pending corrections")  # noqa: T201
         return 0
     for row in rows:
-        print(  # noqa: T201
-            f"{row.artist_id} [{row.source_kind}] {row.current_value!r} -> "
-            f"{row.proposed_value!r} — filed {row.filed_at}: {row.note}"
-        )
+        print(row.describe())  # noqa: T201
     return 0
 
 

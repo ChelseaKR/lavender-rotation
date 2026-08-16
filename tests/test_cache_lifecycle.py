@@ -175,3 +175,75 @@ def test_cli_refresh_rejects_negative_ttl(tmp_path) -> None:
     with pytest.raises(SystemExit) as exc:
         cli_main(["refresh", "--db", str(tmp_path / "c.db"), "--ttl-days", "-1"])
     assert exc.value.code == 2
+
+
+# -- #70: `wad refresh` must not delete a filed correction ------------------------
+
+
+def _seed_stale_only_in_retrieved_at(db, artist_id: str) -> str:
+    """Cache a copy of a demo artist differing from the fixture ONLY in the date.
+
+    Returns the citation the seeded source carries. A refresh against the fixture
+    then produces an ``IdentityLabelChange`` whose ``old_value`` and ``new_value``
+    are byte-identical — the exact shape that used to reconcile a pending
+    correction away.
+    """
+    from dataclasses import replace
+
+    from pipeline.demo import demo_catalog
+
+    artist = demo_catalog()[artist_id]
+    stale_sources = tuple(replace(s, retrieved_at="2020-01-01") for s in artist.identity.sources)
+    stale = replace(artist, identity=replace(artist.identity, sources=stale_sources))
+    with Cache(db) as cache:
+        cache.put_artist(stale, fetched_at="2020-01-01")
+    return artist.identity.sources[0].citation
+
+
+def test_cli_refresh_does_not_delete_a_pending_correction(tmp_path, capsys) -> None:
+    """THE #70 regression, end to end through the CLI.
+
+    A person files a note saying an editorial database has their gender wrong.
+    An ordinary refresh — which queries no upstream, and in which the asserted
+    value does not move at all — used to delete that note and report
+    "reconciled 1 pending upstream correction(s)".
+    """
+    from pipeline import corrections
+
+    db = tmp_path / "cache.db"
+    pending = tmp_path / "pending.json"
+    citation = _seed_stale_only_in_retrieved_at(db, "snail-mail")
+    corrections.add_correction(
+        pending,
+        artist_id="snail-mail",
+        source_kind="musicbrainz-gender",
+        citation=citation,
+        current_value="female",
+        proposed_value="nonbinary",
+        note="the editorial record is wrong",
+        filed_at="2026-08-06",
+    )
+
+    exit_code = cli_main(
+        [
+            "refresh",
+            "--artist",
+            "snail-mail",
+            "--db",
+            str(db),
+            "--pending-corrections",
+            str(pending),
+        ]
+    )
+    assert exit_code == 0
+
+    rows = corrections.list_corrections(pending)
+    assert len(rows) == 1, "an ordinary refresh deleted a filed correction"
+    assert rows[0].proposed_value == "nonbinary"
+    out = capsys.readouterr().out
+    # The asserted value moved for nobody, and nothing upstream was consulted —
+    # the report must not claim otherwise.
+    assert "reconciled 0" in out
+    assert "no upstream identity source was queried" in out
+    assert "1 pending correction(s) still open" in out
+    assert "reconciled 1 pending upstream correction(s)" not in out
