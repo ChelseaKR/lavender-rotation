@@ -529,8 +529,14 @@ def test_similar_artists_carry_a_display_name_alongside_their_key() -> None:
 
 
 def test_the_user_agent_carries_the_operators_contact() -> None:
-    assert "someone@example.org" in build_user_agent("someone@example.org")
-    assert "github.com" in build_user_agent("")
+    # Asserted by equality rather than substring: `"github.com" in <url>` is the
+    # shape of an incomplete URL check (CodeQL py/incomplete-url-substring-
+    # sanitization flags it), and here the exact string is knowable anyway, so
+    # the weaker assertion bought nothing.
+    from pipeline.http import PROJECT_URL, USER_AGENT_BASE
+
+    assert build_user_agent("someone@example.org") == f"{USER_AGENT_BASE} ( someone@example.org )"
+    assert build_user_agent("") == f"{USER_AGENT_BASE} ( {PROJECT_URL} )"
 
 
 def test_a_cached_response_costs_no_request() -> None:
