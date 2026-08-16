@@ -35,6 +35,42 @@ def test_healthy_cache_and_no_hard_failures_exit_ok(monkeypatch, tmp_path) -> No
     assert version_check.passed
 
 
+def test_cache_size_is_reported_and_grows_with_content(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("WAD_DATA_DIR", str(tmp_path))
+    db_path = default_db_path()
+    with Cache(db_path):
+        pass  # empty, freshly-created cache
+
+    empty_report = doctor.run_diagnostics(check_upstream=False)
+    empty_check = next(c for c in empty_report.checks if c.name == "cache_size")
+    assert empty_check.passed
+    assert not empty_check.hard  # informational — never fails the run
+    assert empty_check.detail.split()[0].replace(".", "", 1).isdigit()
+
+    # Legitimately grow the cache through its own API and confirm the report follows.
+    with Cache(db_path) as cache:
+        for i in range(200):
+            cache.put_cached_response(f"https://example.invalid/{i}", "x" * 5000, "2026-08-04")
+
+    grown_report = doctor.run_diagnostics(check_upstream=False)
+    grown_check = next(c for c in grown_report.checks if c.name == "cache_size")
+    assert grown_check.passed
+    grown_bytes = db_path.stat().st_size
+    empty_bytes_str = empty_check.detail
+    assert grown_bytes > 0
+    assert grown_check.detail != empty_bytes_str
+
+
+def test_format_bytes_picks_the_right_unit() -> None:
+    assert doctor._format_bytes(0) == "0 B"
+    assert doctor._format_bytes(1023) == "1023 B"
+    assert doctor._format_bytes(1024) == "1.0 KiB"
+    assert doctor._format_bytes(1536) == "1.5 KiB"
+    assert doctor._format_bytes(1024 * 1024) == "1.0 MiB"
+    assert doctor._format_bytes(1024 * 1024 * 1024) == "1.0 GiB"
+    assert doctor._format_bytes(5 * 1024 * 1024 * 1024) == "5.0 GiB"
+
+
 def test_missing_env_keys_are_reported_but_never_fail_the_run(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("WAD_DATA_DIR", str(tmp_path))
     for key in doctor.ENV_KEYS:

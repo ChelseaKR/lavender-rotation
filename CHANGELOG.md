@@ -33,6 +33,10 @@ tag, not backfilled to an earlier commit date.
   wrong Wikidata entities shipped. A citation absent from the ledger now fails, so an unverified
   identifier cannot be added silently, and the six `example.org` placeholders that stand in for
   real people's self-identification are enumerated rather than invisible.
+- `wad doctor` now reports the on-disk cache size (`cache_size`, informational — never fails the
+  run) alongside the existing `cache_path`/`cache_schema_version` checks: the one signal the CLI
+  gives an operator for when to reach for `wad refresh --ttl-days`, since nothing previously
+  reported cache footprint.
 - Docs-currency guard (`scripts/check-readme-claims.py`, wired into `make test`): re-derives the
   actual test count (`pytest --collect-only`) and coverage total (`coverage report
   --format=total`) and fails if either drifts from README's "Project status" claim, instead of
