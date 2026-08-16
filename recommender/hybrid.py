@@ -33,6 +33,7 @@ from recommender.diversify import diversify
 from recommender.explain import build_explanation
 from recommender.feedback import Feedback, feedback_adjustment
 from recommender.filters import is_sourced_man_only
+from recommender.lens import VALUES_LENS, LensSpec
 from recommender.rerank import is_rank_protected, rerank, values_boost_for_artist
 
 
@@ -52,6 +53,7 @@ def recommend(
     feedbacks: list[Feedback] | None = None,
     feedback_strength: float = 1.0,
     hide_sourced_men: bool = False,
+    lens: LensSpec = VALUES_LENS,
 ) -> list[Recommendation]:
     """Produce the top-``k`` explained recommendations.
 
@@ -63,6 +65,8 @@ def recommend(
     popularity baseline), 1 = maximum tag-space diversity.
     ``feedbacks`` contains the listener's current per-artist votes. The bounded
     adjustment is part of the taste-side base score, before the values lens.
+    ``lens`` selects which declared :class:`~recommender.lens.LensSpec` boosts —
+    the shipped women/nonbinary one by default, or the queer lens (ADR 0011).
     ``hide_sourced_men`` is the listener's opt-in output filter — off by default,
     so the eval and every existing caller are unaffected. It is deliberately not
     the lens: see :mod:`recommender.filters` for why it removes only a positive
@@ -102,7 +106,7 @@ def recommend(
         base += feedback_adjustment(
             artist, feedbacks or (), feedback_strength, username=profile.username
         )
-        delta = values_boost_for_artist(artist, lens_strength)
+        delta = values_boost_for_artist(artist, lens_strength, lens)
         explanation = build_explanation(artist, c_res, t_res, delta, lens_strength)
         recs.append(
             Recommendation(
@@ -120,16 +124,18 @@ def recommend(
     base_rank_of = {r.artist.artist_id: i + 1 for i, r in enumerate(base_ordered)}
     recs = [rec.with_base_rank(base_rank_of[rec.artist.artist_id]) for rec in recs]
 
-    ranked = rerank(recs, lens_strength)
+    ranked = rerank(recs, lens_strength, lens)
 
     # Serendipity remains identity-blind inside diversify(). At this orchestration
     # boundary, pass it only the movable candidates, then reconstruct the full list
     # around the slots already protected by rerank(). Otherwise an MMR pass
     # after reranking can silently undo the absolute top-k/rank guarantee — for
     # sourced-OTHER artists as well as unknown ones (#68).
-    movable = [rec for rec in ranked if not is_rank_protected(rec.artist)]
+    movable = [rec for rec in ranked if not is_rank_protected(rec.artist, lens)]
     diversified = iter(diversify(movable, explore))
-    protected = [rec if is_rank_protected(rec.artist) else next(diversified) for rec in ranked]
+    protected = [
+        rec if is_rank_protected(rec.artist, lens) else next(diversified) for rec in ranked
+    ]
 
     # The listener's own opt-in subtraction, applied last — after ranking, after
     # rank protection, and after `base_rank` was recorded. Doing it here rather

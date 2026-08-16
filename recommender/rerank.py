@@ -41,7 +41,7 @@ from dataclasses import replace
 
 from pipeline.models import Artist, Gender, Recommendation
 
-from recommender.lens import VALUES_LENS
+from recommender.lens import VALUES_LENS, LensSpec
 
 #: Backward-compatible alias for :data:`recommender.lens.VALUES_LENS`'s boost
 #: bound. Prefer importing ``VALUES_LENS`` directly for new code — this stays
@@ -49,18 +49,20 @@ from recommender.lens import VALUES_LENS
 MAX_BOOST = VALUES_LENS.max_boost
 
 
-def values_boost_for_artist(artist: Artist, lens_strength: float) -> float:
+def values_boost_for_artist(
+    artist: Artist, lens_strength: float, lens: LensSpec = VALUES_LENS
+) -> float:
     """The non-negative boost for an artist. Zero unless *sourced*-aligned.
 
     Delegates to :meth:`recommender.lens.LensSpec.boost` on the default
     :data:`~recommender.lens.VALUES_LENS`.
     """
-    return VALUES_LENS.boost(artist, lens_strength)
+    return lens.boost(artist, lens_strength)
 
 
-def values_boost(rec: Recommendation, lens_strength: float) -> float:
+def values_boost(rec: Recommendation, lens_strength: float, lens: LensSpec = VALUES_LENS) -> float:
     """The non-negative boost for one recommendation. Zero unless sourced-aligned."""
-    return values_boost_for_artist(rec.artist, lens_strength)
+    return values_boost_for_artist(rec.artist, lens_strength, lens)
 
 
 def sort_and_rank(recs: list[Recommendation]) -> list[Recommendation]:
@@ -90,7 +92,7 @@ def sort_and_rank(recs: list[Recommendation]) -> list[Recommendation]:
 RANK_PROTECTED_GENDERS: frozenset[Gender] = frozenset({Gender.UNKNOWN, Gender.OTHER})
 
 
-def is_unknown_artist(artist: Artist) -> bool:
+def is_unknown_artist(artist: Artist, lens: LensSpec = VALUES_LENS) -> bool:
     """Match the fairness report's ``unknown`` segmentation without a cycle.
 
     Reads ``values_aligned`` rather than ``female_fronted`` so that a band whose
@@ -98,10 +100,10 @@ def is_unknown_artist(artist: Artist) -> bool:
     a boost — is not counted as unknown. ``tests/test_exposure.py`` asserts this
     stays equivalent to ``identity_segment(artist) == UNKNOWN``.
     """
-    return artist.identity.gender is Gender.UNKNOWN and not artist.values_aligned
+    return artist.identity.gender is Gender.UNKNOWN and not lens.aligned(artist)
 
 
-def is_rank_protected(artist: Artist) -> bool:
+def is_rank_protected(artist: Artist, lens: LensSpec = VALUES_LENS) -> bool:
     """True iff this artist keeps its exact pure-taste position under the lens.
 
     An artist the lens *boosts* is never protected: pinning a boosted artist to
@@ -109,10 +111,12 @@ def is_rank_protected(artist: Artist) -> bool:
     solo artist is protected, while an ``OTHER``-sourced artist fronting an
     aligned band is movable — it is being paid, not displaced.
     """
-    return artist.identity.gender in RANK_PROTECTED_GENDERS and not artist.values_aligned
+    return artist.identity.gender in RANK_PROTECTED_GENDERS and not lens.aligned(artist)
 
 
-def rerank(recs: list[Recommendation], lens_strength: float) -> list[Recommendation]:
+def rerank(
+    recs: list[Recommendation], lens_strength: float, lens: LensSpec = VALUES_LENS
+) -> list[Recommendation]:
     """Apply the boost-only lens while holding every rank-protected artist's base slot.
 
     Raises ``ValueError`` for a lens strength outside [0, 1].
@@ -123,15 +127,17 @@ def rerank(recs: list[Recommendation], lens_strength: float) -> list[Recommendat
     base_order = sorted(recs, key=lambda r: (-r.base_score, r.artist.artist_id))
     boosted: list[Recommendation] = []
     for rec in base_order:
-        delta = values_boost(rec, lens_strength)
+        delta = values_boost(rec, lens_strength, lens)
         assert delta >= 0.0  # invariant: the lens never penalises
         boosted.append(replace(rec, rerank_delta=delta))
 
     movable = sorted(
-        (rec for rec in boosted if not is_rank_protected(rec.artist)),
+        (rec for rec in boosted if not is_rank_protected(rec.artist, lens)),
         key=lambda r: (-r.score, r.artist.artist_id),
     )
     movable_iter = iter(movable)
-    ordered = [rec if is_rank_protected(rec.artist) else next(movable_iter) for rec in boosted]
+    ordered = [
+        rec if is_rank_protected(rec.artist, lens) else next(movable_iter) for rec in boosted
+    ]
 
     return [rec.with_rank(i + 1) for i, rec in enumerate(ordered)]

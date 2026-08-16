@@ -68,6 +68,10 @@ class EnrichmentSource(Protocol):
 
     def gender_evidence(self, artist_id: str) -> list[IdentityEvidence]: ...
 
+    def orientation_evidence(self, artist_id: str) -> list[IdentityEvidence]:
+        """Sourced sexual-orientation claims (ADR 0011). Empty is the norm."""
+        ...
+
     def composition_evidence(
         self, artist_id: str
     ) -> tuple[list[FrontPerson], list[IdentityEvidence]]: ...
@@ -93,30 +97,39 @@ def parse_musicbrainz_gender(
     )
 
 
-def parse_wikidata_p21(
-    payload: object, citation: str, retrieved_at: str
+def _first_claim_qid(
+    payload: object, prop: str, kind: SourceKind, citation: str, retrieved_at: str
 ) -> Optional[IdentityEvidence]:
-    """Parse a Wikidata entity's P21 ('sex or gender') claim into a QID evidence."""
+    """The first item-valued claim for ``prop``, validated, as evidence.
+
+    Shared by P21 and P91 (ADR 0011): the document shape is identical and the
+    two axes differ only in which property is read and what kind of claim the
+    result is. Only the *first* statement is taken — a person with several
+    recorded values is not something to summarise, and the resolver's job is to
+    normalise one asserted value, not to reconcile a list.
+    """
     if not isinstance(payload, dict):
         raise ValueError("wikidata payload must be an object")
     claims = payload.get("claims", {})
     if not isinstance(claims, dict):
         return None
-    p21 = claims.get("P21", [])
-    if not isinstance(p21, list) or not p21:
+    statements = claims.get(prop, [])
+    if not isinstance(statements, list) or not statements:
         return None
     try:
-        qid = p21[0]["mainsnak"]["datavalue"]["value"]["id"]
+        qid = statements[0]["mainsnak"]["datavalue"]["value"]["id"]
     except (KeyError, TypeError, IndexError):
         return None
     if not isinstance(qid, str) or not qid.startswith("Q"):
         return None
-    return IdentityEvidence(
-        kind=SourceKind.WIKIDATA_P21,
-        value=qid,
-        citation=citation,
-        retrieved_at=retrieved_at,
-    )
+    return IdentityEvidence(kind=kind, value=qid, citation=citation, retrieved_at=retrieved_at)
+
+
+def parse_wikidata_p21(
+    payload: object, citation: str, retrieved_at: str
+) -> Optional[IdentityEvidence]:
+    """Parse a Wikidata entity's P21 ('sex or gender') claim into a QID evidence."""
+    return _first_claim_qid(payload, "P21", SourceKind.WIKIDATA_P21, citation, retrieved_at)
 
 
 def parse_discogs_lineup(
@@ -181,12 +194,17 @@ class FixtureEnricher:
         self,
         gender: dict[str, list[IdentityEvidence]],
         composition: dict[str, tuple[list[FrontPerson], list[IdentityEvidence]]],
+        orientation: Optional[dict[str, list[IdentityEvidence]]] = None,
     ) -> None:
         self._gender = gender
         self._composition = composition
+        self._orientation = orientation or {}
 
     def gender_evidence(self, artist_id: str) -> list[IdentityEvidence]:
         return list(self._gender.get(artist_id, []))
+
+    def orientation_evidence(self, artist_id: str) -> list[IdentityEvidence]:
+        return list(self._orientation.get(artist_id, []))
 
     def composition_evidence(
         self, artist_id: str
@@ -297,19 +315,42 @@ def parse_wikidata_link(payload: object) -> Optional[str]:
     return None
 
 
-def parse_wikidata_entity(
-    payload: object, qid: str, citation: str, retrieved_at: str
-) -> Optional[IdentityEvidence]:
-    """Unwrap a Special:EntityData document and read its P21 claim."""
+def _unwrap_entity(payload: object, qid: str) -> Optional[dict[str, object]]:
+    """The entity for ``qid`` inside a Special:EntityData document, if present."""
     if not isinstance(payload, dict):
         raise ValueError("wikidata entity payload must be an object")
     entities = payload.get("entities", {})
     if not isinstance(entities, dict):
         return None
     entity = entities.get(qid)
-    if not isinstance(entity, dict):
-        return None
-    return parse_wikidata_p21(entity, citation, retrieved_at)
+    return entity if isinstance(entity, dict) else None
+
+
+def parse_wikidata_entity(
+    payload: object, qid: str, citation: str, retrieved_at: str
+) -> Optional[IdentityEvidence]:
+    """Unwrap a Special:EntityData document and read its P21 claim."""
+    entity = _unwrap_entity(payload, qid)
+    return None if entity is None else parse_wikidata_p21(entity, citation, retrieved_at)
+
+
+def parse_wikidata_entity_orientation(
+    payload: object, qid: str, citation: str, retrieved_at: str
+) -> Optional[IdentityEvidence]:
+    """The same document's P91 ("sexual orientation") claim (ADR 0011).
+
+    Free, in request terms: the entity is already fetched for P21, so the second
+    axis costs nothing upstream and asks nobody anything new.
+    """
+    entity = _unwrap_entity(payload, qid)
+    return None if entity is None else parse_wikidata_p91(entity, citation, retrieved_at)
+
+
+def parse_wikidata_p91(
+    payload: object, citation: str, retrieved_at: str
+) -> Optional[IdentityEvidence]:
+    """Parse a Wikidata entity's P91 ('sexual orientation') claim into QID evidence."""
+    return _first_claim_qid(payload, "P91", SourceKind.WIKIDATA_P91, citation, retrieved_at)
 
 
 @dataclass(frozen=True)
@@ -403,6 +444,34 @@ class MusicBrainzEnricher:
             return []
         payload = self._artist_payload(mbid)
         return [] if payload is None else self._evidence_for(mbid, payload)
+
+    def orientation_evidence(self, artist_id: str) -> list[IdentityEvidence]:
+        """Sourced orientation claims (ADR 0011) — Wikidata P91 only, upstream.
+
+        MusicBrainz has no orientation field and neither does Discogs, so the
+        live path can offer exactly one source here. An artist's own cited
+        words are the higher-trust source, but nothing publishes them in a
+        machine-readable form; they reach the resolver through the corrections
+        ledger (``wad corrections --artist … --value queer --citation …``),
+        which is also the route by which a person can get their own entry
+        right when a registry has it wrong.
+        """
+        mbid = self.resolve_mbid(artist_id)
+        if mbid is None:
+            return []
+        payload = self._artist_payload(mbid)
+        if payload is None:
+            return []
+        qid = parse_wikidata_link(payload)
+        if qid is None:
+            return []
+        entity = self._json(wikidata_entity_data_url(qid))
+        if entity is None:
+            return []
+        claimed = parse_wikidata_entity_orientation(
+            entity, qid, WIKIDATA_ENTITY_URL.format(qid=qid), self.retrieved_at
+        )
+        return [] if claimed is None else [claimed]
 
     def composition_evidence(
         self, artist_id: str

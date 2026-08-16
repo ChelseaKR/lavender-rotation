@@ -25,12 +25,15 @@ from typing import Optional
 from pipeline.models import (
     BAND_COMPOSITION_SOURCES,
     INDIVIDUAL_IDENTITY_SOURCES,
+    ORIENTATION_SOURCES,
     BandComposition,
     FrontPerson,
     Gender,
     IdentityBasis,
     IdentityLabel,
     InferenceForbiddenError,
+    Orientation,
+    QueerIdentity,
     Source,
     SourceKind,
 )
@@ -70,10 +73,69 @@ _WIKIDATA_QID_VOCAB: dict[str, Gender] = {
     "Q1097630": Gender.OTHER,  # intersex
 }
 
+# --- Orientation vocabulary (ADR 0011) --------------------------------------
+# Wikidata P91 ("sexual orientation") item ids. Every QID below was verified
+# against live Wikidata on 2026-08-16 by fetching its English label, because
+# this repo has already shipped three wrong Wikidata entities once and a
+# plausible-looking Q-number is not evidence of anything. (Q43455 — the obvious
+# guess for "queer" — is *ethnology*.)
+_ORIENTATION_QID_VOCAB: dict[str, Orientation] = {
+    "Q6636": Orientation.HOMOSEXUAL,  # homosexuality
+    "Q6649": Orientation.LESBIAN,  # lesbianism
+    "Q592": Orientation.GAY,  # gay
+    "Q43200": Orientation.BISEXUAL,  # bisexuality
+    "Q271534": Orientation.PANSEXUAL,  # pansexuality
+    "Q724351": Orientation.ASEXUAL,  # asexuality
+    "Q23912283": Orientation.DEMISEXUAL,  # demisexuality
+    "Q1035954": Orientation.HETEROSEXUAL,  # heterosexuality
+}
+# What an artist's own words map to. Anything absent contributes nothing —
+# there is no fallback that turns an unrecognised phrase into an orientation.
+_ORIENTATION_FREEFORM_VOCAB: dict[str, Orientation] = {
+    "lesbian": Orientation.LESBIAN,
+    "gay": Orientation.GAY,
+    "homosexual": Orientation.HOMOSEXUAL,
+    "bisexual": Orientation.BISEXUAL,
+    "bi": Orientation.BISEXUAL,
+    "pansexual": Orientation.PANSEXUAL,
+    "pan": Orientation.PANSEXUAL,
+    "queer": Orientation.QUEER,
+    "asexual": Orientation.ASEXUAL,
+    "ace": Orientation.ASEXUAL,
+    "demisexual": Orientation.DEMISEXUAL,
+    "straight": Orientation.HETEROSEXUAL,
+    "heterosexual": Orientation.HETEROSEXUAL,
+}
+
+# --- Trans self-identification (ADR 0011) -----------------------------------
+# Read from values a *gender* source already asserted and this module already
+# stored for provenance — no new fetch, no new field, nothing newly asked of
+# anyone. `Gender` still maps every one of these to WOMAN/MAN/NONBINARY and
+# still draws no cis/trans distinction of its own.
+_TRANS_ASSERTED_VALUES: frozenset[str] = frozenset(
+    {
+        "Q1052281",  # trans woman
+        "Q2449503",  # trans man
+        "Q189125",  # transgender
+        "trans woman",
+        "trans man",
+        "transgender",
+        "transgender female",
+        "transgender male",
+        "transfeminine",
+        "transmasculine",
+    }
+)
+
 # Trust priority when sources are present (higher wins on disagreement).
 _SOURCE_PRIORITY: dict[SourceKind, int] = {
     SourceKind.ARTIST_STATEMENT: 3,
     SourceKind.WIKIDATA_P21: 2,
+    # P91 sits where P21 does — below the artist's own words, and for the same
+    # reason. It is admitted for coverage (ADR 0011) while being, more often
+    # than P21 is, a biographer's characterisation rather than a self-statement,
+    # which is why the why-card renders the two differently.
+    SourceKind.WIKIDATA_P91: 2,
     SourceKind.MUSICBRAINZ_GENDER: 1,
 }
 # Base confidence contributed by a single source of each kind.
@@ -283,6 +345,77 @@ def _compute_confidence(
     return round(min(0.99, best + bonus), 3)
 
 
+def _map_orientation(kind: SourceKind, value: str) -> Optional[Orientation]:
+    """Normalise one sourced orientation claim, or ``None``. Never a guess."""
+    raw = value.strip()
+    if kind is SourceKind.WIKIDATA_P91:
+        return _ORIENTATION_QID_VOCAB.get(raw)
+    return _ORIENTATION_FREEFORM_VOCAB.get(raw.lower())
+
+
+def resolve_queer_identity(evidence: Sequence[IdentityEvidence]) -> QueerIdentity:
+    """Resolve the second axis (ADR 0011) from permitted evidence only.
+
+    Takes the *same* evidence list as :func:`resolve_identity` and reads a
+    different question out of it, which is why nothing new has to be fetched:
+
+    * **Orientation** comes from :data:`~pipeline.models.ORIENTATION_SOURCES`
+      evidence — a P91 claim or the artist's own cited words. A statement the
+      vocabulary does not cover contributes nothing.
+    * **Trans self-identification** comes from the raw value a *gender* source
+      asserted, which this module has always stored on
+      :attr:`~pipeline.models.Source.detail` for provenance. A P21 claim of
+      ``Q1052281`` says "trans woman"; :func:`resolve_identity` maps that to
+      ``WOMAN`` and deliberately forgets the rest, and this reads it.
+
+    Returns the first-class unknown on both halves when nothing maps — the
+    normal answer for almost every artist, and never a negative claim about
+    them. An artist with no sourced orientation is not thereby heterosexual, and
+    one with no sourced trans self-identification is not thereby cis.
+    """
+    assert_permitted_only(evidence)
+    mapped: list[tuple[IdentityEvidence, Orientation]] = []
+    for ev in evidence:
+        if ev.kind not in ORIENTATION_SOURCES:
+            continue
+        orientation = _map_orientation(ev.kind, ev.value)
+        if orientation is not None:
+            mapped.append((ev, orientation))
+
+    orientation = Orientation.UNKNOWN
+    orientation_sources: tuple[Source, ...] = ()
+    if mapped:
+        # Same priority rule as gender: the artist's own words outrank a
+        # third-party registry entry, deterministically.
+        mapped.sort(
+            key=lambda pair: (
+                -_SOURCE_PRIORITY.get(pair[0].kind, 0),
+                pair[0].kind.value,
+                pair[0].citation,
+            )
+        )
+        orientation = mapped[0][1]
+        orientation_sources = tuple(ev.as_source() for ev, _ in mapped)
+
+    trans_sources = tuple(
+        ev.as_source()
+        for ev in evidence
+        if ev.kind in INDIVIDUAL_IDENTITY_SOURCES and _asserts_trans_identity(ev.value)
+    )
+    return QueerIdentity(
+        orientation=orientation,
+        orientation_sources=orientation_sources,
+        trans_self_identified=True if trans_sources else None,
+        trans_sources=trans_sources,
+    )
+
+
+def _asserts_trans_identity(value: str) -> bool:
+    """Whether a raw asserted value is itself a trans self-identification."""
+    raw = value.strip()
+    return raw in _TRANS_ASSERTED_VALUES or raw.lower() in _TRANS_ASSERTED_VALUES
+
+
 def resolve_composition(
     fronts: Sequence[FrontPerson], evidence: Sequence[IdentityEvidence]
 ) -> Optional[BandComposition]:
@@ -319,5 +452,7 @@ def assert_permitted_only(evidence: Sequence[IdentityEvidence]) -> None:
     raise.
     """
     for ev in evidence:
-        if ev.kind not in (INDIVIDUAL_IDENTITY_SOURCES | BAND_COMPOSITION_SOURCES):
+        if ev.kind not in (
+            INDIVIDUAL_IDENTITY_SOURCES | ORIENTATION_SOURCES | BAND_COMPOSITION_SOURCES
+        ):
             raise InferenceForbiddenError(f"{ev.kind} is not a permitted source")

@@ -38,6 +38,7 @@ from recommender.eval import (
 from recommender.exposure import observability_panel
 from recommender.feedback import Feedback
 from recommender.hybrid import recommend
+from recommender.lens import LENSES
 from recommender.upstream import upstream_edit_url
 from recommender.why import why_this_artist
 
@@ -149,6 +150,13 @@ def _add_world_args(parser: argparse.ArgumentParser) -> None:
         f"offline {DEMO_USER!r} world)",
     )
     parser.add_argument("--db", default=str(DEFAULT_DB_PATH), help="cache database path")
+    parser.add_argument(
+        "--lens-name",
+        choices=sorted(LENSES),
+        default="women-nonbinary",
+        help="which declared values lens boosts: 'women-nonbinary' (default) or "
+        "'queer' (sourced queer women + sourced nonbinary artists, ADR 0011)",
+    )
     parser.add_argument(
         "--hide-sourced-men",
         action="store_true",
@@ -512,6 +520,7 @@ def _cmd_recommend(args: argparse.Namespace) -> int:
             explore=args.explore,
             feedbacks=feedbacks,
             hide_sourced_men=args.hide_sourced_men,
+            lens=LENSES[args.lens_name],
         )
     print(f"Identity coverage: {identity_coverage(recs).summary_line()}")  # noqa: T201
     for rec in recs:
@@ -540,6 +549,7 @@ def _cmd_export(args: argparse.Namespace) -> int:
             explore=args.explore,
             feedbacks=feedbacks,
             hide_sourced_men=args.hide_sourced_men,
+            lens=LENSES[args.lens_name],
         )
     tracks = recommendations_to_tracks(recs)
     text = render(tracks, ExportFormat(args.format), playlist_name="Women-Artist Discovery")
@@ -584,6 +594,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
                 k=args.k,
                 lens_strength=lens,
                 hide_sourced_men=args.hide_sourced_men,
+                lens=LENSES[args.lens_name],
             )
             for lens in sorted({0.0, 0.25, 0.5, 0.75, 1.0, args.lens})
         }
