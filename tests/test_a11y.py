@@ -65,7 +65,10 @@ def test_observability_panel_is_table_first_and_accessible(profile, catalog, sou
     assert check_html(html) == []
     assert "Fairness observability" in html
     assert "exposure share by identity segment" in html
-    assert "Unknown-identity retention" in html
+    assert "Rank-protected retention" in html
+    # Both rank-protected segments get a row, not just unknown (#68).
+    assert '<th scope="row">unknown</th>' in html
+    assert '<th scope="row">other</th>' in html
     assert html.count("<table>") >= 3
 
 

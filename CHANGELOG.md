@@ -110,6 +110,20 @@ tag, not backfilled to an earlier commit date.
   registry stay free-form, which was the original reason for the exemption.
 - The demo-citation gate walked individual identity and band composition but not the front-person
   identities nested inside composition, reaching one level short of the data it covers.
+- The values lens's published harms note and the ranking now agree (#68). The note is rendered to
+  the reader and promised that anyone unaligned was "never down-ranked, never treated worse than
+  an unknown-identity artist"; the re-rank pinned only *unknown* slots, so an artist sourced as
+  `Gender.OTHER` could be ranked below a **lower-scoring** unknown artist. Sourced `Gender.OTHER`
+  is now rank-protected alongside `UNKNOWN` (`recommender/rerank.py::RANK_PROTECTED_GENDERS`),
+  with a merge-blocking `assert_other_retained` counterpart to `assert_unknown_retained` and a new
+  `assert_no_score_reduced` covering every artist of every identity; both are enforced by
+  `wad eval`. The remainder of the promise cannot hold — a boosted artist that rises has to pass
+  someone — so the note now states plainly that a sourced man's *position* can move down and that
+  this is the whole of the lens's re-allocation. The score tables in both the dashboard and the
+  committed static render gained a **Position** column so a reader can see why rank is not a pure
+  function of total score. `tests/test_lens.py::test_lens_other_is_not_penalised_like_unknown`,
+  which had asserted only that two boosts were both `0.0` and stayed green throughout the defect,
+  now asserts the rank protection its name describes.
 - A band whose only sourced front-person is a nonbinary artist is no longer described as a
   "female-fronted band" (#69). `BandComposition.female_fronted` now means only "a front-person's
   own sourced gender is `WOMAN`" and no longer reads the lens's `VALUES_ALIGNED_GENDERS`, so lens

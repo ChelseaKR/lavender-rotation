@@ -92,10 +92,20 @@ This is a deliberate, documented decision, not an oversight:
   a legitimate future `LensSpec` — but it is a *new* manifest with its own
   rationale and harms note, gated on a fresh identity-data-ethics review
   (this document), not a silent addition to the existing one.
-- **This is a re-rank concern, never a penalty.** Exactly like `UNKNOWN`, an
-  artist sourced as `Gender.OTHER` keeps its exact base score: zero boost, no
-  down-rank, no exclusion. `tests/test_lens.py::test_lens_other_excluded` and
-  `test_lens_other_is_not_penalised_like_unknown` lock this in.
+- **Not boosted, and not displaced either.** Exactly like `UNKNOWN`, an artist
+  sourced as `Gender.OTHER` keeps its exact base score *and* its exact pure-taste
+  position: zero boost, no down-rank, no exclusion
+  (`recommender/rerank.py::RANK_PROTECTED_GENDERS`,
+  `recommender/exposure.py::assert_other_retained`).
+  `tests/test_lens.py::test_lens_other_excluded`,
+  `test_lens_other_is_not_penalised_like_unknown`, and
+  `tests/test_rank_protection.py` lock this in.
+  **Correction, 2026-08-14 (#68):** this bullet claimed the position half before
+  the code did it. The re-rank pinned only `UNKNOWN` slots, so a sourced `OTHER`
+  artist could be pushed below a *lower-scoring* unknown one. The ranking was
+  changed to match the claim, and `test_lens_other_is_not_penalised_like_unknown`
+  — which had asserted only that both boosts were `0.0`, and so stayed green
+  throughout — now asserts the rank protection its name describes.
 
 ## Non-redistribution
 

@@ -142,6 +142,11 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     beat_baseline = bool(report["hybrid_beats_popularity"])
     guarantees = cast("dict[str, object]", fairness["guarantees"])
     unknown_retained = bool(guarantees["unknown_retention_all_lenses"])
+    # #68: the same gate for the other rank-protected segment, and for the
+    # universal no-penalty claim. Before this, the lens's harms note promised
+    # both and only the unknown half was ever checked.
+    other_retained = bool(guarantees["other_retention_all_lenses"])
+    no_score_reduced = bool(guarantees["no_score_reduced_any_artist"])
     regressed = bool(regression is not None and regression["regressed"])
     if not beat_baseline:
         print("FAIL: hybrid did not beat the popularity baseline", file=sys.stderr)  # noqa: T201
@@ -149,6 +154,18 @@ def _cmd_eval(args: argparse.Namespace) -> int:
         print(  # noqa: T201
             "FAIL: an unknown-identity artist lost score/rank to the values lens "
             f"(unknown-retention < 100%): {guarantees}",
+            file=sys.stderr,
+        )
+    if not other_retained:
+        print(  # noqa: T201
+            "FAIL: an artist sourced as Gender.OTHER lost score/rank to the values "
+            f"lens (other-retention < 100%): {guarantees}",
+            file=sys.stderr,
+        )
+    if not no_score_reduced:
+        print(  # noqa: T201
+            "FAIL: the values lens reduced some artist's score — the boost-only "
+            f"invariant no longer holds on emitted output: {guarantees}",
             file=sys.stderr,
         )
     if regressed:
@@ -159,7 +176,15 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     multiworld_passed = bool(multiworld["hybrid_beats_popularity"])
     if not multiworld_passed:
         print("FAIL: hybrid did not beat popularity across fixture worlds", file=sys.stderr)  # noqa: T201
-    return 0 if (beat_baseline and unknown_retained and not regressed and multiworld_passed) else 1
+    passed = (
+        beat_baseline
+        and unknown_retained
+        and other_retained
+        and no_score_reduced
+        and not regressed
+        and multiworld_passed
+    )
+    return 0 if passed else 1
 
 
 def _cmd_eval_real(args: argparse.Namespace) -> int:

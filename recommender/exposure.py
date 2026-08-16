@@ -13,13 +13,19 @@ Metric choices (short justification, per FIX-05's requirement):
   it per lens strength so the lens's re-allocation is visible. (Attention-weighted
   exposure — discounting lower ranks — is a defensible alternative; we prefer the
   unweighted share because the list is short and every surfaced slot is seen.)
-* **Unknown-retention@k** — the fraction of pure-taste unknown artists in the
-  evaluated top-``k`` whose score, top-``k`` presence, and rank are preserved as
-  the lens strengthens. It is *verified on emitted output*, not inferred from a
-  boost-only score formula — see :func:`assert_unknown_retained`.
+* **Unknown-retention@k** and **other-retention@k** — the fraction of pure-taste
+  ``unknown`` (resp. sourced-``OTHER``) artists in the evaluated top-``k`` whose
+  score, top-``k`` presence, and rank are preserved as the lens strengthens.
+  Both are *verified on emitted output*, not inferred from a boost-only score
+  formula — see :func:`assert_unknown_retained` and :func:`assert_other_retained`.
+  The ``OTHER`` measure exists because #68 found the lens's published harms note
+  promising it and nothing checking it.
 * **Rank-shift** — the mean change in list position per segment relative to pure
-  taste (lens 0). Aligned artists can re-order sourced non-unknown slots, while
-  unknown slots stay pinned to their pure-taste positions.
+  taste (lens 0). Aligned artists re-order only the unpinned slots; ``unknown``
+  and sourced-``OTHER`` slots stay pinned to their pure-taste positions
+  (:data:`recommender.rerank.RANK_PROTECTED_GENDERS`), so the lens's
+  re-allocation lands on sourced men. Nothing here softens that: it is what the
+  ``man`` row of ``mean_rank_shift`` reports.
 * **Popularity-tier x identity** — cross-tabs the candidate pool by listener count
   (:attr:`~pipeline.models.Artist.listeners`), surfacing the "lens over-favours
   already-popular women" allocational risk named in ``fairness-identity.md`` §3.
@@ -127,29 +133,35 @@ def exposure_at_k(recs: list[Recommendation], k: int) -> dict[str, float]:
     return {seg: round(counts[seg] / n, 4) if n else 0.0 for seg in SEGMENTS}
 
 
-def _unknown_state(recs: list[Recommendation], k: int) -> dict[str, tuple[float, int]]:
-    """artist_id -> (score, one-based rank) for unknown artists in the top-k."""
+def _segment_state(
+    recs: list[Recommendation], k: int, segment: str
+) -> dict[str, tuple[float, int]]:
+    """artist_id -> (score, one-based rank) for ``segment`` artists in the top-k."""
     if k < 1:
         raise ValueError("k must be at least 1")
     return {
         rec.artist.artist_id: (rec.score, rank)
         for rank, rec in enumerate(recs[:k], start=1)
-        if identity_segment(rec.artist) == UNKNOWN
+        if identity_segment(rec.artist) == segment
     }
 
 
-def unknown_retention(
-    recs_by_lens: dict[float, list[Recommendation]], *, k: int, base_lens: float = 0.0
+def segment_retention(
+    recs_by_lens: dict[float, list[Recommendation]],
+    *,
+    k: int,
+    segment: str,
+    base_lens: float = 0.0,
 ) -> dict[str, float]:
-    """Per-lens fraction of pure-taste top-k unknowns without score/rank loss.
+    """Per-lens fraction of pure-taste top-k ``segment`` artists without score/rank loss.
 
     An artist is retained only if it remains in the emitted top-k, its score is not
     lower, and its one-based rank is no worse than under pure taste.
     """
-    base = _unknown_state(recs_by_lens[base_lens], k)
+    base = _segment_state(recs_by_lens[base_lens], k, segment)
     out: dict[str, float] = {}
     for lens in sorted(recs_by_lens):
-        present = _unknown_state(recs_by_lens[lens], k)
+        present = _segment_state(recs_by_lens[lens], k, segment)
         if not base:
             out[_lens_key(lens)] = 1.0
             continue
@@ -162,47 +174,115 @@ def unknown_retention(
     return out
 
 
-def _unknown_downranked_count(
+def unknown_retention(
     recs_by_lens: dict[float, list[Recommendation]], *, k: int, base_lens: float = 0.0
+) -> dict[str, float]:
+    """Per-lens fraction of pure-taste top-k unknowns without score/rank loss."""
+    return segment_retention(recs_by_lens, k=k, segment=UNKNOWN, base_lens=base_lens)
+
+
+def other_retention(
+    recs_by_lens: dict[float, list[Recommendation]], *, k: int, base_lens: float = 0.0
+) -> dict[str, float]:
+    """Same measure for artists sourced as ``Gender.OTHER`` (#68).
+
+    They are rank-protected exactly as unknown artists are — see
+    :data:`recommender.rerank.RANK_PROTECTED_GENDERS` — so this is the number
+    that makes the lens's harms note checkable rather than a claim.
+    """
+    return segment_retention(recs_by_lens, k=k, segment=OTHER, base_lens=base_lens)
+
+
+def _downranked_count(
+    recs_by_lens: dict[float, list[Recommendation]],
+    *,
+    k: int,
+    segment: str,
+    base_lens: float = 0.0,
 ) -> int:
-    """Count unknown/lens pairs dropped from top-k or losing score/rank."""
-    base = _unknown_state(recs_by_lens[base_lens], k)
+    """Count ``segment``/lens pairs dropped from top-k or losing score/rank."""
+    base = _segment_state(recs_by_lens[base_lens], k, segment)
     count = 0
     for lens, recs in recs_by_lens.items():
         if lens == base_lens:
             continue
-        present = _unknown_state(recs, k)
+        present = _segment_state(recs, k, segment)
         for aid, (base_score, base_rank) in base.items():
             if aid not in present or present[aid][0] < base_score or present[aid][1] > base_rank:
                 count += 1
     return count
 
 
-def assert_unknown_retained(
-    recs_by_lens: dict[float, list[Recommendation]], *, k: int, base_lens: float = 0.0
+def assert_segment_retained(
+    recs_by_lens: dict[float, list[Recommendation]],
+    *,
+    k: int,
+    segment: str,
+    base_lens: float = 0.0,
 ) -> None:
-    """Merge-blocking guarantee, checked on emitted output: unknown is never penalised.
+    """Merge-blocking guarantee, checked on emitted output, for one protected segment.
 
-    Raises :class:`FairnessAssertionError` if, at any lens strength, an
-    ``unknown``-identity artist surfaced in pure taste's top-k is dropped from the
-    top-k, has its score lowered, or moves to a worse rank.
+    Raises :class:`FairnessAssertionError` if, at any lens strength, an artist of
+    ``segment`` surfaced in pure taste's top-k is dropped from the top-k, has its
+    score lowered, or moves to a worse rank.
     """
-    base = _unknown_state(recs_by_lens[base_lens], k)
+    base = _segment_state(recs_by_lens[base_lens], k, segment)
     for lens in sorted(recs_by_lens):
-        present = _unknown_state(recs_by_lens[lens], k)
+        present = _segment_state(recs_by_lens[lens], k, segment)
         for aid, (base_score, base_rank) in base.items():
             if aid not in present:
                 raise FairnessAssertionError(
-                    f"unknown artist {aid!r} dropped from top-{k} at lens {lens}"
+                    f"{segment} artist {aid!r} dropped from top-{k} at lens {lens}"
                 )
             score, rank = present[aid]
             if score < base_score:
                 raise FairnessAssertionError(
-                    f"unknown artist {aid!r} lost score at lens {lens}: {base_score} -> {score}"
+                    f"{segment} artist {aid!r} lost score at lens {lens}: {base_score} -> {score}"
                 )
             if rank > base_rank:
                 raise FairnessAssertionError(
-                    f"unknown artist {aid!r} lost rank at lens {lens}: {base_rank} -> {rank}"
+                    f"{segment} artist {aid!r} lost rank at lens {lens}: {base_rank} -> {rank}"
+                )
+
+
+def assert_unknown_retained(
+    recs_by_lens: dict[float, list[Recommendation]], *, k: int, base_lens: float = 0.0
+) -> None:
+    """Merge-blocking guarantee, checked on emitted output: unknown is never penalised."""
+    assert_segment_retained(recs_by_lens, k=k, segment=UNKNOWN, base_lens=base_lens)
+
+
+def assert_other_retained(
+    recs_by_lens: dict[float, list[Recommendation]], *, k: int, base_lens: float = 0.0
+) -> None:
+    """The counterpart #68 found missing: sourced ``OTHER`` is never penalised either.
+
+    Nothing checked this before, which is how the lens shipped a harms note
+    promising that a sourced ``Gender.OTHER`` artist is "never down-ranked,
+    never treated worse than an unknown-identity artist" while the re-rank
+    pinned only unknown slots and pushed ``OTHER`` below lower-scoring unknowns.
+    """
+    assert_segment_retained(recs_by_lens, k=k, segment=OTHER, base_lens=base_lens)
+
+
+def assert_no_score_reduced(
+    recs_by_lens: dict[float, list[Recommendation]], *, base_lens: float = 0.0
+) -> None:
+    """The boost-only invariant, verified on emitted output for **every** artist.
+
+    Unlike the retention guarantees this is not scoped to a segment, to a
+    protected set, or to the top-k: no artist of any identity may end up with a
+    lower score at any lens strength than it had under pure taste. This is the
+    half of the harms note that holds universally, so it is checked universally
+    rather than being asserted from the shape of the boost formula.
+    """
+    base = {rec.artist.artist_id: rec.score for rec in recs_by_lens[base_lens]}
+    for lens in sorted(recs_by_lens):
+        for rec in recs_by_lens[lens]:
+            aid = rec.artist.artist_id
+            if aid in base and rec.score < base[aid]:
+                raise FairnessAssertionError(
+                    f"artist {aid!r} lost score at lens {lens}: {base[aid]} -> {rec.score}"
                 )
 
 
@@ -237,14 +317,24 @@ def exposure_report(
     """
     lenses = sorted(recs_by_lens)
     retention = unknown_retention(recs_by_lens, k=k, base_lens=base_lens)
-    downranked = _unknown_downranked_count(recs_by_lens, k=k, base_lens=base_lens)
+    downranked = _downranked_count(recs_by_lens, k=k, segment=UNKNOWN, base_lens=base_lens)
     min_retention = min(retention.values()) if retention else 1.0
+    other = other_retention(recs_by_lens, k=k, base_lens=base_lens)
+    other_downranked = _downranked_count(recs_by_lens, k=k, segment=OTHER, base_lens=base_lens)
+    min_other = min(other.values()) if other else 1.0
+    try:
+        assert_no_score_reduced(recs_by_lens, base_lens=base_lens)
+    except FairnessAssertionError:
+        no_score_reduced = False
+    else:
+        no_score_reduced = True
     return {
         "k": k,
         "lens_strengths": lenses,
         "segments": list(SEGMENTS),
         "exposure_at_k": {_lens_key(s): exposure_at_k(recs_by_lens[s], k) for s in lenses},
         "unknown_retention": retention,
+        "other_retention": other,
         "mean_rank_shift": {
             _lens_key(s): rank_shift_by_segment(recs_by_lens[base_lens], recs_by_lens[s])
             for s in lenses
@@ -255,6 +345,15 @@ def exposure_report(
             "unknown_retention_all_lenses": min_retention >= 1.0 and downranked == 0,
             "min_unknown_retention": min_retention,
             "unknown_downranked_count": downranked,
+            # #68: the same measure for the other rank-protected segment. Its
+            # absence is why the lens could ship a harms note the ranking
+            # contradicted with every gate green.
+            "other_retention_all_lenses": min_other >= 1.0 and other_downranked == 0,
+            "min_other_retention": min_other,
+            "other_downranked_count": other_downranked,
+            # The universal half of the promise, verified on emitted output for
+            # every artist rather than inferred from the boost formula.
+            "no_score_reduced_any_artist": no_score_reduced,
         },
     }
 
@@ -287,6 +386,12 @@ def observability_panel(
             }
             for segment in SEGMENTS
         ],
+        "retention_rows": [
+            {"segment": UNKNOWN, "by_lens": retention},
+            {"segment": OTHER, "by_lens": other_retention(recs_by_lens, k=k, base_lens=base_lens)},
+        ],
+        # Kept for callers written against the single-row shape; the unknown row
+        # is the first entry of ``retention_rows``.
         "retention_row": {"segment": UNKNOWN, "by_lens": retention},
         "rank_shift_row": rank_shift_by_segment(
             recs_by_lens[base_lens], recs_by_lens[current_lens]

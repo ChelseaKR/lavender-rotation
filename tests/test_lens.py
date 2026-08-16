@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 from pipeline.models import Gender
 from recommender.lens import VALUES_LENS, LensSpec
+from recommender.rerank import is_rank_protected
 
 from .conftest import make_artist
 
@@ -42,10 +43,35 @@ def test_lens_other_excluded() -> None:
 
 
 def test_lens_other_is_not_penalised_like_unknown() -> None:
-    """OTHER, like UNKNOWN, is a re-rank non-event — never a penalty."""
+    """OTHER, like UNKNOWN, is a re-rank non-event — in score *and* in position.
+
+    This test used to assert only ``boost(other) == boost(unknown) == 0.0``,
+    which is a statement about the boost function and proves nothing about the
+    ranking. It passed for as long as the ranking pushed sourced-OTHER artists
+    below lower-scoring unknown ones (#68). It now asserts the property its own
+    name claims: both are rank-protected by the same rule.
+    """
     other = make_artist("other-artist", gender=Gender.OTHER)
     unknown = make_artist("unknown-artist")
     assert VALUES_LENS.boost(other, 1.0) == VALUES_LENS.boost(unknown, 1.0) == 0.0
+    assert is_rank_protected(other) is True
+    assert is_rank_protected(unknown) is True
+
+
+def test_harms_note_does_not_promise_what_the_ranking_does_not_do() -> None:
+    """The published note must not re-acquire the claim #68 falsified.
+
+    ``harms_note`` is rendered to the reader (``app/dashboard.py``). Sourced men
+    *can* lose list position, so a blanket "never down-ranked" for anyone
+    unaligned is a promise the re-rank cannot keep. Asserted as an absence, so a
+    rewording stays green and a re-promise does not.
+    """
+    note = VALUES_LENS.harms_note.lower()
+    assert "never down-ranked" not in note
+    assert "never treated worse than an unknown-identity artist" not in note
+    # …and it must still say the two things that *are* true and checked.
+    assert "assert_no_score_reduced" in note
+    assert "assert_other_retained" in note
 
 
 def test_lens_woman_and_nonbinary_are_aligned() -> None:
