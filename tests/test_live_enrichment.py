@@ -452,7 +452,22 @@ def test_the_fronting_lineup_is_capped() -> None:
 
 @pytest.mark.parametrize(
     ("role", "fronting"),
-    [("lead vocals", True), ("Backing Vocals", True), ("frontman", True), ("drums", False)],
+    [
+        ("lead vocals", True),
+        ("vocals", True),
+        ("frontman", True),
+        ("lead singer", True),
+        # Not fronting. This case previously asserted True, which was wrong and
+        # not harmlessly so: front-people are what `female_fronted` is derived
+        # from, so a woman singing harmonies would have made the band
+        # "female-fronted". Both live sources emit this shape — MusicBrainz as
+        # "background vocals", Discogs as "Backing Vocals".
+        ("Backing Vocals", False),
+        ("background vocals", False),
+        ("additional vocals", False),
+        ("guest vocals", False),
+        ("drums", False),
+    ],
 )
 def test_fronting_roles_are_read_from_what_the_source_stated(role: str, fronting: bool) -> None:
     assert is_fronting_role(role) is fronting
