@@ -56,10 +56,28 @@ _MB_GENDER_ALLOWED = {"male", "female", "other", "non-binary"}
 #: nothing whatsoever about their gender.
 _FRONTING_ROLE_MARKERS = ("vocal", "front", "lead singer")
 
+#: Qualifiers that mean a vocal credit is *not* a fronting one. Checked first,
+#: because "background vocals" contains "vocal" and would otherwise read as
+#: fronting — which is not a small mistake. Front-people are what
+#: :attr:`~pipeline.models.BandComposition.female_fronted` is derived from, so
+#: treating a backing vocalist as fronting would call a band "female-fronted"
+#: on the strength of someone singing harmonies. MusicBrainz credits
+#: "background vocals" and Discogs "Backing Vocals", so this is a shape both
+#: live sources actually emit.
+_NOT_FRONTING_QUALIFIERS = ("background", "backing", "additional", "guest", "session")
+
 
 def is_fronting_role(role: str) -> bool:
-    """True if a source-stated lineup role describes fronting the act."""
+    """True if a source-stated lineup role describes *fronting* the act.
+
+    Narrow on purpose. The question is not "does this person sing" but "does
+    the source say they front the band", and answering the first while claiming
+    the second is how a band ends up described as female-fronted because a
+    woman sang backing vocals on it.
+    """
     text = role.strip().lower()
+    if any(qualifier in text for qualifier in _NOT_FRONTING_QUALIFIERS):
+        return False
     return any(marker in text for marker in _FRONTING_ROLE_MARKERS)
 
 

@@ -25,6 +25,30 @@ tag, not backfilled to an earlier commit date.
   3.1.56/3.1.57 respectively). Found via `pip-audit` while verifying an unrelated PR; fixed here
   as a minimal, separately-committed companion change rather than folded into that PR's diff.
 
+### Fixed
+- **A backing vocalist is no longer treated as fronting the band.** `is_fronting_role` matched the
+  substring `vocal`, so "background vocals" (MusicBrainz) and "Backing Vocals" (Discogs) both read
+  as fronting — and front-people are what `BandComposition.female_fronted` is derived from, so a
+  woman singing harmonies would have made a band "female-fronted". Exactly the over-claiming the
+  guardrails exist to prevent, shipped by the change that added live lineup enrichment. A test
+  asserted the wrong behaviour (`("Backing Vocals", True)`); it now pins the right one, alongside
+  "additional"/"guest"/"session" vocal credits.
+
+### Added
+- **`scripts/upstream_worklist.py`** — turns a local cache into a prioritised list of MusicBrainz
+  edits, offline and credential-free. "Fix it at the source" was the stated posture
+  (`CONTRIBUTING.md`) with no way to see *what* was missing or which gap was worth an evening.
+
+  It separates the categories because they are different work with different care requirements —
+  and the split is the point. On a 7,146-artist library, **593 of 785 gaps are bands whose lineup
+  MusicBrainz already has, missing only a fronting role attribute on an existing member relation**:
+  ordinary discography work, no identity claim, no citation dilemma. Only 57 are gender fields on
+  people, where the rule is the project's own no-inference guardrail pointed outward — publicly
+  self-identified and citable, or correctly left empty. Ranking is by the operator's play count,
+  because fixing a band they play constantly improves the *candidate graph*, not just one label.
+
+  The generated report is gitignored: it is derived from a personal listening history.
+
 ### Changed
 - **Renamed to Lavender Rotation** ([ADR 0012](docs/adr/0012-rename-to-lavender-rotation.md)) —
   the old name described a scope [ADR 0011](docs/adr/0011-queer-lens-and-the-trans-vocabulary-amendment.md)
