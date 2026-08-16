@@ -217,16 +217,153 @@ def render(items: list[Item], username: str) -> str:
     return "\n".join(lines)
 
 
+#: Self-contained on purpose. This document carries a personal listening history
+#: (play counts) alongside identity data, so it stays a local file — no CDN, no
+#: web font, no analytics, nothing that would make opening it a network event.
+_HTML_SHELL = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Upstream worklist — {user}</title>
+<style>
+  :root {{ color-scheme: light dark;
+    --bg: #fdfcff; --fg: #1a1725; --muted: #5d5670; --line: #e2dced;
+    --card: #ffffff; --accent: #6b4d8f; --done: #8b85a0; }}
+  @media (prefers-color-scheme: dark) {{ :root {{
+    --bg: #16131c; --fg: #ece8f2; --muted: #a79fb8; --line: #2e2839;
+    --card: #1e1a26; --accent: #c3a8e0; --done: #635c74; }} }}
+  * {{ box-sizing: border-box; }}
+  body {{ margin: 0; padding: 2rem 1.25rem 5rem; background: var(--bg); color: var(--fg);
+    font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }}
+  main {{ max-width: 60rem; margin: 0 auto; }}
+  h1 {{ font-size: 1.6rem; margin: 0 0 .35rem; letter-spacing: -.01em; }}
+  .sub {{ color: var(--muted); margin: 0 0 1.5rem; font-size: .92rem; }}
+  .rule {{ background: var(--card); border: 1px solid var(--line);
+    border-left: 3px solid var(--accent); border-radius: 6px;
+    padding: .85rem 1rem; margin: 0 0 1.75rem; font-size: .9rem; }}
+  .rule strong {{ color: var(--accent); }}
+  .tools {{ position: sticky; top: 0; background: var(--bg); padding: .6rem 0 .75rem;
+    border-bottom: 1px solid var(--line); margin-bottom: 1.5rem; display: flex; gap: .75rem;
+    align-items: center; flex-wrap: wrap; z-index: 2; }}
+  input[type=search] {{ flex: 1 1 14rem; padding: .5rem .7rem; font: inherit; font-size: .92rem;
+    border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--fg); }}
+  .count {{ color: var(--muted); font-size: .88rem; font-variant-numeric: tabular-nums; }}
+  section {{ margin: 0 0 2.5rem; }}
+  h2 {{ font-size: 1.05rem; margin: 0 0 .3rem; }}
+  h2 .n {{ color: var(--muted); font-weight: 400; }}
+  .why {{ color: var(--muted); font-size: .88rem; margin: 0 0 .9rem; }}
+  ul {{ list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }}
+  li {{ display: grid; grid-template-columns: 1.6rem 4.5rem 1fr auto; gap: .75rem;
+    align-items: baseline; padding: .5rem .3rem;
+    border-bottom: 1px solid var(--line); }}
+  li.done {{ opacity: .45; }}
+  li.done .name {{ text-decoration: line-through; }}
+  li.hidden {{ display: none; }}
+  .plays {{ color: var(--muted); font-size: .82rem; text-align: right;
+    font-variant-numeric: tabular-nums; }}
+  .name {{ font-weight: 500; }}
+  .note {{ color: var(--muted); font-size: .8rem; font-weight: 400; }}
+  a {{ color: var(--accent); font-size: .85rem; }}
+  input[type=checkbox] {{ width: 1.05rem; height: 1.05rem; accent-color: var(--accent); }}
+</style></head><body><main>
+<h1>Upstream worklist</h1>
+<p class="sub">{total} artists · generated from the local cache for <strong>{user}</strong> ·
+offline, no requests made · regenerate with
+<code>python scripts/upstream_worklist.py --user {user} --format html</code></p>
+<p class="rule"><strong>Before editing anything that touches a person's gender:</strong> only where
+the artist has publicly self-identified and you can cite where. Not from a photo, a name, a voice,
+or press pronouns. That is this project's no-inference guardrail pointed outward — and an unsourced
+edit upstream is worse than one here, because it publishes the guess to everyone. If you cannot
+cite it, an empty field is the correct state.</p>
+<div class="tools">
+  <input type="search" id="q" placeholder="Filter by artist name…"
+    aria-label="Filter by artist name">
+  <span class="count" id="count"></span>
+</div>
+{sections}
+</main>
+<script>
+const KEY = "worklist:{user}";
+const done = new Set(JSON.parse(localStorage.getItem(KEY) || "[]"));
+const items = [...document.querySelectorAll("li")];
+function save() {{ localStorage.setItem(KEY, JSON.stringify([...done])); }}
+function count() {{
+  const shown = items.filter(li => !li.classList.contains("hidden"));
+  document.getElementById("count").textContent =
+    `${{done.size}} done · ${{shown.length}} shown`;
+}}
+for (const li of items) {{
+  const box = li.querySelector("input");
+  if (done.has(li.dataset.id)) {{ box.checked = true; li.classList.add("done"); }}
+  box.addEventListener("change", () => {{
+    li.classList.toggle("done", box.checked);
+    box.checked ? done.add(li.dataset.id) : done.delete(li.dataset.id);
+    save(); count();
+  }});
+}}
+document.getElementById("q").addEventListener("input", e => {{
+  const term = e.target.value.trim().toLowerCase();
+  for (const li of items)
+    li.classList.toggle("hidden", term && !li.dataset.name.includes(term));
+  count();
+}});
+count();
+</script></body></html>
+"""
+
+
+def _escape(text: str) -> str:
+    return (
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    )
+
+
+def render_html(items: list[Item], username: str) -> str:
+    """A working document: tickable, filterable, and entirely local."""
+    by_category: dict[str, list[Item]] = defaultdict(list)
+    for item in items:
+        by_category[item.category].append(item)
+
+    sections = []
+    for category, blurb in CATEGORIES.items():
+        rows = by_category.get(category, [])
+        if not rows:
+            continue
+        lis = []
+        for item in rows:
+            note = f'<span class="note">{_escape(item.detail)}</span>' if item.detail else ""
+            lis.append(
+                f'<li data-id="{_escape(item.mbid)}" data-name="{_escape(item.name.lower())}">'
+                f'<input type="checkbox" aria-label="Done: {_escape(item.name)}">'
+                f'<span class="plays">{item.plays}</span>'
+                f'<span class="name">{_escape(item.name)} {note}</span>'
+                f'<a href="{item.edit_url}" target="_blank" rel="noopener">edit &rarr;</a></li>'
+            )
+        blurb_html = _escape(blurb).replace("**", "")
+        sections.append(
+            f'<section><h2>{category} <span class="n">({len(rows)})</span></h2>'
+            f'<p class="why">{blurb_html}</p><ul>{"".join(lis)}</ul></section>'
+        )
+    return _HTML_SHELL.format(user=_escape(username), total=len(items), sections="".join(sections))
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--user", required=True, help="username whose cache to read")
     parser.add_argument("--db", default=None, help="cache path (default: the resolved data dir)")
     parser.add_argument("--out", default="upstream-worklist.md")
+    parser.add_argument(
+        "--format",
+        choices=("md", "html"),
+        default="md",
+        help="html produces a self-contained working document: tickable, filterable, "
+        "progress kept in the browser's own storage. No network, no hosting.",
+    )
     args = parser.parse_args(argv)
 
     db_path = Path(args.db) if args.db else default_db_path()
     items = collect(db_path, args.user)
-    Path(args.out).write_text(render(items, args.user), encoding="utf-8")
+    renderer = render_html if args.format == "html" else render
+    Path(args.out).write_text(renderer(items, args.user), encoding="utf-8")
     counts = defaultdict(int)
     for item in items:
         counts[item.category] += 1

@@ -35,3 +35,4 @@ node_modules/
 # Generated upstream worklist: derived from a personal listening history
 # (artist play counts), so it is local output, never a committed artifact.
 upstream-worklist.md
+upstream-worklist.html
