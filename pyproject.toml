@@ -141,7 +141,16 @@ filterwarnings = ["error::DeprecationWarning:pipeline.*", "error::DeprecationWar
 [tool.coverage.run]
 branch = true
 omit = [
-    "app/*",                 # Streamlit UI — verified via a11y + manual walkthrough
+    # Narrowed from "app/*" (#71). The old justification — "Streamlit UI —
+    # verified via a11y + manual walkthrough" — did not hold: the a11y spec
+    # says in its own words that the Streamlit dashboard is explicitly NOT
+    # covered, and the manual walkthrough is still pending
+    # (docs/audits/accessibility-2026-07-17.md). It also hid three modules that
+    # are ordinary, testable logic and are in fact well covered. Only the
+    # Streamlit entry point is omitted now, and only because it is a live
+    # `streamlit run` surface with no import-time test seam; the honest status
+    # of its a11y verification is "pending", recorded in the audit note.
+    "app/dashboard.py",      # Streamlit entry point — a11y sign-off still pending
     "pipeline/cli.py",       # thin argparse glue
 ]
 

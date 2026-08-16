@@ -12,7 +12,7 @@ A11Y_HTML_LIGHT := /tmp/wad-dashboard-light.html
 A11Y_HTML_DARK  := /tmp/wad-dashboard-dark.html
 
 .DEFAULT_GOAL := help
-.PHONY: help install dev verify format lint typecheck test security a11y a11y-e2e eval eval-real i18n bench mutation audit clean
+.PHONY: help install dev verify format lint typecheck test security render a11y a11y-e2e eval eval-real i18n bench mutation audit clean
 
 # eval-real inputs (FIX-06's human-gated real-data leg — LOCAL ONLY, never CI).
 EVAL_REAL_USER ?=
@@ -95,8 +95,21 @@ security: ## Stage 4 — dependency vulnerability + secret scan
 	$(PYTHON) -m pip_audit --skip-editable $(AUDIT_IGNORES)
 	@./scripts/secret-scan.sh
 
-a11y: ## Stage 5 — render the dashboard (auto + pinned light/dark) and run the a11y gate (0 violations in BOTH schemes)
+# Regenerating the *committed* artifact is deliberately NOT part of `a11y`
+# (BUG #71). It used to be: `make a11y` overwrote docs/audits/dashboard.html and
+# then audited the fresh copy, so the gate could never observe that the
+# committed page had gone stale — it destroyed the evidence before looking. The
+# committed page is browsable on GitHub and the README's Standards table links
+# to it, so a silent drift is a claim about a build that no longer exists.
+# `tests/test_committed_render.py` (stage 3, before this stage) asserts the
+# committed bytes equal what the renderer produces today, and this target is how
+# you regenerate them on purpose.
+render: ## Regenerate the committed static dashboard render (docs/audits/dashboard.html)
 	$(PYTHON) -m app.build_static
+
+a11y: ## Stage 5 — audit the COMMITTED render plus pinned light/dark renders (0 violations in BOTH schemes)
+	@test -f $(A11Y_HTML) || { \
+		echo "a11y: $(A11Y_HTML) is missing — run 'make render' and commit it" >&2; exit 1; }
 	$(PYTHON) -m app.build_static --scheme light --out $(A11Y_HTML_LIGHT)
 	$(PYTHON) -m app.build_static --scheme dark --out $(A11Y_HTML_DARK)
 	@if command -v pa11y >/dev/null 2>&1; then \
@@ -145,7 +158,7 @@ bench: ## Benchmark the scoring path on a generated 5k-artist / 50k-scrobble wor
 mutation: $(PYTHON) ## Mutation-test identity.py + rerank.py (CQ-47; fails under 70% mutants killed; slow)
 	@./scripts/mutation-gate.sh
 
-audit: a11y eval ## Regenerate all committed responsible-tech artifacts
+audit: render a11y eval ## Regenerate all committed responsible-tech artifacts
 	$(PYTHON) -m pytest -q >/dev/null
 	@$(PYTHON) scripts/writeup-check.py
 	@echo "✓ audit artifacts regenerated under docs/audits/"
