@@ -118,3 +118,85 @@ def test_the_report_leads_with_the_no_inference_rule() -> None:
 
 def test_edit_urls_point_at_the_edit_form() -> None:
     assert worklist.Item("no-lineup", "X", MBID, 0).edit_url.endswith(f"{MBID}/edit")
+
+
+# --- citations --------------------------------------------------------------
+
+
+def _source(kind: str, citation: str) -> dict[str, Any]:
+    return {"kind": kind, "citation": citation, "retrieved_at": "2026-08-16", "detail": "x"}
+
+
+def test_citations_are_gathered_from_every_axis_a_claim_can_live_on() -> None:
+    """Gender, the ADR 0011 second axis, the lineup, and each front-person's own label."""
+    act = {
+        "identity": {"sources": [_source("musicbrainz-gender", "https://mb/1")]},
+        "queer": {
+            "orientation_sources": [_source("wikidata-p91", "https://wd/2")],
+            "trans_sources": [_source("wikidata-p21", "https://wd/3")],
+        },
+        "composition": {
+            "sources": [_source("musicbrainz-relationship", "https://mb/4")],
+            "members_fronting": [
+                {"identity": {"sources": [_source("artist-statement", "https://post/5")]}}
+            ],
+        },
+    }
+    kinds = [k for k, _ in worklist.existing_citations(act)]
+
+    assert kinds == [
+        "musicbrainz-gender",
+        "wikidata-p91",
+        "wikidata-p21",
+        "musicbrainz-relationship",
+        "artist-statement",
+    ]
+
+
+def test_a_repeated_citation_is_listed_once() -> None:
+    same = _source("wikidata-p21", "https://wd/1")
+    act = {"identity": {"sources": [same, same]}}
+    assert len(worklist.existing_citations(act)) == 1
+
+
+def test_an_artist_with_nothing_sourced_has_no_citations() -> None:
+    assert worklist.existing_citations({"identity": {"gender": "unknown"}}) == ()
+
+
+def test_only_identity_edits_are_marked_as_needing_a_citation() -> None:
+    """Adding a vocals credit is discography; recording someone's gender is not."""
+    needs = {c: worklist.Item(c, "X", MBID, 1).needs_citation for c in worklist.CATEGORIES}
+    assert needs == {
+        "fronting-role": False,
+        "no-lineup": False,
+        "person-gender": True,
+        "front-person-gender": True,
+    }
+
+
+def test_an_uncited_identity_row_says_so_rather_than_looking_finished() -> None:
+    rendered = worklist.render([worklist.Item("person-gender", "X", MBID, 1)], "someone")
+    assert "nothing cited yet" in rendered
+
+
+def test_a_discography_row_is_not_nagged_for_a_citation() -> None:
+    rendered = worklist.render([worklist.Item("no-lineup", "X", MBID, 1)], "someone")
+    assert "nothing cited yet" not in rendered
+
+
+def test_existing_citations_are_rendered_as_links() -> None:
+    item = worklist.Item(
+        "person-gender", "X", MBID, 1, "", (("wikidata-p21", "https://www.wikidata.org/wiki/Q1"),)
+    )
+    for rendered in (worklist.render([item], "s"), worklist.render_html([item], "s")):
+        assert "wikidata-p21" in rendered
+        assert "https://www.wikidata.org/wiki/Q1" in rendered
+
+
+def test_only_identity_rows_get_a_citation_capture_field() -> None:
+    """The field appears where a citation is the gate, and nowhere else."""
+    gated = worklist.render_html([worklist.Item("person-gender", "X", MBID, 1)], "s")
+    plain = worklist.render_html([worklist.Item("fronting-role", "Y", MBID, 1)], "s")
+
+    assert 'class="src"' in gated
+    assert 'class="src"' not in plain

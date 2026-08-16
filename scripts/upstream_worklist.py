@@ -41,7 +41,7 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -71,17 +71,61 @@ CATEGORIES = {
 
 @dataclass(frozen=True)
 class Item:
-    """One upstream edit worth making."""
+    """One upstream edit worth making, with whatever is already cited for it."""
 
     category: str
     name: str
     mbid: str
     plays: int
     detail: str = ""
+    #: ``(source kind, citation)`` for every claim already on record about this
+    #: artist. Shown so the reader can see what upstream *does* say before
+    #: changing it — a field that looks empty here may be empty because nobody
+    #: sourced it, or because the claim lives on a different axis.
+    citations: tuple[tuple[str, str], ...] = ()
 
     @property
     def edit_url(self) -> str:
         return MB_EDIT.format(mbid=self.mbid)
+
+    @property
+    def needs_citation(self) -> bool:
+        """Whether making this edit means recording a claim about a person."""
+        return self.category in _IDENTITY_CATEGORIES
+
+
+#: Categories whose edit records something about a person, and therefore may
+#: only be made from a public self-identification you can cite.
+_IDENTITY_CATEGORIES = frozenset({"person-gender", "front-person-gender"})
+
+
+def existing_citations(artist: dict[str, Any]) -> tuple[tuple[str, str], ...]:
+    """Every citation already on record for this artist, deduplicated.
+
+    Reads all three places a claim can live — the individual's gender, the
+    second axis (ADR 0011), and the band's sourced lineup, including each
+    front-person's own label — because "what is already cited here" is the
+    question a person about to edit upstream actually needs answered.
+    """
+    found: list[tuple[str, str]] = []
+
+    def take(container: object) -> None:
+        if not isinstance(container, dict):
+            return
+        for key in ("sources", "orientation_sources", "trans_sources"):
+            for source in container.get(key) or []:
+                if isinstance(source, dict) and source.get("citation"):
+                    found.append((str(source.get("kind", "?")), str(source["citation"])))
+
+    take(artist.get("identity"))
+    take(artist.get("queer"))
+    composition = artist.get("composition")
+    if isinstance(composition, dict):
+        take(composition)
+        for person in composition.get("members_fronting") or []:
+            if isinstance(person, dict):
+                take(person.get("identity"))
+    return tuple(dict.fromkeys(found))
 
 
 class CachedUpstream:
@@ -130,7 +174,14 @@ def classify(artist: dict[str, object], upstream: CachedUpstream, plays: int) ->
             mbid = upstream.mbid_for(str(artist.get("artist_id", "")))
             if mbid:
                 who = ", ".join(str(f.get("name", "?")) for f in unsourced[:3])
-                return Item("front-person-gender", name, mbid, plays, f"front: {who}")
+                return Item(
+                    "front-person-gender",
+                    name,
+                    mbid,
+                    plays,
+                    f"front: {who}",
+                    existing_citations(artist),
+                )
         return None
 
     if isinstance(identity, dict) and identity.get("gender", "unknown") != "unknown":
@@ -145,12 +196,18 @@ def classify(artist: dict[str, object], upstream: CachedUpstream, plays: int) ->
 
     if str(record.get("type", "")).lower() != "group":
         if record.get("gender") is None:
-            return Item("person-gender", name, mbid, plays)
+            return Item("person-gender", name, mbid, plays, "", existing_citations(artist))
         return None
-    return _classify_group(record, name, mbid, plays)
+    return _classify_group(record, name, mbid, plays, existing_citations(artist))
 
 
-def _classify_group(record: dict[str, object], name: str, mbid: str, plays: int) -> Optional[Item]:
+def _classify_group(
+    record: dict[str, object],
+    name: str,
+    mbid: str,
+    plays: int,
+    citations: tuple[tuple[str, str], ...] = (),
+) -> Optional[Item]:
     """Which lineup edit a band needs: the members, or a role on one of them."""
     relations = [
         r
@@ -158,10 +215,12 @@ def _classify_group(record: dict[str, object], name: str, mbid: str, plays: int)
         if isinstance(r, dict) and str(r.get("type", "")).lower() == "member of band"
     ]
     if not relations:
-        return Item("no-lineup", name, mbid, plays)
+        return Item("no-lineup", name, mbid, plays, "", citations)
     marked = any(is_fronting_role(str(a)) for r in relations for a in (r.get("attributes") or []))
     if not marked:
-        return Item("fronting-role", name, mbid, plays, f"{len(relations)} member(s) listed")
+        return Item(
+            "fronting-role", name, mbid, plays, f"{len(relations)} member(s) listed", citations
+        )
     return None
 
 
@@ -211,8 +270,13 @@ def render(items: list[Item], username: str) -> str:
         if not rows:
             continue
         lines += [f"## {category} ({len(rows)})", "", blurb, ""]
-        lines += ["| plays | artist | edit | notes |", "|---:|---|---|---|"]
-        lines += [f"| {i.plays} | {i.name} | [edit]({i.edit_url}) | {i.detail} |" for i in rows]
+        lines += ["| plays | artist | edit | already cited | notes |", "|---:|---|---|---|---|"]
+        for i in rows:
+            if i.citations:
+                cited = " ".join(f"[{kind}]({url})" for kind, url in i.citations)
+            else:
+                cited = "_nothing cited yet_" if i.needs_citation else "—"
+            lines.append(f"| {i.plays} | {i.name} | [edit]({i.edit_url}) | {cited} | {i.detail} |")
         lines.append("")
     return "\n".join(lines)
 
@@ -264,6 +328,19 @@ _HTML_SHELL = """<!doctype html>
   .note {{ color: var(--muted); font-size: .8rem; font-weight: 400; }}
   a {{ color: var(--accent); font-size: .85rem; }}
   input[type=checkbox] {{ width: 1.05rem; height: 1.05rem; accent-color: var(--accent); }}
+  .cites {{ display: block; margin-top: .15rem; }}
+  .cite {{ display: inline-block; margin-right: .4rem; font-size: .72rem;
+    padding: .05rem .35rem; border: 1px solid var(--line); border-radius: 999px;
+    text-decoration: none; }}
+  .cite.none {{ color: var(--muted); border-style: dashed; }}
+  .cap {{ grid-column: 3 / -1; display: flex; gap: .4rem; margin-top: .3rem; }}
+  .cap:empty {{ display: none; }}
+  .src {{ flex: 1 1 auto; font: inherit; font-size: .8rem; padding: .3rem .5rem;
+    border: 1px solid var(--line); border-radius: 5px; background: var(--bg); color: var(--fg); }}
+  .src.filled {{ border-color: var(--accent); }}
+  .copy {{ font: inherit; font-size: .78rem; padding: .3rem .6rem; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 5px; background: var(--card); color: var(--fg); }}
+  .copy:disabled {{ opacity: .4; cursor: not-allowed; }}
 </style></head><body><main>
 <h1>Upstream worklist</h1>
 <p class="sub">{total} artists · generated from the local cache for <strong>{user}</strong> ·
@@ -283,7 +360,9 @@ cite it, an empty field is the correct state.</p>
 </main>
 <script>
 const KEY = "worklist:{user}";
+const SRC = "worklist-citations:{user}";
 const done = new Set(JSON.parse(localStorage.getItem(KEY) || "[]"));
+const cites = JSON.parse(localStorage.getItem(SRC) || "{{}}");
 const items = [...document.querySelectorAll("li")];
 function save() {{ localStorage.setItem(KEY, JSON.stringify([...done])); }}
 function count() {{
@@ -292,12 +371,36 @@ function count() {{
     `${{done.size}} done · ${{shown.length}} shown`;
 }}
 for (const li of items) {{
-  const box = li.querySelector("input");
+  const box = li.querySelector("input[type=checkbox]");
   if (done.has(li.dataset.id)) {{ box.checked = true; li.classList.add("done"); }}
   box.addEventListener("change", () => {{
     li.classList.toggle("done", box.checked);
     box.checked ? done.add(li.dataset.id) : done.delete(li.dataset.id);
     save(); count();
+  }});
+
+  const src = li.querySelector(".src");
+  if (!src) continue;
+  const copy = li.querySelector(".copy");
+  const sync = () => {{
+    const v = src.value.trim();
+    src.classList.toggle("filled", !!v);
+    copy.disabled = !v;
+  }};
+  src.value = cites[li.dataset.id] || "";
+  sync();
+  src.addEventListener("input", () => {{
+    const v = src.value.trim();
+    v ? (cites[li.dataset.id] = v) : delete cites[li.dataset.id];
+    localStorage.setItem(SRC, JSON.stringify(cites));
+    sync();
+  }});
+  copy.addEventListener("click", async () => {{
+    // The edit note MusicBrainz asks for: the claim, and where it came from.
+    const note = `Gender per the artist's own public self-identification: ${{src.value.trim()}}`;
+    try {{ await navigator.clipboard.writeText(note); copy.textContent = "copied"; }}
+    catch {{ copy.textContent = "copy failed"; }}
+    setTimeout(() => (copy.textContent = "note"), 1400);
   }});
 }}
 document.getElementById("q").addEventListener("input", e => {{
@@ -331,12 +434,37 @@ def render_html(items: list[Item], username: str) -> str:
         lis = []
         for item in rows:
             note = f'<span class="note">{_escape(item.detail)}</span>' if item.detail else ""
+            cited = "".join(
+                f'<a class="cite" href="{_escape(url)}" target="_blank" rel="noopener" '
+                f'title="{_escape(url)}">{_escape(kind)}</a>'
+                for kind, url in item.citations
+            )
+            if not cited:
+                cited = (
+                    '<span class="cite none">nothing cited yet</span>'
+                    if item.needs_citation
+                    else ""
+                )
+            # Only the edits that record something about a person get a capture
+            # field. The rest are discography, where a citation is not the
+            # gate — offering one everywhere would blur exactly the line this
+            # document exists to hold.
+            capture = (
+                f'<input class="src" type="url" placeholder="paste the source you are citing…" '
+                f'aria-label="Citation for {_escape(item.name)}">'
+                f'<button class="copy" type="button" '
+                f'title="Copy a MusicBrainz edit note">note</button>'
+                if item.needs_citation
+                else ""
+            )
             lis.append(
                 f'<li data-id="{_escape(item.mbid)}" data-name="{_escape(item.name.lower())}">'
                 f'<input type="checkbox" aria-label="Done: {_escape(item.name)}">'
                 f'<span class="plays">{item.plays}</span>'
-                f'<span class="name">{_escape(item.name)} {note}</span>'
-                f'<a href="{item.edit_url}" target="_blank" rel="noopener">edit &rarr;</a></li>'
+                f'<span class="name">{_escape(item.name)} {note}'
+                f'<span class="cites">{cited}</span></span>'
+                f'<a href="{item.edit_url}" target="_blank" rel="noopener">edit &rarr;</a>'
+                f'<div class="cap">{capture}</div></li>'
             )
         blurb_html = _escape(blurb).replace("**", "")
         sections.append(
