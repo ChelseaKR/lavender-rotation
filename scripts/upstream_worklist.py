@@ -83,6 +83,8 @@ class Item:
     #: changing it — a field that looks empty here may be empty because nobody
     #: sourced it, or because the claim lives on a different axis.
     citations: tuple[tuple[str, str], ...] = ()
+    #: ``(label, url)`` external links to *look* in — never citations themselves.
+    links: tuple[tuple[str, str], ...] = ()
 
     @property
     def edit_url(self) -> str:
@@ -97,6 +99,52 @@ class Item:
 #: Categories whose edit records something about a person, and therefore may
 #: only be made from a public self-identification you can cite.
 _IDENTITY_CATEGORIES = frozenset({"person-gender", "front-person-gender"})
+
+#: MusicBrainz URL-relation types worth following when looking for a public
+#: self-identification, most-likely-to-be-the-artist's-own-words first. An
+#: official site or the artist's own social account is a primary source; a
+#: database entry is somebody else's summary, useful for finding the primary one.
+#: Deliberately excludes streaming, purchase, lyrics and setlist links, which
+#: say nothing about a person and would bury the useful ones.
+_RESEARCH_RELATIONS: tuple[str, ...] = (
+    "official homepage",
+    "social network",
+    "bandcamp",
+    "wikidata",
+    "wikipedia",
+    "discogs",
+    "allmusic",
+)
+#: How many to show. The point is a place to start, not an exhaustive index.
+_MAX_RESEARCH_LINKS = 5
+
+
+def research_links(record: Optional[dict[str, object]]) -> tuple[tuple[str, str], ...]:
+    """Where to go looking for a citable self-identification, from MusicBrainz.
+
+    These are not citations and are never presented as such — they are the
+    external links MusicBrainz already holds for the artist, ordered so the
+    artist's own words come first. The document previously showed "nothing cited
+    yet" and stopped there, which is true but useless: every one of these
+    artists is unknown precisely *because* nothing is on record, so a worklist
+    that only lists what is already cited has nothing to say about exactly the
+    rows that need work.
+
+    Free, in request terms: the enricher already fetches ``inc=url-rels`` for
+    the P21 link, so these were being parsed and thrown away.
+    """
+    if not isinstance(record, dict):
+        return ()
+    found: dict[str, str] = {}
+    for wanted in _RESEARCH_RELATIONS:
+        for relation in record.get("relations") or []:
+            if not isinstance(relation, dict) or str(relation.get("type", "")) != wanted:
+                continue
+            target = relation.get("url")
+            resource = str(target.get("resource", "")).strip() if isinstance(target, dict) else ""
+            if resource and wanted not in found:
+                found[wanted] = resource
+    return tuple(found.items())[:_MAX_RESEARCH_LINKS]
 
 
 def existing_citations(artist: dict[str, Any]) -> tuple[tuple[str, str], ...]:
@@ -159,46 +207,92 @@ class CachedUpstream:
             return None
 
 
-def classify(artist: dict[str, object], upstream: CachedUpstream, plays: int) -> Optional[Item]:
-    """The one edit that would move this artist from unknown to sourced, if any."""
+def classify(artist: dict[str, object], upstream: CachedUpstream, plays: int) -> list[Item]:
+    """The edits that would move this artist from unknown to sourced.
+
+    A list rather than one item, because a band with three unsourced
+    front-people is three edits on three different pages — see
+    :func:`_front_person_items`.
+    """
     name = str(artist.get("name", ""))
     identity = artist.get("identity") or {}
-    composition = artist.get("composition")
-
-    if isinstance(composition, dict) and composition.get("members_fronting"):
-        fronts = [f for f in composition["members_fronting"] if isinstance(f, dict)]
-        unsourced = [
-            f for f in fronts if (f.get("identity") or {}).get("gender", "unknown") == "unknown"
-        ]
-        if fronts and len(unsourced) == len(fronts):
-            mbid = upstream.mbid_for(str(artist.get("artist_id", "")))
-            if mbid:
-                who = ", ".join(str(f.get("name", "?")) for f in unsourced[:3])
-                return Item(
-                    "front-person-gender",
-                    name,
-                    mbid,
-                    plays,
-                    f"front: {who}",
-                    existing_citations(artist),
-                )
-        return None
-
-    if isinstance(identity, dict) and identity.get("gender", "unknown") != "unknown":
-        return None
-
     mbid = upstream.mbid_for(str(artist.get("artist_id", "")))
     if mbid is None:
-        return None  # unresolvable upstream; a local MBID pin, not an edit, is the fix
+        return []  # unresolvable upstream; a local MBID pin, not an edit, is the fix
     record = upstream.document(musicbrainz_lookup_url(mbid))
     if record is None:
-        return None
+        return []
 
+    composition = artist.get("composition")
+    if isinstance(composition, dict) and composition.get("members_fronting"):
+        return _front_person_items(composition, record, upstream, name, plays)
+
+    if isinstance(identity, dict) and identity.get("gender", "unknown") != "unknown":
+        return []
+
+    citations = existing_citations(artist)
+    links = research_links(record)
     if str(record.get("type", "")).lower() != "group":
         if record.get("gender") is None:
-            return Item("person-gender", name, mbid, plays, "", existing_citations(artist))
-        return None
-    return _classify_group(record, name, mbid, plays, existing_citations(artist))
+            return [Item("person-gender", name, mbid, plays, "", citations, links)]
+        return []
+    return _classify_group(record, name, mbid, plays, citations, links)
+
+
+def _front_person_items(
+    composition: dict[str, object],
+    record: dict[str, object],
+    upstream: CachedUpstream,
+    band: str,
+    plays: int,
+) -> list[Item]:
+    """One item per front-person whose own gender is empty — on *their* page.
+
+    The gender field for a band's singer lives on the singer's MusicBrainz
+    entity, not the band's, so pointing this row at the band was an edit link to
+    a page without the field on it. Their MBID is not in our cached
+    ``FrontPerson`` (which stores name, role and label only), so it is recovered
+    from the band's own member relations.
+    """
+    unsourced = {
+        str(person.get("name", ""))
+        for person in composition.get("members_fronting") or []
+        if isinstance(person, dict)
+        and (person.get("identity") or {}).get("gender", "unknown") == "unknown"
+    }
+    if not unsourced:
+        return []
+    items: list[Item] = []
+    # A person can hold several member relations to the same band — one per
+    # instrument, or per stint — and each would otherwise become a duplicate row
+    # for a single edit.
+    seen: set[str] = set()
+    for relation in record.get("relations") or []:
+        if not isinstance(relation, dict) or str(relation.get("type", "")) != "member of band":
+            continue
+        related = relation.get("artist")
+        if not isinstance(related, dict):
+            continue
+        person_name = str(related.get("name", ""))
+        person_mbid = str(related.get("id", "")).strip().lower()
+        if person_name not in unsourced or not looks_like_mbid(person_mbid):
+            continue
+        if person_mbid in seen:
+            continue
+        seen.add(person_mbid)
+        person_record = upstream.document(musicbrainz_lookup_url(person_mbid))
+        items.append(
+            Item(
+                "front-person-gender",
+                person_name,
+                person_mbid,
+                plays,
+                f"fronts {band}",
+                (),
+                research_links(person_record),
+            )
+        )
+    return items
 
 
 def _classify_group(
@@ -207,7 +301,8 @@ def _classify_group(
     mbid: str,
     plays: int,
     citations: tuple[tuple[str, str], ...] = (),
-) -> Optional[Item]:
+    links: tuple[tuple[str, str], ...] = (),
+) -> list[Item]:
     """Which lineup edit a band needs: the members, or a role on one of them."""
     relations = [
         r
@@ -215,13 +310,12 @@ def _classify_group(
         if isinstance(r, dict) and str(r.get("type", "")).lower() == "member of band"
     ]
     if not relations:
-        return Item("no-lineup", name, mbid, plays, "", citations)
+        return [Item("no-lineup", name, mbid, plays, "", citations, links)]
     marked = any(is_fronting_role(str(a)) for r in relations for a in (r.get("attributes") or []))
     if not marked:
-        return Item(
-            "fronting-role", name, mbid, plays, f"{len(relations)} member(s) listed", citations
-        )
-    return None
+        detail = f"{len(relations)} member(s) listed"
+        return [Item("fronting-role", name, mbid, plays, detail, citations, links)]
+    return []
 
 
 def collect(db_path: Path, username: str) -> list[Item]:
@@ -237,9 +331,7 @@ def collect(db_path: Path, username: str) -> list[Item]:
         items: list[Item] = []
         for (payload,) in conn.execute("SELECT payload FROM artists"):
             artist = json.loads(payload)
-            item = classify(artist, upstream, plays.get(str(artist.get("artist_id", "")), 0))
-            if item is not None:
-                items.append(item)
+            items.extend(classify(artist, upstream, plays.get(str(artist.get("artist_id", "")), 0)))
     finally:
         conn.close()
     return sorted(items, key=lambda i: (-i.plays, i.name))
@@ -270,13 +362,19 @@ def render(items: list[Item], username: str) -> str:
         if not rows:
             continue
         lines += [f"## {category} ({len(rows)})", "", blurb, ""]
-        lines += ["| plays | artist | edit | already cited | notes |", "|---:|---|---|---|---|"]
+        lines += [
+            "| plays | artist | edit | already cited | where to look | notes |",
+            "|---:|---|---|---|---|---|",
+        ]
         for i in rows:
             if i.citations:
                 cited = " ".join(f"[{kind}]({url})" for kind, url in i.citations)
             else:
                 cited = "_nothing cited yet_" if i.needs_citation else "—"
-            lines.append(f"| {i.plays} | {i.name} | [edit]({i.edit_url}) | {cited} | {i.detail} |")
+            look = " ".join(f"[{label}]({url})" for label, url in i.links) or "—"
+            lines.append(
+                f"| {i.plays} | {i.name} | [edit]({i.edit_url}) | {cited} | {look} | {i.detail} |"
+            )
         lines.append("")
     return "\n".join(lines)
 
@@ -333,6 +431,10 @@ _HTML_SHELL = """<!doctype html>
     padding: .05rem .35rem; border: 1px solid var(--line); border-radius: 999px;
     text-decoration: none; }}
   .cite.none {{ color: var(--muted); border-style: dashed; }}
+  .look {{ display: inline-block; margin-right: .4rem; font-size: .72rem;
+    padding: .05rem .35rem; border-radius: 999px; text-decoration: none;
+    color: var(--muted); background: color-mix(in srgb, var(--accent) 9%, transparent); }}
+  .look:hover {{ color: var(--accent); }}
   .cap {{ grid-column: 3 / -1; display: flex; gap: .4rem; margin-top: .3rem; }}
   .cap:empty {{ display: none; }}
   .src {{ flex: 1 1 auto; font: inherit; font-size: .8rem; padding: .3rem .5rem;
@@ -351,6 +453,12 @@ the artist has publicly self-identified and you can cite where. Not from a photo
 or press pronouns. That is this project's no-inference guardrail pointed outward — and an unsourced
 edit upstream is worse than one here, because it publishes the guess to everyone. If you cannot
 cite it, an empty field is the correct state.</p>
+<p class="rule" style="border-left-color: var(--line)">Each row shows what is
+<strong>already cited</strong> for that artist (bordered pills, linking to the source) and
+<strong>where to look</strong> for one (filled pills — the external links MusicBrainz already
+holds, artist's own words first). The second kind are starting points, never citations: an
+official site or the artist's own account is a primary source, a database entry is someone
+else's summary of one.</p>
 <div class="tools">
   <input type="search" id="q" placeholder="Filter by artist name…"
     aria-label="Filter by artist name">
@@ -445,6 +553,11 @@ def render_html(items: list[Item], username: str) -> str:
                     if item.needs_citation
                     else ""
                 )
+            cited += "".join(
+                f'<a class="look" href="{_escape(url)}" target="_blank" rel="noopener" '
+                f'title="{_escape(url)}">{_escape(label)}</a>'
+                for label, url in item.links
+            )
             # Only the edits that record something about a person get a capture
             # field. The rest are discography, where a citation is not the
             # gate — offering one everywhere would blur exactly the line this

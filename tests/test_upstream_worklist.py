@@ -68,14 +68,14 @@ def member(*attributes: str) -> dict[str, Any]:
 def test_each_gap_maps_to_the_edit_that_would_close_it(
     record: dict[str, Any], expected: str | None
 ) -> None:
-    item = worklist.classify(artist(), FakeUpstream(record), plays=10)
-    assert (item.category if item else None) == expected
+    items = worklist.classify(artist(), FakeUpstream(record), plays=10)
+    assert [i.category for i in items] == ([expected] if expected else [])
 
 
 def test_a_backing_vocalist_does_not_count_as_fronting() -> None:
     """The worklist must agree with `is_fronting_role`, including its fix."""
-    item = worklist.classify(artist(), FakeUpstream(group([member("background vocals")])), plays=1)
-    assert item is not None and item.category == "fronting-role"
+    items = worklist.classify(artist(), FakeUpstream(group([member("background vocals")])), plays=1)
+    assert [i.category for i in items] == ["fronting-role"]
 
 
 def test_a_marked_front_person_with_no_gender_is_its_own_category() -> None:
@@ -83,31 +83,34 @@ def test_a_marked_front_person_with_no_gender_is_its_own_category() -> None:
     act = artist(
         composition={
             "members_fronting": [
-                {"name": "A Singer", "role": "lead vocals", "identity": {"gender": "unknown"}}
+                {"name": "A Person", "role": "lead vocals", "identity": {"gender": "unknown"}}
             ]
         }
     )
-    item = worklist.classify(act, FakeUpstream(group([member("lead vocals")])), plays=5)
+    items = worklist.classify(act, FakeUpstream(group([member("lead vocals")])), plays=5)
 
-    assert item is not None
-    assert item.category == "front-person-gender"
-    assert "A Singer" in item.detail
+    assert len(items) == 1
+    assert items[0].category == "front-person-gender"
+    # The row points at the *person*, whose page the gender field is actually on.
+    assert items[0].name == "A Person"
+    assert items[0].mbid == MBID
+    assert "fronts" in items[0].detail
 
 
 def test_an_already_sourced_front_person_needs_nothing() -> None:
     act = artist(
         composition={
             "members_fronting": [
-                {"name": "A Singer", "role": "lead vocals", "identity": {"gender": "woman"}}
+                {"name": "A Person", "role": "lead vocals", "identity": {"gender": "woman"}}
             ]
         }
     )
-    assert worklist.classify(act, FakeUpstream(group([member("lead vocals")])), plays=5) is None
+    assert worklist.classify(act, FakeUpstream(group([member("lead vocals")])), plays=5) == []
 
 
 def test_an_artist_we_cannot_resolve_upstream_is_not_an_edit() -> None:
     """No MusicBrainz record means no edit to propose — a local pin is the fix."""
-    assert worklist.classify(artist(), FakeUpstream(None), plays=5) is None
+    assert worklist.classify(artist(), FakeUpstream(None), plays=5) == []
 
 
 def test_the_report_leads_with_the_no_inference_rule() -> None:
@@ -200,3 +203,60 @@ def test_only_identity_rows_get_a_citation_capture_field() -> None:
 
     assert 'class="src"' in gated
     assert 'class="src"' not in plain
+
+
+# --- research links ---------------------------------------------------------
+
+
+def test_research_links_lead_with_the_artists_own_words() -> None:
+    """A homepage or their own account is a primary source; a database is not."""
+    record = {
+        "relations": [
+            {"type": "allmusic", "url": {"resource": "https://allmusic/x"}},
+            {"type": "official homepage", "url": {"resource": "https://theband.example"}},
+            {"type": "social network", "url": {"resource": "https://social/x"}},
+        ]
+    }
+    assert [label for label, _ in worklist.research_links(record)] == [
+        "official homepage",
+        "social network",
+        "allmusic",
+    ]
+
+
+def test_links_that_say_nothing_about_a_person_are_left_out() -> None:
+    """Streaming and purchase links would bury the useful ones."""
+    record = {
+        "relations": [
+            {"type": "streaming", "url": {"resource": "https://stream/x"}},
+            {"type": "purchase for download", "url": {"resource": "https://buy/x"}},
+            {"type": "lyrics", "url": {"resource": "https://lyrics/x"}},
+        ]
+    }
+    assert worklist.research_links(record) == ()
+
+
+def test_research_links_are_capped_and_deduplicated() -> None:
+    record = {
+        "relations": [
+            {"type": "social network", "url": {"resource": f"https://social/{n}"}} for n in range(4)
+        ]
+    }
+    assert len(worklist.research_links(record)) == 1
+
+
+def test_a_missing_record_yields_no_links() -> None:
+    assert worklist.research_links(None) == ()
+
+
+def test_a_person_holding_several_member_relations_is_one_row() -> None:
+    """MusicBrainz records a relation per instrument or stint; that is one edit."""
+    act = artist(
+        composition={
+            "members_fronting": [
+                {"name": "A Person", "role": "lead vocals", "identity": {"gender": "unknown"}}
+            ]
+        }
+    )
+    record = group([member("lead vocals"), member("guitar"), member("vocals")])
+    assert len(worklist.classify(act, FakeUpstream(record), plays=1)) == 1
