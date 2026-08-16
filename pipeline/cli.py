@@ -1,10 +1,15 @@
-"""Command-line entry point: ``wad eval|recommend|export|refresh`` (demo mode).
+"""Command-line entry point: ``wad ingest|eval|recommend|export|refresh``.
 
 Argparse glue over the library; omitted from coverage accounting, but the gate
 behaviour of ``wad eval`` (exit codes, regression/fairness blocks) and ``wad
 refresh`` is exercised directly by ``tests/test_eval.py`` and
-``tests/test_cache_lifecycle.py``. All product commands remain demo-first; no
-live identity enricher is constructed here.
+``tests/test_cache_lifecycle.py``.
+
+Every product command still defaults to the offline demo world, and everything
+that reaches upstream is opt-in and named: ``wad ingest --user <you>`` is the
+one command that fetches a real listening history and resolves identity against
+MusicBrainz/Wikidata, and ``--user`` on the recommendation surfaces then reads
+back what it cached. Without ``--user`` nothing here opens a socket.
 """
 
 from __future__ import annotations
@@ -12,6 +17,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -39,12 +45,79 @@ from pipeline import corrections as pending_corrections
 from pipeline.cache import DEFAULT_DB_PATH, DEFAULT_HTTP_TTL_DAYS, Cache
 from pipeline.demo import DEMO_USER, demo_catalog, demo_profile, demo_scrobbles, demo_source
 from pipeline.doctor import run_diagnostics
+from pipeline.enrich import MusicBrainzEnricher
+from pipeline.http import CachedHttpFetcher, build_user_agent
 from pipeline.identity import IdentityEvidence
-from pipeline.ingest import diff_identity_labels, refresh_catalog
+from pipeline.ingest import (
+    DEFAULT_CANDIDATE_LIMIT,
+    DEFAULT_PER_SEED,
+    DEFAULT_SEEDS,
+    catalog_from_cache,
+    diff_identity_labels,
+    discover_candidates,
+    enrich_candidates,
+    ingest,
+    profile_from_cache,
+    refresh_catalog,
+)
+from pipeline.lastfm import CachedLastfm, LastfmClient, ScrobbleSource
 from pipeline.logconfig import LOG_FORMATS, configure_logging
-from pipeline.models import SourceKind, UnsourcedIdentityError
+from pipeline.models import Artist, ListeningProfile, SourceKind, UnsourcedIdentityError
 
 _BASELINE_METRICS = frozenset({"precision_at_k", "recall_at_k", "map_at_k"})
+
+#: Number of the listener's own most-played artists that a live ingest enriches.
+#: See ``pipeline.ingest.ingest``'s ``enrich_top`` for why this is bounded.
+DEFAULT_ENRICH_TOP = 50
+
+
+class LiveModeError(RuntimeError):
+    """A live command was asked for without what live mode needs."""
+
+
+def _require_api_key() -> str:
+    key = os.environ.get("WAD_LASTFM_API_KEY", "").strip()
+    if not key:
+        raise LiveModeError(
+            "live mode needs a Last.fm API key. Set WAD_LASTFM_API_KEY "
+            "(get one at https://www.last.fm/api/account/create), or omit --user "
+            "to use the offline demo world."
+        )
+    return key
+
+
+def _live_enricher(cache: Cache, *, retrieved_at: str, ttl_days: int) -> MusicBrainzEnricher:
+    """The live identity enricher, wired to the one allowlisted HTTP seam."""
+    fetcher = CachedHttpFetcher(
+        cache,
+        user_agent=build_user_agent(os.environ.get("WAD_CONTACT", "")),
+        ttl_days=ttl_days,
+    )
+    return MusicBrainzEnricher(fetcher, retrieved_at=retrieved_at)
+
+
+def _load_world(
+    cache: Cache, args: argparse.Namespace
+) -> tuple[ListeningProfile, dict[str, Artist], ScrobbleSource]:
+    """The demo world, or the operator's own cached one when ``--user`` is given.
+
+    Both branches are offline. ``wad ingest`` is the command that reaches
+    upstream; everything it fetched — scrobbles, tags, the similar-artist graph
+    the collaborative signal walks — is in the cache by the time a
+    recommendation surface runs, so reading it back needs no credential and
+    opens no socket.
+    """
+    username = getattr(args, "user", DEMO_USER) or DEMO_USER
+    if username == DEMO_USER:
+        return demo_profile(), demo_catalog(), demo_source()
+    source = CachedLastfm(cache)
+    profile = profile_from_cache(cache, username)
+    if not profile.play_counts:
+        raise LiveModeError(
+            f"no listening history cached for {username!r} — run "
+            f"`wad ingest --user {username}` first"
+        )
+    return profile, catalog_from_cache(cache), source
 
 
 def _positive_int(value: str) -> int:
@@ -65,6 +138,24 @@ def _nonnegative_int(value: str) -> int:
     if parsed < 0:
         raise argparse.ArgumentTypeError("must be non-negative")
     return parsed
+
+
+def _add_world_args(parser: argparse.ArgumentParser) -> None:
+    """``--user``/``--db``: which world a recommendation surface reads from."""
+    parser.add_argument(
+        "--user",
+        default=DEMO_USER,
+        help=f"Last.fm username previously synced with `wad ingest` (default: the "
+        f"offline {DEMO_USER!r} world)",
+    )
+    parser.add_argument("--db", default=str(DEFAULT_DB_PATH), help="cache database path")
+    parser.add_argument(
+        "--hide-sourced-men",
+        action="store_true",
+        help="drop artists whose sourced gender is a man's, and acts whose sourced "
+        "lineup is entirely sourced men. Never drops unknown-identity artists — "
+        "an absent claim is not a claim (see recommender/filters.py)",
+    )
 
 
 def _baseline_number(value: object, *, field: str) -> float:
@@ -339,19 +430,89 @@ def _cmd_pending_corrections(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_recommend(args: argparse.Namespace) -> int:
-    profile = demo_profile()
-    with Cache(DEFAULT_DB_PATH) as cache:
-        feedbacks = cache.load_feedback(profile.username)
-    recs = recommend(
-        profile,
-        demo_catalog(),
-        demo_source(),
-        k=args.k,
-        lens_strength=args.lens,
-        explore=args.explore,
-        feedbacks=feedbacks,
+def _cmd_ingest(args: argparse.Namespace) -> int:
+    """LIVE: sync one listener's history and resolve identity from upstream sources."""
+    today = datetime.now(UTC).date().isoformat()
+    try:
+        api_key = _require_api_key()
+    except LiveModeError as exc:
+        print(f"error: {exc}", file=sys.stderr)  # noqa: T201
+        return 2
+    with Cache(args.db) as cache:
+        source = LastfmClient(api_key, cache)
+        enricher = _live_enricher(cache, retrieved_at=today, ttl_days=args.ttl_days)
+        print(f"syncing {args.user}'s listening history …", flush=True)  # noqa: T201
+        profile, catalog = ingest(
+            args.user,
+            source,
+            enricher,
+            cache=cache,
+            fetched_at=today,
+            limit=args.page_size,
+            enrich_top=args.enrich_top,
+        )
+        attempted = min(args.enrich_top, len(profile.artist_names))
+        print(  # noqa: T201
+            f"  {len(profile.play_counts)} artist(s) played; "
+            f"{len(catalog)} of your top {attempted} enriched",
+            flush=True,
+        )
+        if attempted and not catalog:
+            print(  # noqa: T201
+                "error: every enrichment attempt failed — check the network and re-run "
+                "(your synced scrobbles are already cached, so a re-run resumes)",
+                file=sys.stderr,
+            )
+            return 1
+        if attempted > len(catalog):
+            print(  # noqa: T201
+                f"  {attempted - len(catalog)} skipped after an upstream error — they stay "
+                "in your profile, and a re-run retries just those"
+            )
+        if not args.no_expand:
+            found = discover_candidates(
+                profile,
+                source,
+                seeds=args.seeds,
+                per_seed=args.similar,
+                limit=args.max_candidates,
+            )
+            print(  # noqa: T201
+                f"enriching {len(found)} candidate artist(s) you have not played …",
+                flush=True,
+            )
+            catalog = {
+                **catalog,
+                **enrich_candidates(found, source, enricher, cache=cache, fetched_at=today),
+            }
+    sourced = sum(1 for artist in catalog.values() if artist.identity.is_known)
+    print(  # noqa: T201
+        f"cached {len(catalog)} artist(s): {sourced} with a cited basis, "
+        f"{len(catalog) - sourced} unknown"
     )
+    print("  (unknown is first-class here — it never down-ranks anyone)")  # noqa: T201
+    print(f"next: wad recommend --user {args.user}")  # noqa: T201
+    return 0
+
+
+def _cmd_recommend(args: argparse.Namespace) -> int:
+    with Cache(args.db) as cache:
+        try:
+            profile, catalog, source = _load_world(cache, args)
+        except LiveModeError as exc:
+            print(f"error: {exc}", file=sys.stderr)  # noqa: T201
+            return 2
+        feedbacks = cache.load_feedback(profile.username)
+        recs = recommend(
+            profile,
+            catalog,
+            source,
+            k=args.k,
+            lens_strength=args.lens,
+            explore=args.explore,
+            feedbacks=feedbacks,
+            hide_sourced_men=args.hide_sourced_men,
+        )
     print(f"Identity coverage: {identity_coverage(recs).summary_line()}")  # noqa: T201
     for rec in recs:
         why = why_this_artist(rec)
@@ -363,18 +524,23 @@ def _cmd_recommend(args: argparse.Namespace) -> int:
 
 
 def _cmd_export(args: argparse.Namespace) -> int:
-    profile = demo_profile()
-    with Cache(DEFAULT_DB_PATH) as cache:
+    with Cache(args.db) as cache:
+        try:
+            profile, catalog, source = _load_world(cache, args)
+        except LiveModeError as exc:
+            print(f"error: {exc}", file=sys.stderr)  # noqa: T201
+            return 2
         feedbacks = cache.load_feedback(profile.username)
-    recs = recommend(
-        profile,
-        demo_catalog(),
-        demo_source(),
-        k=args.k,
-        lens_strength=args.lens,
-        explore=args.explore,
-        feedbacks=feedbacks,
-    )
+        recs = recommend(
+            profile,
+            catalog,
+            source,
+            k=args.k,
+            lens_strength=args.lens,
+            explore=args.explore,
+            feedbacks=feedbacks,
+            hide_sourced_men=args.hide_sourced_men,
+        )
     tracks = recommendations_to_tracks(recs)
     text = render(tracks, ExportFormat(args.format), playlist_name="Women-Artist Discovery")
     if args.out:
@@ -404,16 +570,28 @@ def _cmd_feedback(args: argparse.Namespace) -> int:
 
 
 def _cmd_report(args: argparse.Namespace) -> int:
-    profile, catalog, source = demo_profile(), demo_catalog(), demo_source()
-    recs_by_lens = {
-        lens: recommend(profile, catalog, source, k=args.k, lens_strength=lens)
-        for lens in sorted({0.0, 0.25, 0.5, 0.75, 1.0, args.lens})
-    }
+    with Cache(args.db) as cache:
+        try:
+            profile, catalog, source = _load_world(cache, args)
+        except LiveModeError as exc:
+            print(f"error: {exc}", file=sys.stderr)  # noqa: T201
+            return 2
+        recs_by_lens = {
+            lens: recommend(
+                profile,
+                catalog,
+                source,
+                k=args.k,
+                lens_strength=lens,
+                hide_sourced_men=args.hide_sourced_men,
+            )
+            for lens in sorted({0.0, 0.25, 0.5, 0.75, 1.0, args.lens})
+        }
     panel = observability_panel(recs_by_lens, current_lens=args.lens, k=min(3, args.k))
     html = render_cards_html(
         recs_by_lens[args.lens],
         lens_strength=args.lens,
-        username=DEMO_USER,
+        username=profile.username,
         exposure_panel=panel,
     )
     privacy_footer = (
@@ -467,7 +645,56 @@ def main(argv: list[str] | None = None) -> int:
     p_eval_real.add_argument("--out", default=None)
     p_eval_real.set_defaults(func=_cmd_eval_real)
 
-    p_rec = sub.add_parser("recommend", help="print demo recommendations")
+    p_ingest = sub.add_parser(
+        "ingest",
+        help="LIVE: sync a Last.fm history and resolve identity upstream (needs an API key)",
+    )
+    p_ingest.add_argument("--user", required=True, help="Last.fm username to sync")
+    p_ingest.add_argument("--db", default=str(DEFAULT_DB_PATH), help="cache database path")
+    p_ingest.add_argument(
+        "--page-size",
+        type=_positive_int,
+        default=200,
+        help="scrobbles per Last.fm page (the sync is incremental and resumable)",
+    )
+    p_ingest.add_argument(
+        "--enrich-top",
+        type=_positive_int,
+        default=DEFAULT_ENRICH_TOP,
+        help="how many of your own most-played artists to enrich (default: 50)",
+    )
+    p_ingest.add_argument(
+        "--seeds",
+        type=_positive_int,
+        default=DEFAULT_SEEDS,
+        help="top artists used as discovery seeds",
+    )
+    p_ingest.add_argument(
+        "--similar",
+        type=_positive_int,
+        default=DEFAULT_PER_SEED,
+        help="similar artists considered per seed",
+    )
+    p_ingest.add_argument(
+        "--max-candidates",
+        type=_positive_int,
+        default=DEFAULT_CANDIDATE_LIMIT,
+        help="cap on candidate artists enriched in one run",
+    )
+    p_ingest.add_argument(
+        "--no-expand",
+        action="store_true",
+        help="sync and enrich your own artists only; skip candidate discovery",
+    )
+    p_ingest.add_argument(
+        "--ttl-days",
+        type=_nonnegative_int,
+        default=DEFAULT_HTTP_TTL_DAYS,
+        help="treat cached upstream responses older than this as stale and re-fetch",
+    )
+    p_ingest.set_defaults(func=_cmd_ingest)
+
+    p_rec = sub.add_parser("recommend", help="print recommendations (demo world unless --user)")
     p_rec.add_argument("--k", type=_positive_int, default=10)
     p_rec.add_argument("--lens", type=float, default=0.5)
     p_rec.add_argument(
@@ -476,9 +703,10 @@ def main(argv: list[str] | None = None) -> int:
         default=0.0,
         help="serendipity slider in [0,1]; 0=pure relevance, 1=max tag-space diversity",
     )
+    _add_world_args(p_rec)
     p_rec.set_defaults(func=_cmd_recommend)
 
-    p_exp = sub.add_parser("export", help="export demo recommendations to a portable playlist file")
+    p_exp = sub.add_parser("export", help="export recommendations to a portable playlist file")
     p_exp.add_argument(
         "--format", choices=[str(f) for f in ExportFormat], default=str(ExportFormat.TEXT)
     )
@@ -491,6 +719,7 @@ def main(argv: list[str] | None = None) -> int:
         help="serendipity slider in [0,1]; 0=pure relevance, 1=max tag-space diversity",
     )
     p_exp.add_argument("--out", default=None, help="write to a file instead of stdout")
+    _add_world_args(p_exp)
     p_exp.set_defaults(func=_cmd_export)
 
     p_feedback = sub.add_parser("feedback", help="record a thumbs vote that tunes future rankings")
@@ -508,6 +737,7 @@ def main(argv: list[str] | None = None) -> int:
     p_report.add_argument("--k", type=_positive_int, default=10)
     p_report.add_argument("--lens", type=float, default=0.5)
     p_report.add_argument("--out", default="my-discoveries.html")
+    _add_world_args(p_report)
     p_report.set_defaults(func=_cmd_report)
 
     p_doctor = sub.add_parser("doctor", help="diagnose env, data location, and cache health")

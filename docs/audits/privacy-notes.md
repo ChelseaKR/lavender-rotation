@@ -1,7 +1,13 @@
 # Privacy Notes (DPIA-style)
 
 > Instantiates RESPONSIBLE-TECH-AUDITS §C.
-> **Last verified: 2026-05-31 · Recheck cadence: per data-flow change.**
+> **Last verified: 2026-08-15 · Recheck cadence: per data-flow change.**
+>
+> *2026-08-15 — re-verified for FIX-01 (live identity enrichment).* One egress
+> module was added (`pipeline/http.py`); one data flow changed from "not shipped"
+> to "shipped, opt-in behind `wad ingest --user`". What leaves the machine is
+> unchanged in kind: an artist name or MBID goes to a public metadata registry,
+> and nothing about *what or when* anyone listened goes with it.
 
 ## Data inventory
 
@@ -9,7 +15,7 @@
 |------|-------------|---------------|---------|-----------|
 | Last.fm username | low (personal) | identifies whose history to fetch | in-memory / local cache | until cache cleared |
 | Scrobbles (plays) | personal | the recommendation ground truth | `data/cache.db` (local) | until `make clean` |
-| Enriched artist metadata | public | identity + tags + similarity | `data/cache.db` (local) | fixture-rewritten on demand; live re-enrichment not shipped |
+| Enriched artist metadata | public | identity + tags + similarity | `data/cache.db` (local) | re-fetched past the `--ttl-days` horizon; fixture-rewritten on demand |
 | API responses | public | rate-limit-respecting cache | `data/cache.db` (local) | overwritten on refetch |
 | Playlist export (opt-in) | personal | user-initiated push of the recommended artist names to Spotify | none (sent, not stored) | n/a — only on click |
 
@@ -20,9 +26,17 @@ public figures (artists), never about the user.
 
 There are two product data-flow purposes plus one opt-in diagnostic probe:
 
-1. **Last.fm-shaped client / enrichment interfaces** — network-capable Last.fm code
-   is confined to `pipeline/lastfm.py` (asserted by `tests/test_privacy.py`), but no
-   product command currently wires it to a live identity enricher.
+1. **Listening-history fetch and identity enrichment** — network-capable Last.fm
+   code is confined to `pipeline/lastfm.py` and identity-source fetches to
+   `pipeline/http.py` (both asserted by `tests/test_privacy.py`). Since FIX-01
+   one product command wires them together: `wad ingest --user <you>`, which is
+   opt-in by construction — it requires a username *and* an API key, and no
+   other command reaches upstream. What travels outbound is asymmetric, and
+   deliberately so: the username goes to Last.fm only (which already holds that
+   history), while MusicBrainz and Wikidata receive an artist name or MBID and
+   nothing else. Neither registry learns who asked, what was played, or when.
+   Responses are cached locally, and identity data is never re-exported
+   (`identity-data-ethics.md`, "Non-redistribution").
 2. **Playlist export** (`export/`) — the project's only *user-initiated* egress.
    It is opt-in (nothing leaves on load), runs only when the user clicks
    export/connect, and sends just the recommended **artist names** (a public
@@ -49,6 +63,7 @@ network — enforced across `pipeline/`, `recommender/`, `app/`, and `export/`.
 | Module | What it does | Live transport |
 |--------|---------------|-----------------|
 | `pipeline/lastfm.py` | Last.fm scrobble/tag/similarity fetch, cached, rate-limited | `import requests` (lazy, inside the client) |
+| `pipeline/http.py` | The identity-source transport: MusicBrainz + Wikidata GETs, cached, rate-limited to 1 req/s, sending a `User-Agent` with the operator's `WAD_CONTACT` | `import requests` (lazy, inside `CachedHttpFetcher._get`) |
 | `pipeline/doctor.py` | Explicit `wad doctor --check-upstream` reachability probes; never runs by default | `import requests` (lazy, inside the opt-in check) |
 | `export/base.py` | The shared exporter seam: PKCE/OAuth helpers plus the **one** live transport used by every playlist provider (Spotify, TIDAL, and any future adapter) | `import requests` (lazy, inside `RequestsTransport.request`) |
 
@@ -58,9 +73,13 @@ only transport in `export/`, so `export/tidal.py` reaches the network exactly as
 construct. That is why this list got shorter, not longer, when the second
 provider landed.
 
-Adding a new live client (e.g. a FIX-01 MusicBrainz/Discogs/Wikidata HTTP
-client) requires updating **both** of the following in the same change, or the
-new client will fail the merge-blocking privacy gate:
+The same discipline is why FIX-01's live enrichment added **one** row rather
+than one per registry: `pipeline/enrich.py` takes its fetcher as a constructor
+argument, so MusicBrainz and Wikidata are both reached through the single
+transport in `pipeline/http.py`, and a future Discogs enricher would be too.
+
+Adding a new live client requires updating **both** of the following in the same
+change, or the new client will fail the merge-blocking privacy gate:
 
 1. This table.
 2. The exact repository-relative module path in `NETWORK_ALLOWED` in
@@ -93,7 +112,7 @@ new client will fail the merge-blocking privacy gate:
   recommended artist names (see "Outbound data flows" below).
 - **No telemetry / no third-party analytics.** Enforced by source scan:
   `tests/test_privacy.py` asserts no analytics SDK is imported and that network
-  egress exists **only** in the three modules in the "Egress registry /
+  egress exists **only** in the four modules in the "Egress registry /
   allowlist" above; the cache uses
   stdlib `sqlite3` only. Backed by a runtime socket guard (see below) so the
   claim holds even for indirect/transitive egress.

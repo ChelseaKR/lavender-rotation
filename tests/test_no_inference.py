@@ -123,6 +123,10 @@ TAG_HANDLING_EXEMPTIONS: dict[str, str] = {
     "pipeline.ingest.build_profile": "declares the profile's (initially empty) content tags",
     "pipeline.ingest.enrich_artist": "reads source.artist_tags() into Artist.tags (content only)",
     "pipeline.ingest.ingest": "collects per-artist content tags for the emitted profile",
+    "pipeline.ingest.profile_from_cache": (
+        "reads cached Artist.tags back into a rebuilt profile (content only); the "
+        "identity on those same cached rows is never re-derived here, only re-read"
+    ),
     "pipeline.lastfm.FixtureLastfm.__init__": "stores the fixture's per-artist content tags",
     "pipeline.lastfm.parse_top_tags": "parses Last.fm's top-tags payload (content signal only)",
     "pipeline.serde.artist_to_dict": "serialises Artist.tags to the cache row",

@@ -41,7 +41,17 @@ TELEMETRY_TOKENS = (
 # landed (#54): the one live HTTP transport moved into the shared seam, so the export
 # half of this allowlist got SHORTER as providers were added instead of growing one
 # entry per provider. A new adapter that needs its own socket has to change this line.
-NETWORK_ALLOWED = {"pipeline/lastfm.py", "pipeline/doctor.py", "export/base.py"}
+#
+# `pipeline/http.py` joined it when live enrichment landed (FIX-01) — the fourth and,
+# by the same seam discipline, last entry the identity path needs: MusicBrainz and
+# Wikidata are both fetched through that one transport, and `pipeline/enrich.py`
+# takes its fetcher as an argument rather than importing a client of its own.
+NETWORK_ALLOWED = {
+    "pipeline/lastfm.py",
+    "pipeline/http.py",
+    "pipeline/doctor.py",
+    "export/base.py",
+}
 NETWORK_TOKENS = (
     "import requests",
     "import httpx",

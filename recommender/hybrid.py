@@ -32,6 +32,7 @@ from recommender.content import ContentResult, content_scores
 from recommender.diversify import diversify
 from recommender.explain import build_explanation
 from recommender.feedback import Feedback, feedback_adjustment
+from recommender.filters import is_sourced_man_only
 from recommender.rerank import is_rank_protected, rerank, values_boost_for_artist
 
 
@@ -50,6 +51,7 @@ def recommend(
     explore: float = 0.0,
     feedbacks: list[Feedback] | None = None,
     feedback_strength: float = 1.0,
+    hide_sourced_men: bool = False,
 ) -> list[Recommendation]:
     """Produce the top-``k`` explained recommendations.
 
@@ -61,15 +63,28 @@ def recommend(
     popularity baseline), 1 = maximum tag-space diversity.
     ``feedbacks`` contains the listener's current per-artist votes. The bounded
     adjustment is part of the taste-side base score, before the values lens.
+    ``hide_sourced_men`` is the listener's opt-in output filter — off by default,
+    so the eval and every existing caller are unaffected. It is deliberately not
+    the lens: see :mod:`recommender.filters` for why it removes only a positive
+    sourced claim and never an unknown artist.
     """
     if not (0.0 <= alpha <= 1.0):
         raise ValueError("alpha must be in [0, 1]")
 
     collab = collaborative_scores(profile, source)
     known = profile.known_artist_ids
-    # Candidates must be enriched (present in catalog) and not already known.
+    known_names = profile.known_artist_names
+    # Candidates must be enriched (present in catalog) and not already known —
+    # by id *or* by name. The name check is not redundant: the same artist can
+    # be keyed by MBID in one upstream payload and by name in another, and on a
+    # real listening history that aliasing served heavily-played artists back as
+    # discoveries. See `ListeningProfile.known_artist_names`.
     candidates = {
-        aid for aid in (set(collab) | set(catalog)) if aid in catalog and aid not in known
+        aid
+        for aid in (set(collab) | set(catalog))
+        if aid in catalog
+        and aid not in known
+        and catalog[aid].name.strip().casefold() not in known_names
     }
     content = content_scores(profile, catalog, candidates)
 
@@ -115,5 +130,15 @@ def recommend(
     movable = [rec for rec in ranked if not is_rank_protected(rec.artist)]
     diversified = iter(diversify(movable, explore))
     protected = [rec if is_rank_protected(rec.artist) else next(diversified) for rec in ranked]
+
+    # The listener's own opt-in subtraction, applied last — after ranking, after
+    # rank protection, and after `base_rank` was recorded. Doing it here rather
+    # than by dropping candidates earlier keeps every remaining pick's "the lens
+    # moved this from #19 to #7" true of the real pure-taste ordering, instead
+    # of a counterfactual computed over a pre-filtered world. See
+    # `recommender.filters` for why this removes only a positive sourced claim.
+    if hide_sourced_men:
+        protected = [rec for rec in protected if not is_sourced_man_only(rec.artist)]
+
     limit = max(0, min(k, len(protected)))
     return [rec.with_rank(i + 1) for i, rec in enumerate(protected[:limit])]

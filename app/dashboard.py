@@ -1,8 +1,12 @@
 """Streamlit dashboard: enter a username, get explainable, values-aware picks.
 
-Run with ``make dev`` (``streamlit run app/dashboard.py``). Defaults to the
-offline demo world so it works with no API key; set ``WAD_LASTFM_API_KEY`` to
-use a real Last.fm username.
+Run with ``make dev`` (``streamlit run app/dashboard.py``). This surface is the
+**demo world**, always: it renders the fixture catalog so it works with no API
+key and no account. Live data has a home since FIX-01, but it is the CLI's
+(``wad ingest --user`` then ``wad recommend --user``), not this one's — a
+Streamlit script re-runs top to bottom on every interaction, and holding the
+cache connection a live source needs across those re-runs is a change to make
+deliberately rather than as a side effect of wiring ingest.
 
 Accessibility: the values lens is a labelled, always-visible, explained slider;
 identity is shown as text + glyph (never colour alone); the score chart is paired
@@ -262,8 +266,12 @@ def main() -> None:  # pragma: no cover - exercised via the live Streamlit runti
         era_start = int(datetime(year_from, 1, 1, tzinfo=UTC).timestamp())
         era_end = int(datetime(year_to, 12, 31, 23, 59, 59, tzinfo=UTC).timestamp())
 
-    if os.environ.get("WAD_LASTFM_API_KEY") and username != DEMO_USER:
-        st.info("Live mode would fetch this user; this demo build uses cached data.")
+    if username != DEMO_USER:
+        st.info(
+            f"This dashboard always shows the demo world. To see picks for {username}, "
+            f"run `wad ingest --user {username}` once, then `wad recommend --user "
+            f"{username}` (or `wad report --user {username}` for a shareable page)."
+        )
     profile = _build_temporal_profile(
         username,
         scrobbles,

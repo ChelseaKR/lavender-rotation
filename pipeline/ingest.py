@@ -13,16 +13,25 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Optional, overload
 
 from pipeline.cache import Cache
 from pipeline.enrich import EnrichmentSource
 from pipeline.identity import resolve_composition, resolve_identity
-from pipeline.lastfm import ScrobbleSource
+from pipeline.lastfm import NamedSimilaritySource, ScrobbleSource
 from pipeline.models import Artist, IdentityLabel, ListeningProfile, Scrobble, Source
 
 log = logging.getLogger("wad.ingest")
+
+#: Discovery defaults. A first live ingest is bounded by how long an operator
+#: will wait on a 1 req/s upstream, not by how much we could fetch: these
+#: numbers put a first run in the minutes, and every response is cached, so a
+#: second run costs nothing.
+DEFAULT_SEEDS = 15
+DEFAULT_PER_SEED = 12
+DEFAULT_CANDIDATE_LIMIT = 150
 
 
 def build_profile(
@@ -115,6 +124,7 @@ def ingest(
     cache: Optional[Cache] = None,
     fetched_at: str = "1970-01-01",
     limit: int = 200,
+    enrich_top: Optional[int] = None,
 ) -> tuple[ListeningProfile, dict[str, Artist]]:
     """Run the full ingest. Returns the listening profile and an enriched catalog.
 
@@ -127,6 +137,19 @@ def ingest(
     artists are persisted with the given ``fetched_at`` lineage timestamp.
 
     Without a ``cache``, ingest is a single-page snapshot, as before.
+
+    ``enrich_top`` bounds *enrichment* (not the profile) to the N most-played
+    artists. A years-deep listening history holds thousands of distinct artists,
+    and enriching every one against a 1 req/s upstream would take hours to
+    establish identity for artists that are excluded from recommendation anyway
+    — the listener already plays them. The unenriched ones stay in
+    ``play_counts``/``artist_names``, which is what keeps them excluded; they
+    just contribute no tags to the content profile, where the play-count
+    weighting had already made their contribution negligible. ``None`` (the
+    default) enriches everything, as before.
+
+    An artist whose enrichment *fails* is skipped rather than fatal; compare
+    ``len(catalog)`` against the number selected to see how many were lost.
     """
     ingest_start = time.monotonic()
     log.info("stage=ingest event=start username=%s limit=%d", username, limit)
@@ -155,7 +178,12 @@ def ingest(
 
     catalog: dict[str, Artist] = {}
     tags_by_artist: dict[str, tuple[str, ...]] = {}
-    for artist_id, name in profile.artist_names.items():
+    selected = (
+        profile.artist_names
+        if enrich_top is None
+        else {aid: profile.artist_names[aid] for aid in profile.top_artists(enrich_top)}
+    )
+    for artist_id, name in selected.items():
         try:
             artist = enrich_artist(
                 artist_id,
@@ -166,12 +194,21 @@ def ingest(
                 cache=cache,
             )
         except Exception:
+            # Skip the artist, keep the run. This used to re-raise, which meant
+            # one `ReadTimeout` on one artist's tags discarded an entire live
+            # ingest — 95k scrobbles and 48 enriched artists, thrown away nine
+            # minutes in, over a blip that a retry now absorbs anyway. A
+            # listening history is long enough that *something* will fail, and
+            # a skipped artist degrades exactly as an artist with no upstream
+            # claim does: they stay in the profile (so they are still excluded
+            # from recommendation, which is what matters) and contribute no
+            # tags. The count is returned to the caller to report.
             log.exception(
                 "stage=enrich event=failed artist_id=%s enricher=%s",
                 artist_id,
                 type(enricher).__name__,
             )
-            raise
+            continue
         catalog[artist_id] = artist
         tags_by_artist[artist_id] = artist.tags
         if cache is not None:
@@ -191,6 +228,140 @@ def ingest(
         len(catalog),
     )
     return profile, catalog
+
+
+@dataclass(frozen=True)
+class Candidate:
+    """An artist the listener has *not* played, reachable from ones they have."""
+
+    artist_id: str
+    name: str
+    affinity: float
+
+
+def discover_candidates(
+    profile: ListeningProfile,
+    source: NamedSimilaritySource,
+    *,
+    seeds: int = DEFAULT_SEEDS,
+    per_seed: int = DEFAULT_PER_SEED,
+    limit: int = DEFAULT_CANDIDATE_LIMIT,
+) -> list[Candidate]:
+    """Find enrichable candidates from the similar-artist graph around a profile.
+
+    Ingest alone cannot produce a recommendation: it enriches the artists a
+    listener *already plays*, and :func:`recommender.hybrid.recommend` excludes
+    those by construction, so a catalog built only from a listening history
+    yields an empty list. This is the step that makes the live world non-empty —
+    the offline demo gets the same thing for free from its fixture catalog.
+
+    Deterministic: seeds are the top-played artists, candidates accumulate
+    ``seed_share * similarity`` across seeds, and ties break on the artist key.
+    This mirrors :func:`recommender.collaborative.collaborative_scores` on
+    purpose — the artists worth *paying an upstream fetch for* are the ones the
+    collaborative signal will actually score.
+    """
+    known = profile.known_artist_ids
+    known_names = profile.known_artist_names
+    total = sum(profile.play_counts.values()) or 1.0
+    affinity: dict[str, float] = {}
+    names: dict[str, str] = {}
+    for seed_id in profile.top_artists(seeds):
+        share = profile.play_counts[seed_id] / total
+        for edge in source.similar_artists_named(seed_id)[:per_seed]:
+            if edge.artist_id in known or edge.artist_id == seed_id:
+                continue
+            # Same aliasing guard the re-ranker applies, one step earlier, so an
+            # artist the listener already plays does not cost an upstream fetch.
+            if edge.name.strip().casefold() in known_names:
+                continue
+            affinity[edge.artist_id] = affinity.get(edge.artist_id, 0.0) + share * edge.match
+            names.setdefault(edge.artist_id, edge.name)
+    ordered = sorted(affinity.items(), key=lambda item: (-item[1], item[0]))[:limit]
+    return [
+        Candidate(artist_id=aid, name=names[aid], affinity=round(score, 6))
+        for aid, score in ordered
+    ]
+
+
+def enrich_candidates(
+    candidates: Sequence[Candidate],
+    source: ScrobbleSource,
+    enricher: EnrichmentSource,
+    *,
+    cache: Optional[Cache] = None,
+    fetched_at: str = "1970-01-01",
+) -> dict[str, Artist]:
+    """Enrich discovered candidates into a catalog, skipping ones that fail.
+
+    Unlike :func:`ingest`, one bad artist does not sink the run. A candidate is
+    speculative — nobody asked for it by name — so an upstream 404 on the
+    fortieth of a hundred candidates should cost that candidate, not the
+    ninety-nine already paid for.
+    """
+    catalog: dict[str, Artist] = {}
+    for candidate in candidates:
+        try:
+            artist = enrich_artist(
+                candidate.artist_id, candidate.name, source, enricher, cache=cache
+            )
+        except Exception:
+            log.exception("stage=enrich_candidate event=failed artist_id=%s", candidate.artist_id)
+            continue
+        catalog[candidate.artist_id] = artist
+        if cache is not None:
+            cache.put_artist(artist, fetched_at=fetched_at)
+    log.info(
+        "stage=enrich_candidates event=end requested=%d enriched=%d",
+        len(candidates),
+        len(catalog),
+    )
+    return catalog
+
+
+def profile_from_cache(
+    cache: Cache,
+    username: str,
+    *,
+    half_life_days: Optional[float] = None,
+    era_start: Optional[int] = None,
+    era_end: Optional[int] = None,
+) -> ListeningProfile:
+    """Rebuild a listening profile from the cache, with no network at all.
+
+    The read half of a live ingest: once ``wad ingest`` has synced, every later
+    command works from local data. Content tags come back off the cached artist
+    rows, so the content signal survives a restart.
+    """
+    scrobbles = cache.get_scrobbles(username)
+    profile = build_profile(
+        username,
+        scrobbles,
+        half_life_days=half_life_days,
+        era_start=era_start,
+        era_end=era_end,
+    )
+    tags: dict[str, tuple[str, ...]] = {}
+    for artist_id in profile.artist_names:
+        cached = cache.get_artist(artist_id)
+        if cached is not None:
+            tags[artist_id] = cached.tags
+    return ListeningProfile(
+        username=profile.username,
+        play_counts=profile.play_counts,
+        artist_names=profile.artist_names,
+        tags=tags,
+    )
+
+
+def catalog_from_cache(cache: Cache) -> dict[str, Artist]:
+    """Every enriched artist the cache holds — the live counterpart of the demo catalog."""
+    catalog: dict[str, Artist] = {}
+    for artist_id in cache.list_artist_ids():
+        cached = cache.get_artist(artist_id)
+        if cached is not None:
+            catalog[artist_id] = cached
+    return catalog
 
 
 @dataclass(frozen=True)

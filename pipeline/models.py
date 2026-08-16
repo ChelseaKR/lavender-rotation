@@ -387,6 +387,28 @@ class ListeningProfile:
     def known_artist_ids(self) -> frozenset[str]:
         return frozenset(self.play_counts)
 
+    @property
+    def known_artist_names(self) -> frozenset[str]:
+        """Casefolded display names of every artist played — the id check's backstop.
+
+        An artist key is an MBID when the source supplied one and the display
+        name otherwise, and *the same artist can arrive keyed either way from
+        two different endpoints*: Last.fm's scrobble payload may omit an MBID
+        that its similar-artists payload supplies. Excluding candidates by id
+        alone therefore leaks artists the listener plays constantly back to them
+        as "discoveries" — on a real history it put an artist with 462 plays at
+        rank 1.
+
+        Matching on the name as well is deduplication of an artist *record*,
+        never a claim about a person: nothing here reaches the identity
+        resolver, which cannot see a name at all. Its failure mode is
+        deliberately the safe one — two distinct artists who share a name lose a
+        candidate slot, rather than a familiar artist being served back as new.
+        """
+        return frozenset(
+            name.strip().casefold() for name in self.artist_names.values() if name.strip()
+        )
+
     def top_artists(self, n: int) -> list[str]:
         """Artist ids by play count, descending, with id as a stable tie-break."""
         return [
