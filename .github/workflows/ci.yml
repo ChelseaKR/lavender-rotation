@@ -78,12 +78,12 @@ jobs:
       # `uv sync` above populates `.venv` at the repo root, which is exactly the
       # Makefile's default `PYTHON ?= .venv/bin/python` — no override needed, so
       # local `make verify` and CI's `make verify` are the literal same command.
-      # WAD_E2E_REQUIRE=1 turns the browser specs' no-browser skip into a hard
+      # LAVENDER_E2E_REQUIRE=1 turns the browser specs' no-browser skip into a hard
       # failure here: a silent skip in CI would be the A11Y-03 gap again.
       - name: make verify
         run: make verify
         env:
-          WAD_E2E_REQUIRE: "1"
+          LAVENDER_E2E_REQUIRE: "1"
 
       # Dedicated, annotating secret-scan layer (kept alongside `make security`'s
       # scripts/secret-scan.sh, which falls back to a grep heuristic when the

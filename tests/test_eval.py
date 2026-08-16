@@ -104,7 +104,7 @@ def test_check_regression_skips_metrics_absent_from_baseline() -> None:
     assert "precision_at_k" not in result["metrics"]
 
 
-# -- the `wad eval` gate end-to-end (exit codes are the merge-blocking contract) --
+# -- the `lavender eval` gate end-to-end (exit codes are the merge-blocking contract) --
 
 
 def _run_eval(tmp_path, baseline: str | None) -> tuple[int, dict]:

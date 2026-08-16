@@ -11,7 +11,7 @@ Roadmap M8's "Playwright keyboard/reflow/reduced-motion specs" item landed:
 three judgment-call criteria that the static checker and axe could only
 approximate are now asserted as **observed behaviour in real Chrome**
 (`tests/test_e2e_a11y.py`, run inside `make test` / `make verify`, dedicated
-entry `make a11y-e2e`; CI sets `WAD_E2E_REQUIRE=1` so a missing browser is a
+entry `make a11y-e2e`; CI sets `LAVENDER_E2E_REQUIRE=1` so a missing browser is a
 hard failure there, not a silent skip — the A11Y-03 lesson).
 
 | Spec | WCAG 2.2 | What is observed |

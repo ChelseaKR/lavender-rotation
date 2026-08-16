@@ -33,13 +33,13 @@ from typing import Optional, Protocol
 from pipeline.cache import Cache
 from pipeline.lastfm import MAX_ATTEMPTS, RateLimiter, is_transient_failure
 
-log = logging.getLogger("wad.enrich")
+log = logging.getLogger("lavender.enrich")
 
 #: Sent on every identity-source request. MusicBrainz's rate-limit policy asks
 #: for an application name, a version, and a way to contact whoever is running
-#: it; an operator supplies the contact half via ``WAD_CONTACT``.
-USER_AGENT_BASE = "women-artist-discovery/0.1.0"
-PROJECT_URL = "https://github.com/ChelseaKR/women-artist-discovery"
+#: it; an operator supplies the contact half via ``LAVENDER_CONTACT``.
+USER_AGENT_BASE = "lavender-rotation/0.1.0"
+PROJECT_URL = "https://github.com/ChelseaKR/lavender-rotation"
 
 #: MusicBrainz asks for at most one request per second from an anonymous client.
 MUSICBRAINZ_MIN_INTERVAL = 1.0
@@ -60,7 +60,7 @@ class HttpFetchError(RuntimeError):
 def build_user_agent(contact: str = "") -> str:
     """The ``User-Agent`` string for identity-source requests.
 
-    ``contact`` is whatever the operator put in ``WAD_CONTACT`` — an email or a
+    ``contact`` is whatever the operator put in ``LAVENDER_CONTACT`` — an email or a
     URL. It is *their* contact detail for an upstream sysadmin to reach, never
     anything derived from the listening data, so it is safe to send and is the
     only way to comply with MusicBrainz's stated policy.

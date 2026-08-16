@@ -23,7 +23,7 @@ from pipeline.identity import resolve_composition, resolve_identity, resolve_que
 from pipeline.lastfm import NamedSimilaritySource, ScrobbleSource
 from pipeline.models import Artist, IdentityLabel, ListeningProfile, Scrobble, Source
 
-log = logging.getLogger("wad.ingest")
+log = logging.getLogger("lavender.ingest")
 
 #: Discovery defaults. A first live ingest is bounded by how long an operator
 #: will wait on a 1 req/s upstream, not by how much we could fetch: these
@@ -335,7 +335,7 @@ def profile_from_cache(
 ) -> ListeningProfile:
     """Rebuild a listening profile from the cache, with no network at all.
 
-    The read half of a live ingest: once ``wad ingest`` has synced, every later
+    The read half of a live ingest: once ``lavender ingest`` has synced, every later
     command works from local data. Content tags come back off the cached artist
     rows, so the content signal survives a restart.
     """

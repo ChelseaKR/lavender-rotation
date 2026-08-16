@@ -1,4 +1,4 @@
-# Women-Artist Discovery — Implementation Roadmap
+# Lavender Rotation — Implementation Roadmap
 
 > Generic enforcement lives in `/STANDARDS`. This document carries the decisions and project-specific values.
 > **Last verified: 2026-07-05 · Recheck cadence: per Last.fm / MusicBrainz / Discogs / Wikidata API change, or per standards-conformance remediation pass.**
@@ -17,7 +17,7 @@ A hybrid Last.fm-driven music-discovery engine with a values-aware re-ranking la
 - **Scope (MoSCoW).**
   - *Must:* Last.fm ingest; enrichment (MusicBrainz/Wikidata/Discogs); hybrid recommender; values-aware re-rank; sourced identity model with unknown-first-class; per-recommendation explanation; dashboard.
   - *Should:* ~~playlist/export~~; ~~thumbs feedback to tune future rankings~~ (implemented). ListenBrainz collaborative signal is deferred pending a separate provider/privacy/live-data validation pass.
-  - *Could:* acoustic/content features; ~~a "discovery report"~~ (done: `wad report`); additional sourced value lenses only after affected-community and sourcing review.
+  - *Could:* acoustic/content features; ~~a "discovery report"~~ (done: `lavender report`); additional sourced value lenses only after affected-community and sourcing review.
   - *Won't (v1):* inferring identity from any signal; redistributing an identity dataset; cross-user/social features.
 - **Non-goals.** Not a gender database product; not identity-blind; not a guessing engine.
 
@@ -50,7 +50,7 @@ Per the Documentation Standard ("keep docs live"), decisions the plan didn't ant
 
 ### Build log addendum (2026-06-29) — playlist export + "Why this artist"
 - **"Why this artist" centralised** in `recommender/why.py` (`WhyThisArtist`): one render-agnostic explanation — sourced identity statement, hybrid + values-lens reasons, and provenance that shows *the raw value each source asserted* (not just a label), plus an explicit `inferred = False`. The dashboard, the a11y static renderer (`app/render.py`), the CLI, and the export now share this single source of truth, removing the previously-duplicated identity wording (also reused by `recommender/explain.py`).
-- **Playlist export** as a new top-level `export/` package — deliberately *outside* `pipeline`/`recommender` so the privacy test's "core network confined to `lastfm.py`" guarantee still holds and the export egress is a separate, opt-in boundary. Credential-free fallbacks (plain text / CSV / M3U / JSPF, `export/tracklist.py`) need no account; live Spotify (`export/spotify.py`) uses the Authorization Code OAuth flow with an injectable `HttpTransport` (fake in tests, `requests` only in `RequestsTransport`), credentials from env only. `wad export` CLI + dashboard download buttons + a Spotify connect panel. New egress documented in `docs/audits/privacy-notes.md`.
+- **Playlist export** as a new top-level `export/` package — deliberately *outside* `pipeline`/`recommender` so the privacy test's "core network confined to `lastfm.py`" guarantee still holds and the export egress is a separate, opt-in boundary. Credential-free fallbacks (plain text / CSV / M3U / JSPF, `export/tracklist.py`) need no account; live Spotify (`export/spotify.py`) uses the Authorization Code OAuth flow with an injectable `HttpTransport` (fake in tests, `requests` only in `RequestsTransport`), credentials from env only. `lavender export` CLI + dashboard download buttons + a Spotify connect panel. New egress documented in `docs/audits/privacy-notes.md`.
 - **No new dependencies** (stdlib `base64`/`csv`/`json`/`secrets`/`urllib`; `requests` already present). Realised the roadmap "Should: playlist/export" item.
 - **Needs real creds to run live:** a Spotify app + a browser OAuth consent; only `RequestsTransport` is uncovered (live network), exactly like `LastfmClient`.
 
@@ -91,12 +91,12 @@ Per the Documentation Standard ("keep docs live"), decisions the plan didn't ant
   are test-asserted never to improve from a boost they did not receive.
 
 ### Build log addendum (2026-07-03) — EXP-11: shareable static discovery report
-- `wad report` writes a self-contained HTML file with the same renderer and
+- `lavender report` writes a self-contained HTML file with the same renderer and
   accessibility gate as the committed dashboard artifact. `--k`, `--lens`,
   and `--out` make it a user feature without adding a second rendering path.
 
 ### Build log addendum (2026-07-05) — standards-conformance remediation
-Executed `audit-2026-07-05/women-artist-discovery-REMEDIATION.md` (see that file for the
+Executed `audit-2026-07-05/lavender-rotation-REMEDIATION.md` (see that file for the
 control-by-control status). Highlights: README now carries a real Standards Conformance table
 (replacing silent "Inherits /STANDARDS"); the phantom "0.1.x release" claim in SECURITY.md/
 CITATION.cff corrected to an honest "unreleased pre-1.0" stance (`CHANGELOG.md` added); CI now
@@ -141,7 +141,7 @@ CodeQL/zizmor/osv-scanner/Scorecard workflows added. Nothing in the identity/fai
 | Observability tier | Tier C (declared) | README `## Observability` | review-gated |
 | AI-evaluation status | narrow-applies (declared); eval-beats-baseline active | `docs/RESPONSIBLE-TECH-AUDITS.md`, `make eval` | merge-blocking (eval half) |
 
-**DORA note.** The git history was reset 2026-06-29 (see `audit-2026-07-05/women-artist-discovery-AUDIT.md` §3), so deployment-frequency/lead-time/change-failure-rate/MTTR cannot be measured before that date — pre-reset delivery evidence no longer exists in this clone. Measurement restarts from 2026-06-29: 8 commits landed 2026-06-29→2026-07-02 (dependency/security/docs remediation), then this standards-conformance pass on 2026-07-05. No production deploys or incidents exist yet (pre-release, personal project), so change-failure-rate/MTTR are not yet meaningful; commit cadence is the only DORA-adjacent signal available today. Revisit once releases exist.
+**DORA note.** The git history was reset 2026-06-29 (see `audit-2026-07-05/lavender-rotation-AUDIT.md` §3), so deployment-frequency/lead-time/change-failure-rate/MTTR cannot be measured before that date — pre-reset delivery evidence no longer exists in this clone. Measurement restarts from 2026-06-29: 8 commits landed 2026-06-29→2026-07-02 (dependency/security/docs remediation), then this standards-conformance pass on 2026-07-05. No production deploys or incidents exist yet (pre-release, personal project), so change-failure-rate/MTTR are not yet meaningful; commit cadence is the only DORA-adjacent signal available today. Revisit once releases exist.
 
 **Testing.** Unit (identity resolver refuses inference; re-rank math; unknown handling), integration (Last.fm/MusicBrainz/Discogs/Wikidata adapters with cached fixtures), eval (offline recommender quality vs popularity baseline), a11y.
 
@@ -172,7 +172,7 @@ docs/
 
 ## 11. Operations & sustainability
 - **Hosting/cost.** Runs locally or on a small host; cheap; the cache cuts API load.
-- **Maintenance.** Cache TTL/diff primitives exist and live enrichment now uses them (`wad ingest --ttl-days`, FIX-01). What remains deferred is *periodic* re-enrichment (there is no scheduler; a re-check is an operator running the command again) and automatic source-correction fold-back — `wad refresh` still walks the fixture catalog rather than the live enricher, so a filed correction is still reconciled by nothing.
+- **Maintenance.** Cache TTL/diff primitives exist and live enrichment now uses them (`lavender ingest --ttl-days`, FIX-01). What remains deferred is *periodic* re-enrichment (there is no scheduler; a re-check is an operator running the command again) and automatic source-correction fold-back — `lavender refresh` still walks the fixture catalog rather than the live enricher, so a filed correction is still reconciled by nothing.
 - **Sustainability.** Single-user, low cost, open methodology survives the maintainer.
 
 ## 12. Responsible-tech summary

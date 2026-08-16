@@ -1,4 +1,4 @@
-"""FIX-12: `wad doctor` diagnostic logic (pipeline/doctor.py).
+"""FIX-12: `lavender doctor` diagnostic logic (pipeline/doctor.py).
 
 cli.py is excluded from the coverage gate, so these tests exercise
 ``run_diagnostics`` directly; a couple also drive ``pipeline.cli.main(["doctor"])``
@@ -15,7 +15,7 @@ from pipeline.paths import default_db_path
 
 
 def test_healthy_cache_and_no_hard_failures_exit_ok(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("WAD_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LAVENDER_DATA_DIR", str(tmp_path))
     with Cache(default_db_path()):
         pass  # just create a healthy, current-schema cache
 
@@ -36,7 +36,7 @@ def test_healthy_cache_and_no_hard_failures_exit_ok(monkeypatch, tmp_path) -> No
 
 
 def test_cache_size_is_reported_and_grows_with_content(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("WAD_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LAVENDER_DATA_DIR", str(tmp_path))
     db_path = default_db_path()
     with Cache(db_path):
         pass  # empty, freshly-created cache
@@ -72,7 +72,7 @@ def test_format_bytes_picks_the_right_unit() -> None:
 
 
 def test_missing_env_keys_are_reported_but_never_fail_the_run(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("WAD_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LAVENDER_DATA_DIR", str(tmp_path))
     for key in doctor.ENV_KEYS:
         monkeypatch.delenv(key, raising=False)
 
@@ -85,18 +85,18 @@ def test_missing_env_keys_are_reported_but_never_fail_the_run(monkeypatch, tmp_p
 
 
 def test_present_env_keys_are_reported_present(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("WAD_DATA_DIR", str(tmp_path))
-    monkeypatch.setenv("WAD_LASTFM_API_KEY", "irrelevant-for-this-test")
+    monkeypatch.setenv("LAVENDER_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LAVENDER_LASTFM_API_KEY", "irrelevant-for-this-test")
 
     report = doctor.run_diagnostics(check_upstream=False)
-    lastfm_check = next(c for c in report.checks if c.name == "env:WAD_LASTFM_API_KEY")
+    lastfm_check = next(c for c in report.checks if c.name == "env:LAVENDER_LASTFM_API_KEY")
     assert lastfm_check.detail == "present"
 
 
 def test_doctor_never_prints_env_values(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("WAD_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LAVENDER_DATA_DIR", str(tmp_path))
     secret = "super-secret-do-not-leak"  # gitleaks:allow — test canary, not a credential
-    monkeypatch.setenv("WAD_LASTFM_API_KEY", secret)
+    monkeypatch.setenv("LAVENDER_LASTFM_API_KEY", secret)
 
     report = doctor.run_diagnostics(check_upstream=False)
     for check in report.checks:
@@ -105,13 +105,13 @@ def test_doctor_never_prints_env_values(monkeypatch, tmp_path) -> None:
 
 
 def test_upstream_check_is_skipped_by_default(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("WAD_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LAVENDER_DATA_DIR", str(tmp_path))
     report = doctor.run_diagnostics(check_upstream=False)
     assert not any(c.name.startswith("upstream:") for c in report.checks)
 
 
 def test_stale_schema_version_is_a_hard_failure(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("WAD_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LAVENDER_DATA_DIR", str(tmp_path))
     db_path = default_db_path()
     with Cache(db_path) as cache:
         cache.conn.execute(f"PRAGMA user_version = {CACHE_SCHEMA_VERSION + 1}")
@@ -125,10 +125,10 @@ def test_stale_schema_version_is_a_hard_failure(monkeypatch, tmp_path) -> None:
 
 
 def test_unreadable_cache_path_is_a_hard_failure(monkeypatch, tmp_path) -> None:
-    # Point WAD_DATA_DIR at a *file*, so the cache directory can never be created.
+    # Point LAVENDER_DATA_DIR at a *file*, so the cache directory can never be created.
     blocked = tmp_path / "not-a-directory"
     blocked.write_text("occupied", encoding="utf-8")
-    monkeypatch.setenv("WAD_DATA_DIR", str(blocked))
+    monkeypatch.setenv("LAVENDER_DATA_DIR", str(blocked))
 
     report = doctor.run_diagnostics(check_upstream=False)
     assert not report.ok
@@ -138,7 +138,7 @@ def test_unreadable_cache_path_is_a_hard_failure(monkeypatch, tmp_path) -> None:
 
 
 def test_corrupt_cache_file_is_a_hard_failure(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("WAD_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LAVENDER_DATA_DIR", str(tmp_path))
     db_path = default_db_path()
     db_path.write_bytes(b"not a sqlite database")
 
@@ -150,7 +150,7 @@ def test_corrupt_cache_file_is_a_hard_failure(monkeypatch, tmp_path) -> None:
 
 
 def test_upstream_check_reports_reachable_and_unreachable(monkeypatch, tmp_path) -> None:
-    monkeypatch.setenv("WAD_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LAVENDER_DATA_DIR", str(tmp_path))
     seen_urls: list[str] = []
 
     def fake_head(url: str, timeout: float) -> object:
@@ -177,7 +177,7 @@ def test_upstream_check_reports_reachable_and_unreachable(monkeypatch, tmp_path)
 
 
 def test_cli_doctor_exit_code_reflects_report(monkeypatch, tmp_path, capsys) -> None:
-    monkeypatch.setenv("WAD_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LAVENDER_DATA_DIR", str(tmp_path))
     from pipeline.cli import main
 
     code = main(["doctor"])
@@ -191,7 +191,7 @@ def test_cli_doctor_check_upstream_flag_parses(monkeypatch, tmp_path) -> None:
     """--check-upstream is opt-in; just confirm the flag is wired without making it run
     (network is unavailable/undesirable in tests — probed indirectly via the flag's
     propagation into run_diagnostics, unit-tested separately)."""
-    monkeypatch.setenv("WAD_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LAVENDER_DATA_DIR", str(tmp_path))
     import argparse
 
     from pipeline.cli import _cmd_doctor

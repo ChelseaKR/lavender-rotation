@@ -709,7 +709,7 @@ def test_a_failed_artist_is_skipped_not_fatal() -> None:
 
 
 def test_the_read_path_needs_no_credential_and_no_socket() -> None:
-    """`wad recommend --user` replays what ingest stored; a miss is an empty answer."""
+    """`lavender recommend --user` replays what ingest stored; a miss is an empty answer."""
     from pipeline.lastfm import CachedLastfm, cache_key
 
     params = {"method": "artist.getsimilar", "artist": "Alpha", "autocorrect": "0"}

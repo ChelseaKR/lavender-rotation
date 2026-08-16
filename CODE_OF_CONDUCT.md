@@ -3,7 +3,7 @@
 This project adopts the [Contributor Covenant](https://www.contributor-covenant.org), version 2.1.
 The full text is available at
 <https://www.contributor-covenant.org/version/2/1/code_of_conduct/>. The abbreviated version below
-governs participation in Women-Artist Discovery.
+governs participation in Lavender Rotation.
 
 ## Our pledge
 

@@ -42,9 +42,9 @@ from export.tracklist import (
 from recommender.hybrid import recommend
 
 _ENV = {
-    "WAD_SPOTIFY_CLIENT_ID": "cid",
-    "WAD_SPOTIFY_CLIENT_SECRET": "secret",  # dummy fixture secret
-    "WAD_SPOTIFY_REDIRECT_URI": "http://127.0.0.1:8080/callback",
+    "LAVENDER_SPOTIFY_CLIENT_ID": "cid",
+    "LAVENDER_SPOTIFY_CLIENT_SECRET": "secret",  # dummy fixture secret
+    "LAVENDER_SPOTIFY_REDIRECT_URI": "http://127.0.0.1:8080/callback",
 }
 
 
@@ -170,11 +170,11 @@ def test_credentials_from_env_reads_all_three() -> None:
 
 def test_credentials_from_env_reports_every_missing_var() -> None:
     with pytest.raises(ExportError) as exc:
-        SpotifyCredentials.from_env({"WAD_SPOTIFY_CLIENT_ID": "cid"})
+        SpotifyCredentials.from_env({"LAVENDER_SPOTIFY_CLIENT_ID": "cid"})
     msg = str(exc.value)
-    assert "WAD_SPOTIFY_CLIENT_SECRET" in msg
-    assert "WAD_SPOTIFY_REDIRECT_URI" in msg
-    assert "WAD_SPOTIFY_CLIENT_ID" not in msg  # this one was supplied
+    assert "LAVENDER_SPOTIFY_CLIENT_SECRET" in msg
+    assert "LAVENDER_SPOTIFY_REDIRECT_URI" in msg
+    assert "LAVENDER_SPOTIFY_CLIENT_ID" not in msg  # this one was supplied
 
 
 def test_authorize_url_is_well_formed_and_scoped() -> None:

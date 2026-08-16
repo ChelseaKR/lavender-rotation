@@ -10,7 +10,7 @@
 >
 > *2026-08-15 — re-verified for FIX-01 (live identity enrichment).* One egress
 > module was added (`pipeline/http.py`); one data flow changed from "not shipped"
-> to "shipped, opt-in behind `wad ingest --user`". What leaves the machine is
+> to "shipped, opt-in behind `lavender ingest --user`". What leaves the machine is
 > unchanged in kind: an artist name or MBID goes to a public metadata registry,
 > and nothing about *what or when* anyone listened goes with it.
 
@@ -46,7 +46,7 @@ There are two product data-flow purposes plus one opt-in diagnostic probe:
 1. **Listening-history fetch and identity enrichment** — network-capable Last.fm
    code is confined to `pipeline/lastfm.py` and identity-source fetches to
    `pipeline/http.py` (both asserted by `tests/test_privacy.py`). Since FIX-01
-   one product command wires them together: `wad ingest --user <you>`, which is
+   one product command wires them together: `lavender ingest --user <you>`, which is
    opt-in by construction — it requires a username *and* an API key, and no
    other command reaches upstream. What travels outbound is asymmetric, and
    deliberately so: the username goes to Last.fm only (which already holds that
@@ -65,10 +65,10 @@ There are two product data-flow purposes plus one opt-in diagnostic probe:
    single, auditable function.
 
    *Secrets:* the Spotify app credentials are read from the environment only
-   (`WAD_SPOTIFY_CLIENT_ID`, `WAD_SPOTIFY_CLIENT_SECRET`, `WAD_SPOTIFY_REDIRECT_URI`)
+   (`LAVENDER_SPOTIFY_CLIENT_ID`, `LAVENDER_SPOTIFY_CLIENT_SECRET`, `LAVENDER_SPOTIFY_REDIRECT_URI`)
    and the OAuth access/refresh tokens are held in memory for the session, never
    written to disk or committed.
-3. **Upstream diagnostics** — `wad doctor --check-upstream` performs explicit,
+3. **Upstream diagnostics** — `lavender doctor --check-upstream` performs explicit,
    opt-in reachability probes and sends no listening history or identity data.
 
 ## Egress registry / allowlist (FIX-07)
@@ -80,8 +80,8 @@ network — enforced across `pipeline/`, `recommender/`, `app/`, and `export/`.
 | Module | What it does | Live transport |
 |--------|---------------|-----------------|
 | `pipeline/lastfm.py` | Last.fm scrobble/tag/similarity fetch, cached, rate-limited | `import requests` (lazy, inside the client) |
-| `pipeline/http.py` | The identity-source transport: MusicBrainz + Wikidata GETs, cached, rate-limited to 1 req/s, sending a `User-Agent` with the operator's `WAD_CONTACT` | `import requests` (lazy, inside `CachedHttpFetcher._get`) |
-| `pipeline/doctor.py` | Explicit `wad doctor --check-upstream` reachability probes; never runs by default | `import requests` (lazy, inside the opt-in check) |
+| `pipeline/http.py` | The identity-source transport: MusicBrainz + Wikidata GETs, cached, rate-limited to 1 req/s, sending a `User-Agent` with the operator's `LAVENDER_CONTACT` | `import requests` (lazy, inside `CachedHttpFetcher._get`) |
+| `pipeline/doctor.py` | Explicit `lavender doctor --check-upstream` reachability probes; never runs by default | `import requests` (lazy, inside the opt-in check) |
 | `export/base.py` | The shared exporter seam: PKCE/OAuth helpers plus the **one** live transport used by every playlist provider (Spotify, TIDAL, and any future adapter) | `import requests` (lazy, inside `RequestsTransport.request`) |
 
 A new **playlist provider** does not extend this table: `export/base.py` owns the
@@ -140,7 +140,7 @@ change, or the new client will fail the merge-blocking privacy gate:
   `fetched_at` timestamp (`pipeline/cache.py`, `tests/test_cache_serde.py`).
 - **Deletion path.** `make clean` removes the local cache (`data/*.db`); there is
   no remote copy to chase.
-- **Secrets.** Any API key is read from the environment (`WAD_LASTFM_API_KEY`),
+- **Secrets.** Any API key is read from the environment (`LAVENDER_LASTFM_API_KEY`),
   never committed; secret scan is merge-blocking (`scripts/secret-scan.sh`, CI
   gitleaks).
 

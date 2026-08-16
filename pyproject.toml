@@ -5,7 +5,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "women-artist-discovery"
+name = "lavender-rotation"
 version = "0.1.0"
 description = "A values-aware music-discovery engine with a sourced-not-inferred identity model."
 readme = "README.md"
@@ -27,6 +27,10 @@ dependencies = [
 app = ["streamlit>=1.54", "pandas>=2.0", "pillow>=12.3"]
 
 [project.scripts]
+lavender = "pipeline.cli:main"
+# Pre-rename name, kept so an existing shell history, script, or muscle memory
+# keeps working across the rename. Deprecated; remove at the first tagged
+# release (see docs/adr/0012).
 wad = "pipeline.cli:main"
 
 # ---------------------------------------------------------------------------
@@ -50,7 +54,7 @@ dev = [
 # reflow, and reduced-motion, run against the static render in a real browser.
 # Split from `dev` so the plain unit-test environment stays browser-free; the
 # specs auto-skip when no Chrome/Chromium is reachable (CI sets
-# WAD_E2E_REQUIRE=1 so a missing browser fails there instead of skipping).
+# LAVENDER_E2E_REQUIRE=1 so a missing browser fails there instead of skipping).
 e2e = ["playwright>=1.55"]
 
 [tool.hatch.build.targets.wheel]
@@ -132,7 +136,7 @@ testpaths = ["tests"]
 markers = [
     # Browser-driven a11y specs (tests/test_e2e_a11y.py). They need a real
     # Chrome/Chromium and auto-skip when none is reachable; setting
-    # WAD_E2E_REQUIRE=1 (as CI does) turns that skip into a hard failure so the
+    # LAVENDER_E2E_REQUIRE=1 (as CI does) turns that skip into a hard failure so the
     # server-side gate cannot silently weaken.
     "e2e: browser-driven accessibility spec (Playwright + Chrome/Chromium)",
 ]

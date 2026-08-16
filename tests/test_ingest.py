@@ -235,10 +235,10 @@ def test_live_client_drains_pages_and_filters_watermark() -> None:
 
 
 def test_ingest_emits_local_stage_summary(caplog, demo_user, source, enricher) -> None:
-    logger = logging.getLogger("wad.ingest")
+    logger = logging.getLogger("lavender.ingest")
     logger.addHandler(caplog.handler)
     try:
-        with caplog.at_level(logging.INFO, logger="wad.ingest"):
+        with caplog.at_level(logging.INFO, logger="lavender.ingest"):
             ingest(demo_user, source, enricher)
     finally:
         logger.removeHandler(caplog.handler)

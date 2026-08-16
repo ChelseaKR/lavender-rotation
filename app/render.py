@@ -326,10 +326,10 @@ def render_cards_html(
         "<!doctype html>"
         '<html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        "<title>Women-Artist Discovery — recommendations</title>"
+        "<title>Lavender Rotation — recommendations</title>"
         f"<style>{_style(scheme)}</style></head><body>"
         '<a class="skip" href="#main">Skip to recommendations</a>'
-        "<header><h1>Women-Artist Discovery</h1>"
+        "<header><h1>Lavender Rotation</h1>"
         f"<p>Recommendations for <strong>{escape(username)}</strong>. "
         f"The values lens is set to <strong>{lens_pct}</strong>: it only ever "
         "<em>boosts</em> artists whose identity is sourced as a woman (cis or "

@@ -59,7 +59,7 @@ def to_csv(tracks: Sequence[PlaylistTrack]) -> str:
     return buffer.getvalue()
 
 
-def to_m3u(tracks: Sequence[PlaylistTrack], playlist_name: str = "Women-Artist Discovery") -> str:
+def to_m3u(tracks: Sequence[PlaylistTrack], playlist_name: str = "Lavender Rotation") -> str:
     """An extended-M3U playlist. Artist entries with the 'why' as the track title.
 
     Most players accept a search/URL-less ``#EXTINF`` entry; this stays useful as
@@ -76,12 +76,12 @@ def to_m3u(tracks: Sequence[PlaylistTrack], playlist_name: str = "Women-Artist D
     return "\n".join(lines) + "\n"
 
 
-def to_jspf(tracks: Sequence[PlaylistTrack], playlist_name: str = "Women-Artist Discovery") -> str:
+def to_jspf(tracks: Sequence[PlaylistTrack], playlist_name: str = "Lavender Rotation") -> str:
     """A JSPF (JSON playlist) document — structured, tool-friendly, portable."""
     playlist = {
         "playlist": {
             "title": playlist_name,
-            "creator": "women-artist-discovery",
+            "creator": "lavender-rotation",
             "track": [
                 {
                     "creator": t.artist_name,
@@ -100,7 +100,7 @@ def to_jspf(tracks: Sequence[PlaylistTrack], playlist_name: str = "Women-Artist 
 def render(
     tracks: Sequence[PlaylistTrack],
     fmt: ExportFormat,
-    playlist_name: str = "Women-Artist Discovery",
+    playlist_name: str = "Lavender Rotation",
 ) -> str:
     """Serialise a track list to the requested fallback format."""
     if fmt is ExportFormat.TEXT:

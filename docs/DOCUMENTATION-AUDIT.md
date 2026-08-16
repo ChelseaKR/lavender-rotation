@@ -56,7 +56,7 @@ Root-adjacent template files checked:
 
 Package and workspace metadata:
 
-- Python package `women-artist-discovery` (>=3.10).
+- Python package `lavender-rotation` (>=3.10).
 
 Source and operations surfaces seen at the repo root:
 

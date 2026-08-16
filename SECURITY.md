@@ -1,6 +1,6 @@
 # Security Policy
 
-Women-Artist Discovery is an independent personal open-source project (MIT). It is **local-first**:
+Lavender Rotation is an independent personal open-source project (MIT). It is **local-first**:
 your Last.fm listening history stays on your machine, there is no auth and no server-side account,
 and the only opt-in egress is a user-initiated Spotify playlist export (artist names only). Because
 the app reads a person's listening data and asserts **sourced identity claims about real artists**,
@@ -31,7 +31,7 @@ Report privately, by either:
 
 1. **GitHub Security Advisory** — open a draft advisory via *Security → Report a vulnerability* on
    the repository (preferred; keeps the report, fix, and GHSA linked), **or**
-2. **Email** — `ckellyreif@gmail.com` with subject `SECURITY: women-artist-discovery`.
+2. **Email** — `ckellyreif@gmail.com` with subject `SECURITY: lavender-rotation`.
 
 Please include, as far as you can:
 

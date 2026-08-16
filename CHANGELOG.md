@@ -25,6 +25,25 @@ tag, not backfilled to an earlier commit date.
   3.1.56/3.1.57 respectively). Found via `pip-audit` while verifying an unrelated PR; fixed here
   as a minimal, separately-committed companion change rather than folded into that PR's diff.
 
+### Changed
+- **Renamed to Lavender Rotation** ([ADR 0012](docs/adr/0012-rename-to-lavender-rotation.md)) —
+  the old name described a scope [ADR 0011](docs/adr/0011-queer-lens-and-the-trans-vocabulary-amendment.md)
+  had moved. Complete rather than cosmetic: repo, CLI (`wad` → `lavender`), env vars (`WAD_*` →
+  `LAVENDER_*`), log namespace, and data directory. The `wad` console script and `WAD_DATA_DIR`
+  keep working, deprecated, until the first tagged release.
+
+  **The data directory migrates rather than resetting.** A cache is hours of rate-limited upstream
+  fetching — 95,613 scrobbles and 450 enriched artists on the maintainer's machine — and losing it
+  to a rename would also mean re-asking MusicBrainz for what it had already given us.
+  `migrate_legacy_data_dir()` moves it under four conditions that make that safe: only when the new
+  directory does not exist, only when the old one does, never when an env var names a path
+  explicitly, and by a same-filesystem rename that is atomic and reversible. A failed move degrades
+  to a working empty directory instead of crashing at startup.
+
+  The name carries the mechanism, not the dataset: a repo named for a category of people would
+  advertise the artifact `identity-data-ethics.md` exists to prevent, and would put that category
+  in every browser history and CI log that touches it.
+
 ### Added
 - **A queer lens, and the guardrail amendment it required** — `--lens-name queer` boosts sourced
   queer women and sourced nonbinary artists, alongside the unchanged default lens. Recorded as

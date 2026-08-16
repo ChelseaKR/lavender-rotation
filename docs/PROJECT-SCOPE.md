@@ -6,11 +6,11 @@ This file is a plain-language map of the project as it exists on `main`. It does
 
 ## What This Project Is
 
-Women-Artist Discovery recommends music with an explicit values lens. It uses listening history and music metadata while keeping identity sourced, never guessed, and treating unknown identity as a valid answer.
+Lavender Rotation recommends music with an explicit values lens. It uses listening history and music metadata while keeping identity sourced, never guessed, and treating unknown identity as a valid answer.
 
 Package metadata checked in this pass:
 
-- Python package `women-artist-discovery` for Python `>=3.10`.
+- Python package `lavender-rotation` for Python `>=3.10`.
 
 ## Who It Serves
 

@@ -3,7 +3,7 @@
 Run with ``make dev`` (``streamlit run app/dashboard.py``). This surface is the
 **demo world**, always: it renders the fixture catalog so it works with no API
 key and no account. Live data has a home since FIX-01, but it is the CLI's
-(``wad ingest --user`` then ``wad recommend --user``), not this one's — a
+(``lavender ingest --user`` then ``lavender recommend --user``), not this one's — a
 Streamlit script re-runs top to bottom on every interaction, and holding the
 cache connection a live source needs across those re-runs is a change to make
 deliberately rather than as a side effect of wiring ingest.
@@ -149,7 +149,7 @@ def _render_spotify_panel(st: Any, recs: list[Recommendation], username: str) ->
         creds = SpotifyCredentials.from_env(os.environ)
     except ExportError as exc:
         st.info(
-            f"{exc}. Set WAD_SPOTIFY_CLIENT_ID / _SECRET / _REDIRECT_URI to enable "
+            f"{exc}. Set LAVENDER_SPOTIFY_CLIENT_ID / _SECRET / _REDIRECT_URI to enable "
             "live Spotify export. The portable formats above work without it."
         )
         return
@@ -187,13 +187,13 @@ def _render_export(recs: list[Recommendation], username: str) -> None:  # pragma
     )
 
     tracks = recommendations_to_tracks(recs)
-    name = f"Women-Artist Discovery — {username}"
+    name = f"Lavender Rotation — {username}"
     cols = st.columns(len(_FALLBACKS))
     for col, (label, fmt, mime) in zip(cols, _FALLBACKS, strict=True):
         col.download_button(
             label,
             data=render(tracks, fmt, playlist_name=name),
-            file_name=f"women-artist-discovery.{fmt}",
+            file_name=f"lavender-rotation.{fmt}",
             mime=mime,
         )
 
@@ -204,8 +204,8 @@ def _render_export(recs: list[Recommendation], username: str) -> None:  # pragma
 def main() -> None:  # pragma: no cover - exercised via the live Streamlit runtime
     import streamlit as st
 
-    st.set_page_config(page_title="Women-Artist Discovery", layout="centered")
-    st.title("Women-Artist Discovery")
+    st.set_page_config(page_title="Lavender Rotation", layout="centered")
+    st.title("Lavender Rotation")
     st.write(
         "Discovery with a values lens, done right: identity is **sourced, never "
         "inferred**, and **unknown is first-class** — never down-ranked."
@@ -269,8 +269,8 @@ def main() -> None:  # pragma: no cover - exercised via the live Streamlit runti
     if username != DEMO_USER:
         st.info(
             f"This dashboard always shows the demo world. To see picks for {username}, "
-            f"run `wad ingest --user {username}` once, then `wad recommend --user "
-            f"{username}` (or `wad report --user {username}` for a shareable page)."
+            f"run `lavender ingest --user {username}` once, then `lavender recommend --user "
+            f"{username}` (or `lavender report --user {username}` for a shareable page)."
         )
     profile = _build_temporal_profile(
         username,

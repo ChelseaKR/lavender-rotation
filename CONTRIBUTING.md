@@ -1,6 +1,6 @@
-# Contributing to Women-Artist Discovery
+# Contributing to Lavender Rotation
 
-Thanks for your interest. Women-Artist Discovery is an independent personal open-source project
+Thanks for your interest. Lavender Rotation is an independent personal open-source project
 (MIT, unaffiliated with any employer or client). It is a *values-aware* recommender, and the whole
 point of the repo is that its responsible-AI posture is **mechanically enforced rather than
 asserted**. Please read this before opening an issue or a pull request — one invariant, the
@@ -130,17 +130,17 @@ source"** link next to it:
 
 Clicking the link opens the upstream site's own edit UI in your browser; nothing in this project
 ever writes to Wikidata or MusicBrainz on your behalf. If you note what you're proposing and why,
-file it locally with `wad corrections add --artist <id> --source-kind <kind> --citation <url>
+file it locally with `lavender corrections add --artist <id> --source-kind <kind> --citation <url>
 --proposed <value> --note <why>` (`pipeline/corrections.py`) — a small JSON file next to the local
-cache, never sent anywhere. `wad corrections` lists what's pending.
+cache, never sent anywhere. `lavender corrections` lists what's pending.
 
-The round-trip closes itself: make the real edit upstream, then run `wad refresh`. It re-enriches
+The round-trip closes itself: make the real edit upstream, then run `lavender refresh`. It re-enriches
 the cache, reports any identity-source change it observes (a new `retrieved_at` is the signal an
 edit landed), and reconciles — clearing — any pending correction whose `artist_id` + `source_kind`
 matches.
 
 **TODO (tracked, not yet done):** a real, documented round-trip — a local note filed against a
-genuinely stale Wikidata `P21` claim, the actual edit made on wikidata.org, and a `wad refresh` run
+genuinely stale Wikidata `P21` claim, the actual edit made on wikidata.org, and a `lavender refresh` run
 showing the pending correction reconciled — is EXP-05's excellence bar and is a human follow-up
 outside of code (it requires an account and a real edit on live Wikidata). Record it under
 `docs/audits/` once completed.

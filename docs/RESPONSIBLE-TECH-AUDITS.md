@@ -1,4 +1,4 @@
-# Responsible-Tech Audits — Women-Artist Discovery
+# Responsible-Tech Audits — Lavender Rotation
 
 > **Last verified: 2026-07-05 · Recheck cadence: per RTF/AIEV standard revision or identity-model change.**
 
@@ -65,7 +65,7 @@ generation, no judge anywhere (verified — the only third-party runtime deps ar
 - §1–3 (LLM/RAG/prompt-injection/judge gates) are **dormant** — nothing there applies until this
   repo imports an LLM SDK.
 - The gates that **are** active and merge-blocking today: the offline eval must beat the popularity
-  baseline *and* must not regress vs `docs/audits/eval-baseline.json` (`make eval` / `wad eval`; CI
+  baseline *and* must not regress vs `docs/audits/eval-baseline.json` (`make eval` / `lavender eval`; CI
   `make verify` step; `docs/audits/eval-report.json`).
 - The first LLM SDK import anywhere in this repo flips this status to full `APPLIES` and activates
   §1–3 for real.
@@ -84,4 +84,4 @@ generation, no judge anywhere (verified — the only third-party runtime deps ar
 - `docs/audits/vex.json` (VEX / waiver ledger — currently empty)
 - `docs/audits/branch-ruleset.json` (proposed `main` ruleset — not yet applied live; see CI/CD Standard section of the remediation plan)
 - `docs/audits/model-card.md`, `docs/audits/data-card.md`, `docs/audits/ai-risk-register.md`
-- `docs/audits/eval-baseline.json` (regression-check reference for `wad eval`)
+- `docs/audits/eval-baseline.json` (regression-check reference for `lavender eval`)

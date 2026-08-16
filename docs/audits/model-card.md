@@ -1,4 +1,4 @@
-# Model Card — Women-Artist Discovery Recommender
+# Model Card — Lavender Rotation Recommender
 
 > Instantiates AIEV-22. Consolidates content already committed across `docs/ROADMAP.md` §6-7,
 > `docs/audits/identity-data-ethics.md`, and `docs/audits/fairness-identity.md` into one card.
