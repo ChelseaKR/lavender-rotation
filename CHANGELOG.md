@@ -26,6 +26,13 @@ tag, not backfilled to an earlier commit date.
   as a minimal, separately-committed companion change rather than folded into that PR's diff.
 
 ### Added
+- Verified-subject ledger for every identity citation the demo ships
+  (`tests/test_demo_citations.py`): each citation is pinned to the subject a human read off the
+  live registry, with the date. `citation_problem()` can only check that an identifier is
+  well-formed; it cannot check that the record is the artist it was cited for, which is how three
+  wrong Wikidata entities shipped. A citation absent from the ledger now fails, so an unverified
+  identifier cannot be added silently, and the six `example.org` placeholders that stand in for
+  real people's self-identification are enumerated rather than invisible.
 - Docs-currency guard (`scripts/check-readme-claims.py`, wired into `make test`): re-derives the
   actual test count (`pytest --collect-only`) and coverage total (`coverage report
   --format=total`) and fails if either drifts from README's "Project status" claim, instead of
@@ -85,6 +92,24 @@ tag, not backfilled to an earlier commit date.
   Python ≥3.10 (see Security, below) and dropped Python 3.9 (EOL 2025-10-31) from the CI matrix.
 
 ### Fixed
+- Three of the demo's Wikidata identity citations pointed at the wrong records. Mitski cited
+  `Q16735549` (Andreas Constantinou, a Cypriot footballer, whose own P21 is male), Phoebe Bridgers
+  cited `Q28907802` (a douar in Morocco), and Lucy Dacus cited `Q47545178` (a politician). Each was
+  a well-formed Q-number that resolved, so `citation_problem()`'s shape check and any link checker
+  passed them. Corrected to `Q23761694`, `Q24883319` and `Q27967785`, each confirmed against the
+  live Wikidata API to be the named artist with `P21=Q6581072`.
+- The demo's two `DISCOGS_LINEUP` citations were bare slugs (`/artist/big-thief`,
+  `/artist/boygenius`), 22 lines after the fixture's own comment forbids exactly that shape.
+  Discogs addresses artists by numeric id; corrected to `/artist/5009441-Big-Thief` and
+  `/artist/6774153-boygenius`, both confirmed against the Discogs API including the member lists
+  the band-composition claim rests on.
+- `citation_problem()` now validates registry addresses by **host** as well as by source kind, so a
+  citation claiming musicbrainz.org, wikidata.org or discogs.com has to be an address that registry
+  can resolve, whatever kind carries it. `DISCOGS_LINEUP` was previously exempt by design, and it
+  is the only source kind behind the demo's band-composition claims. Citations that claim no
+  registry stay free-form, which was the original reason for the exemption.
+- The demo-citation gate walked individual identity and band composition but not the front-person
+  identities nested inside composition, reaching one level short of the data it covers.
 - OpenSSF Scorecard workflow comments now describe the repository's current
   public publishing path instead of its superseded restricted-publication
   posture.

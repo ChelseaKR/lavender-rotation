@@ -64,10 +64,10 @@ _GENDER_EVIDENCE: dict[str, list[IdentityEvidence]] = {
             "female",
             "https://musicbrainz.org/artist/fa58cf24-0e44-421d-8519-8bf461dcfaa5",
         ),
-        _ev(SourceKind.WIKIDATA_P21, "Q6581072", "https://www.wikidata.org/wiki/Q16735549"),
+        _ev(SourceKind.WIKIDATA_P21, "Q6581072", "https://www.wikidata.org/wiki/Q23761694"),
     ],
     "phoebe-bridgers": [
-        _ev(SourceKind.WIKIDATA_P21, "Q6581072", "https://www.wikidata.org/wiki/Q28907802"),
+        _ev(SourceKind.WIKIDATA_P21, "Q6581072", "https://www.wikidata.org/wiki/Q24883319"),
     ],
     "japanese-breakfast": [
         _ev(SourceKind.ARTIST_STATEMENT, "woman", "https://example.org/zauner-interview"),
@@ -87,7 +87,7 @@ _GENDER_EVIDENCE: dict[str, list[IdentityEvidence]] = {
         ),
     ],
     "lucy-dacus": [
-        _ev(SourceKind.WIKIDATA_P21, "Q6581072", "https://www.wikidata.org/wiki/Q47545178"),
+        _ev(SourceKind.WIKIDATA_P21, "Q6581072", "https://www.wikidata.org/wiki/Q27967785"),
     ],
     "adrianne-lenker": [
         _ev(SourceKind.ARTIST_STATEMENT, "woman", "https://example.org/lenker"),
@@ -107,6 +107,15 @@ _GENDER_EVIDENCE: dict[str, list[IdentityEvidence]] = {
     # example.org statement like the demo's other illustrative citations rather
     # than a fabricated MBID: a made-up identifier in a real registry's URL space
     # is the one citation shape this project must not model.
+    #
+    # The Wikidata citations above once broke exactly that rule, in the way that
+    # is hardest to see: the fabricated Q-numbers were well-formed and they
+    # *resolved*, just not to these artists (a Cypriot footballer, a village in
+    # Morocco, a politician). Every registry citation in this module is now
+    # pinned to the subject a human read off the live registry, in
+    # tests/test_demo_citations.py::VERIFIED_SUBJECTS. Change an identifier here
+    # and that ledger fails until someone opens the URL and records whose
+    # record it actually is.
     "big-pop-dude": [
         _ev(SourceKind.ARTIST_STATEMENT, "man", "https://example.org/big-pop-dude-statement"),
     ],
@@ -125,14 +134,26 @@ def _front(name: str, statement: str, citation: str) -> FrontPerson:
 _COMPOSITION: dict[str, tuple[list[FrontPerson], list[IdentityEvidence]]] = {
     "big-thief": (
         [_front("Adrianne Lenker", "woman", "https://example.org/lenker")],
-        [_ev(SourceKind.DISCOGS_LINEUP, "lineup", "https://www.discogs.com/artist/big-thief")],
+        [
+            _ev(
+                SourceKind.DISCOGS_LINEUP,
+                "lineup",
+                "https://www.discogs.com/artist/5009441-Big-Thief",
+            )
+        ],
     ),
     "boygenius": (
         [
             _front("Julien Baker", "woman", "https://example.org/jbaker"),
             _front("Lucy Dacus", "woman", "https://example.org/ldacus"),
         ],
-        [_ev(SourceKind.DISCOGS_LINEUP, "lineup", "https://www.discogs.com/artist/boygenius")],
+        [
+            _ev(
+                SourceKind.DISCOGS_LINEUP,
+                "lineup",
+                "https://www.discogs.com/artist/6774153-boygenius",
+            )
+        ],
     ),
 }
 
