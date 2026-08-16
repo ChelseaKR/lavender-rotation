@@ -71,7 +71,14 @@ not just at review time:
   `SourceKind` member for a name, voice, image, or genre — the guardrail isn't
   just "don't call the inference function," it's "there is no inference function
   to call." `tests/test_no_inference.py` proves this with a vocabulary check and
-  an AST scan of the resolver, not just a behavioural test.
+  an AST scan, not just a behavioural test. The scan walks every `def` and
+  `async def` in every `pipeline/*.py` module — an allowlist of function names
+  does not maintain itself, and #72 found the previous one covering four of
+  seven functions in one file and passing on a helper that mapped genre tags to
+  a gender. Functions that legitimately touch content tags are named with a
+  reason and held to a stricter taint check (no value derived from a forbidden
+  read may reach an identity constructor), and the scan is itself pointed at a
+  synthetic bypass module and asserted to *fail* on it.
 - **`unknown` as first-class, not a null.** `IdentityLabel()` with no arguments
   *is* a valid, complete identity — `UNKNOWN_IDENTITY`, the module-level
   singleton. Nothing downstream branches on "missing data"; it branches on a
