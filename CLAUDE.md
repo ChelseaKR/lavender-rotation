@@ -22,5 +22,15 @@
 - **Commands:** `make dev` · `make verify` · `make a11y` · `make eval`.
 - **Definition of done:** demo recommendations are explainable and reproducible,
   sourced identity is enforced, unknown is retained, and every local gate is
-  green. Live username-to-recommendation orchestration is explicitly deferred in
-  the roadmap ledger (see `DEFINITION_OF_DONE.md` for the full checklist).
+  green (see `DEFINITION_OF_DONE.md` for the full checklist).
+- **Live mode is wired, not deferred.** `lavender ingest --user` (FIX-01, #86)
+  syncs a real history end to end, and `lavender refresh --user` re-asks upstream
+  and reconciles the corrections ledger. Both are opt-in; without `--user`
+  nothing opens a socket. What remains deferred is *scheduling* — a re-check is
+  an operator running the command again.
+- **The refresh invariant:** an upstream that says nothing is not an upstream
+  that agrees. `MusicBrainzEnricher` renders every fetch failure as "no
+  evidence", so on any path that *overwrites* a stored label, an empty
+  re-enrichment must never be written and must never advance `fetched_at`. See
+  `pipeline.ingest.RefreshOutcome` — `upstream_answered` is proof a citation came
+  back, not proof we tried.

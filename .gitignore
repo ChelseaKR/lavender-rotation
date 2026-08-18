@@ -36,3 +36,7 @@ node_modules/
 # (artist play counts), so it is local output, never a committed artifact.
 upstream-worklist.md
 upstream-worklist.html
+# `lavender report --out` renders a real listener's picks — taste data, and the
+# file says so in its own privacy footer. Local output, never committed.
+queer-discoveries.html
+*-discoveries.html

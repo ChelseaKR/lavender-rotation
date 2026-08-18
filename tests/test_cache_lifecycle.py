@@ -177,6 +177,192 @@ def test_cli_refresh_rejects_negative_ttl(tmp_path) -> None:
     assert exc.value.code == 2
 
 
+# -- `lavender refresh --user`: the live re-enrichment leg -----------------------------
+
+
+class _DeadEnricher:
+    """What the live enricher returns when nothing upstream answers: no evidence."""
+
+    def gender_evidence(self, artist_id):
+        return []
+
+    def orientation_evidence(self, artist_id):
+        return []
+
+    def composition_evidence(self, artist_id):
+        return [], []
+
+
+def _install_fake_upstream(monkeypatch, enricher) -> None:
+    """Wire the live refresh to an offline enricher; no socket is ever opened."""
+    from pipeline.lastfm import FixtureLastfm
+
+    monkeypatch.setenv("LAVENDER_LASTFM_API_KEY", "test-key-not-a-real-credential")
+    monkeypatch.setattr(
+        "pipeline.cli.LastfmClient",
+        lambda api_key, cache: FixtureLastfm(scrobbles={}, tags={}, similar={}),
+    )
+    monkeypatch.setattr(
+        "pipeline.cli._live_enricher", lambda cache, *, retrieved_at, ttl_days: enricher
+    )
+
+
+def test_cli_refresh_user_without_an_api_key_says_so_and_changes_nothing(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    monkeypatch.delenv("LAVENDER_LASTFM_API_KEY", raising=False)
+    db = tmp_path / "cache.db"
+    with Cache(db) as cache:
+        cache.put_artist(make_artist("cited", gender=Gender.WOMAN), fetched_at="2026-06-01")
+
+    assert cli_main(["refresh", "--db", str(db), "--user", "someone"]) == 2
+
+    assert "LAVENDER_LASTFM_API_KEY" in capsys.readouterr().err
+    with Cache(db) as cache:
+        assert cache.artist_fetched_at("cited") == "2026-06-01"
+
+
+def test_cli_refresh_user_reports_an_unreachable_upstream_instead_of_agreement(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """The absence-as-value guard, end to end through the CLI.
+
+    A totally silent upstream must not exit zero having quietly replaced every
+    cited identity with "unknown" and printed "no identity-label changes".
+    """
+    db = tmp_path / "cache.db"
+    with Cache(db) as cache:
+        cache.put_artist(make_artist("cited", gender=Gender.WOMAN), fetched_at="2026-06-01")
+    _install_fake_upstream(monkeypatch, _DeadEnricher())
+
+    code = cli_main(["refresh", "--db", str(db), "--user", "someone"])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "unreachable" in captured.out
+    assert "nothing was rewritten" in captured.out
+    assert "nothing was verified against upstream" in captured.err
+    with Cache(db) as cache:
+        kept = cache.get_artist("cited")
+        assert kept is not None and kept.identity.gender is Gender.WOMAN
+        assert cache.artist_fetched_at("cited") == "2026-06-01"  # lineage did not advance
+
+
+def test_cli_refresh_user_writes_back_what_upstream_actually_said(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    from pipeline.enrich import FixtureEnricher
+    from pipeline.identity import IdentityEvidence
+    from pipeline.models import SourceKind
+
+    db = tmp_path / "cache.db"
+    with Cache(db) as cache:
+        cache.put_artist(make_artist("cited", gender=Gender.UNKNOWN), fetched_at="2026-06-01")
+    _install_fake_upstream(
+        monkeypatch,
+        FixtureEnricher(
+            gender={
+                "cited": [
+                    IdentityEvidence(
+                        kind=SourceKind.WIKIDATA_P21,
+                        value="Q6581072",
+                        citation="https://www.wikidata.org/wiki/Q16735549",
+                        retrieved_at="2026-08-18",
+                    )
+                ]
+            },
+            composition={},
+        ),
+    )
+
+    code = cli_main(["refresh", "--db", str(db), "--user", "someone"])
+
+    assert code == 0
+    assert "re-sourced from upstream" in capsys.readouterr().out
+    with Cache(db) as cache:
+        updated = cache.get_artist("cited")
+        assert updated is not None and updated.identity.gender is Gender.WOMAN
+
+
+def test_cli_refresh_user_truncates_the_protected_list_but_never_the_count(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """A truncated list that looks complete is the lie this command exists to stop."""
+    from pipeline.cli import _PROTECTED_PREVIEW
+
+    total = _PROTECTED_PREVIEW + 5
+    db = tmp_path / "cache.db"
+    with Cache(db) as cache:
+        for n in range(total):
+            cache.put_artist(
+                make_artist(f"cited-{n:03d}", gender=Gender.WOMAN), fetched_at="2026-06-01"
+            )
+    _install_fake_upstream(monkeypatch, _DeadEnricher())
+
+    assert cli_main(["refresh", "--db", str(db), "--user", "someone", "--limit", str(total)]) == 1
+
+    out = capsys.readouterr().out
+    assert f"and 5 more (listed {_PROTECTED_PREVIEW} of {total})" in out
+    assert out.count("cited-") == _PROTECTED_PREVIEW
+
+
+def test_stalest_artist_ids_lets_bounded_refresh_runs_make_progress(mem_cache) -> None:
+    """Insertion-order slicing would hand every run the same head of the catalog."""
+    mem_cache.put_artist(make_artist("checked-today"), fetched_at="2026-08-18")
+    mem_cache.put_artist(make_artist("never-rechecked"), fetched_at="2020-01-01")
+    mem_cache.put_artist(make_artist("middling"), fetched_at="2026-01-01")
+
+    assert mem_cache.stalest_artist_ids(2) == ["never-rechecked", "middling"]
+    assert mem_cache.stalest_artist_ids(99) == ["never-rechecked", "middling", "checked-today"]
+
+
+def test_a_verified_refresh_moves_an_artist_to_the_back_of_the_queue(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """The mechanism that makes several bounded runs add up to a whole catalog."""
+    from pipeline.enrich import FixtureEnricher
+    from pipeline.identity import IdentityEvidence
+    from pipeline.models import SourceKind
+
+    db = tmp_path / "cache.db"
+    with Cache(db) as cache:
+        for artist_id in ("first", "second"):
+            cache.put_artist(make_artist(artist_id, gender=Gender.UNKNOWN), fetched_at="2020-01-01")
+        assert cache.stalest_artist_ids(1) == ["first"]
+
+    _install_fake_upstream(
+        monkeypatch,
+        FixtureEnricher(
+            gender={
+                artist_id: [
+                    IdentityEvidence(
+                        kind=SourceKind.WIKIDATA_P21,
+                        value="Q6581072",
+                        citation="https://www.wikidata.org/wiki/Q16735549",
+                        retrieved_at="2026-08-18",
+                    )
+                ]
+                for artist_id in ("first", "second")
+            },
+            composition={},
+        ),
+    )
+    assert cli_main(["refresh", "--db", str(db), "--user", "someone", "--limit", "1"]) == 0
+    capsys.readouterr()
+
+    with Cache(db) as cache:
+        # the one just refreshed sorts to the back, so the next run gets the other
+        assert cache.stalest_artist_ids(1) == ["second"]
+
+
+def test_cli_refresh_without_user_is_still_the_demo_branch(tmp_path, capsys) -> None:
+    """The live leg is opt-in: the default path must not have changed shape."""
+    assert cli_main(["refresh", "--db", str(tmp_path / "cache.db")]) == 0
+    out = capsys.readouterr().out
+    assert "DEMO ONLY" in out
+    assert "no upstream identity API was queried" in out
+
+
 # -- #70: `lavender refresh` must not delete a filed correction ------------------------
 
 

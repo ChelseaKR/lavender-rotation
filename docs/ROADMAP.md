@@ -164,7 +164,7 @@ docs/
 
 ## 9. Community & comms
 - **Marketing/comms.** The writeup is the artifact: how to do values-aware recommendation *without* inferring identity. That's a rare, credible engineering-ethics story.
-- **Community.** Contribution guide and reusable identity-data-ethics doc are shipped; a real upstream correction fold-back mechanism remains open (the current refresh CLI is demo-only).
+- **Community.** Contribution guide and reusable identity-data-ethics doc are shipped; the upstream correction fold-back mechanism is wired (`lavender refresh --user` re-asks upstream and reconciles the pending-corrections ledger against what actually came back).
 
 ## 10. Legal & compliance
 - **API terms** (Last.fm, Discogs, MusicBrainz, Wikidata) honored; **no redistribution** of a scraped identity dataset; personal-use scope; MusicBrainz/Wikidata attribution.
@@ -172,7 +172,7 @@ docs/
 
 ## 11. Operations & sustainability
 - **Hosting/cost.** Runs locally or on a small host; cheap; the cache cuts API load.
-- **Maintenance.** Cache TTL/diff primitives exist and live enrichment now uses them (`lavender ingest --ttl-days`, FIX-01). What remains deferred is *periodic* re-enrichment (there is no scheduler; a re-check is an operator running the command again) and automatic source-correction fold-back — `lavender refresh` still walks the fixture catalog rather than the live enricher, so a filed correction is still reconciled by nothing.
+- **Maintenance.** Cache TTL/diff primitives exist and live enrichment uses them (`lavender ingest --ttl-days`, FIX-01). Source-correction fold-back is now wired too: `lavender refresh --user` walks the live enricher, and a filed correction reconciles only against an observation that actually came back (`RefreshOutcome.upstream_answered`) — a silent upstream is reported as unreachable, never as agreement, and never overwrites a citation. What remains deferred is *periodic* re-enrichment: there is no scheduler, so a re-check is an operator running the command again, and a full catalog is several bounded runs.
 - **Sustainability.** Single-user, low cost, open methodology survives the maintainer.
 
 ## 12. Responsible-tech summary
