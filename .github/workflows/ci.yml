@@ -67,7 +67,7 @@ jobs:
 
       - name: Install project (dev + e2e + app groups, pinned via uv.lock)
         run: |
-          uv sync --frozen --group dev --group e2e --extra app
+          uv sync --locked --group dev --group e2e --extra app
           npm install -g pa11y@9.1.1  # pinned (zizmor adhoc-packages: was unpinned)
 
       # The full local gate set — lint, typecheck, test+coverage (incl. the
