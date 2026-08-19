@@ -232,6 +232,23 @@ class Cache:
         rows = self.conn.execute("SELECT artist_id FROM artists").fetchall()
         return [row["artist_id"] for row in rows]
 
+    def stalest_artist_ids(self, limit: int) -> list[str]:
+        """The ``limit`` artists checked longest ago, oldest lineage first.
+
+        What makes a *bounded* refresh add up to a whole-catalog one. Upstream is
+        ~1 req/s and a real catalog runs to thousands of artists, so a refresh is
+        several runs — but slicing insertion order would hand every run the same
+        first N artists forever. Ordering by ``fetched_at`` makes each run pick up
+        where the last left off, because a successfully re-sourced artist gets
+        today's date and sorts to the back. Ties break on ``artist_id`` so the
+        order is total and a run is reproducible.
+        """
+        rows = self.conn.execute(
+            "SELECT artist_id FROM artists ORDER BY fetched_at ASC, artist_id ASC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [row["artist_id"] for row in rows]
+
     # -- scrobbles -----------------------------------------------------------
     def put_scrobbles(self, username: str, scrobbles: Iterable[Scrobble]) -> None:
         """Persist scrobbles idempotently (dedupe key: username, artist_id, track, ts)."""

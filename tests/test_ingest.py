@@ -69,10 +69,12 @@ def _lastfm() -> FixtureLastfm:
     return FixtureLastfm(scrobbles={}, tags={"mitski": ()}, similar={})
 
 
-def _wikidata_enricher(retrieved_at: str) -> FixtureEnricher:
+def _wikidata_enricher(
+    retrieved_at: str, artist_ids: tuple[str, ...] = ("mitski",)
+) -> FixtureEnricher:
     return FixtureEnricher(
         gender={
-            "mitski": [
+            artist_id: [
                 IdentityEvidence(
                     kind=SourceKind.WIKIDATA_P21,
                     value="Q6581072",
@@ -80,6 +82,7 @@ def _wikidata_enricher(retrieved_at: str) -> FixtureEnricher:
                     retrieved_at=retrieved_at,
                 )
             ]
+            for artist_id in artist_ids
         },
         composition={},
     )
@@ -125,13 +128,15 @@ def test_refresh_catalog_updates_cache_lineage_and_returns_changes() -> None:
         )
         cache.put_artist(artist, fetched_at="2026-05-31")
 
-        changes = refresh_catalog(
+        outcome = refresh_catalog(
             cache, lastfm, _wikidata_enricher("2026-07-01"), fetched_at="2026-07-01"
         )
 
-        assert len(changes) == 1
-        assert changes[0].artist_id == "mitski"
-        assert changes[0].retrieved_at == "2026-07-01"
+        assert outcome.verified == ("mitski",)
+        assert outcome.upstream_answered
+        assert len(outcome.changes) == 1
+        assert outcome.changes[0].artist_id == "mitski"
+        assert outcome.changes[0].retrieved_at == "2026-07-01"
         assert cache.artist_fetched_at("mitski") == "2026-07-01"
         refreshed = cache.get_artist("mitski")
         assert refreshed is not None
@@ -140,13 +145,181 @@ def test_refresh_catalog_updates_cache_lineage_and_returns_changes() -> None:
         cache.close()
 
 
-def test_refresh_catalog_on_empty_cache_is_a_noop() -> None:
+def test_refresh_catalog_on_empty_cache_reports_nothing_attempted_not_a_clean_pass() -> None:
+    """An empty cache must not read as "checked everything, all agreed"."""
     cache = Cache(":memory:")
     try:
-        changes = refresh_catalog(
+        outcome = refresh_catalog(
             cache, _lastfm(), _wikidata_enricher("2026-07-01"), fetched_at="2026-07-01"
         )
-        assert changes == []
+        assert outcome.attempted == 0
+        assert outcome.changes == ()
+        # The distinguishing bit: nothing was verified, so nothing may claim to
+        # have consulted upstream.
+        assert not outcome.upstream_answered
+        assert "no cached artists" in outcome.summary_line()
+    finally:
+        cache.close()
+
+
+def test_refresh_can_be_bounded_to_named_artists() -> None:
+    """A whole-catalog walk is many runs against a ~1 req/s upstream."""
+    lastfm = _lastfm()
+    cache = Cache(":memory:")
+    try:
+        for artist_id in ("mitski", "other"):
+            cache.put_artist(
+                enrich_artist(artist_id, artist_id, lastfm, _wikidata_enricher("2026-05-31")),
+                fetched_at="2026-05-31",
+            )
+        outcome = refresh_catalog(
+            cache,
+            lastfm,
+            _wikidata_enricher("2026-07-01"),
+            fetched_at="2026-07-01",
+            artist_ids=["mitski"],
+        )
+        assert outcome.attempted == 1
+        assert outcome.verified == ("mitski",)
+        # the untouched artist keeps its original lineage date
+        assert cache.artist_fetched_at("other") == "2026-05-31"
+    finally:
+        cache.close()
+
+
+# -- the refresh path must never render an unread upstream as agreement ----------
+
+
+class _DeadEnricher:
+    """Every lookup comes back empty — what `MusicBrainzEnricher` returns when
+    the network is down, since it renders a fetch failure as "no evidence"."""
+
+    def gender_evidence(self, artist_id: str) -> list[IdentityEvidence]:
+        return []
+
+    def orientation_evidence(self, artist_id: str) -> list[IdentityEvidence]:
+        return []
+
+    def composition_evidence(self, artist_id: str) -> tuple[list[object], list[IdentityEvidence]]:
+        return [], []
+
+
+class _RaisingEnricher:
+    """Every lookup raises — an upstream that errors instead of going quiet."""
+
+    def gender_evidence(self, artist_id: str) -> list[IdentityEvidence]:
+        raise RuntimeError("upstream exploded")
+
+    def orientation_evidence(self, artist_id: str) -> list[IdentityEvidence]:
+        raise RuntimeError("upstream exploded")
+
+    def composition_evidence(self, artist_id: str) -> tuple[list[object], list[IdentityEvidence]]:
+        raise RuntimeError("upstream exploded")
+
+
+def test_a_silent_upstream_never_erases_a_cited_identity() -> None:
+    """The regression this whole type exists for.
+
+    A refresh against a dead upstream used to write an evidence-free ``Artist``
+    over every cited one and report zero changes doing it — because the diff
+    walks the *new* sources, and there were none. Erasure plus a clean bill of
+    health.
+    """
+    lastfm = _lastfm()
+    cache = Cache(":memory:")
+    try:
+        sourced = enrich_artist("mitski", "Mitski", lastfm, _wikidata_enricher("2026-05-31"))
+        assert sourced.identity.gender is Gender.WOMAN
+        cache.put_artist(sourced, fetched_at="2026-05-31")
+
+        outcome = refresh_catalog(cache, lastfm, _DeadEnricher(), fetched_at="2026-07-01")
+
+        # The citation survives, unmodified, with its original lineage date —
+        # `fetched_at` claims the artist was checked that day, and nobody answered.
+        kept = cache.get_artist("mitski")
+        assert kept is not None
+        assert kept.identity.gender is Gender.WOMAN
+        assert kept.identity.sources
+        assert cache.artist_fetched_at("mitski") == "2026-05-31"
+
+        # And the report says so, rather than "no identity-label changes".
+        assert outcome.protected == ("mitski",)
+        assert outcome.unverified == ("mitski",)
+        assert outcome.verified == ()
+        assert not outcome.upstream_answered
+        assert "unreachable" in outcome.summary_line()
+        assert "nothing was rewritten" in outcome.summary_line()
+    finally:
+        cache.close()
+
+
+def test_upstream_answered_is_proof_of_a_citation_not_merely_of_trying() -> None:
+    """A run where every lookup came back empty tried hard and learned nothing."""
+    lastfm = _lastfm()
+    cache = Cache(":memory:")
+    try:
+        # An artist with no citation to begin with: nothing is at risk, so it is
+        # `unverified` but not `protected`. It still may not prove upstream spoke.
+        cache.put_artist(
+            enrich_artist("mystery-act", "Mystery Act", lastfm, _DeadEnricher()),
+            fetched_at="2026-05-31",
+        )
+        outcome = refresh_catalog(cache, lastfm, _DeadEnricher(), fetched_at="2026-07-01")
+        assert outcome.attempted == 1
+        assert outcome.unverified == ("mystery-act",)
+        assert outcome.protected == ()
+        assert not outcome.upstream_answered
+    finally:
+        cache.close()
+
+
+def test_one_exploding_artist_costs_that_artist_not_the_run() -> None:
+    lastfm = _lastfm()
+    cache = Cache(":memory:")
+    try:
+        seed = _wikidata_enricher("2026-05-31", artist_ids=("mitski", "boom"))
+        for artist_id in ("mitski", "boom"):
+            cache.put_artist(
+                enrich_artist(artist_id, artist_id, lastfm, seed), fetched_at="2026-05-31"
+            )
+
+        class _OnlyBoomRaises(FixtureEnricher):
+            def gender_evidence(self, artist_id: str) -> list[IdentityEvidence]:
+                if artist_id == "boom":
+                    raise RuntimeError("upstream exploded")
+                return super().gender_evidence(artist_id)
+
+        fresh = _wikidata_enricher("2026-07-01", artist_ids=("mitski", "boom"))
+        enricher = _OnlyBoomRaises(gender=fresh._gender, composition={})
+        outcome = refresh_catalog(cache, lastfm, enricher, fetched_at="2026-07-01")
+
+        assert outcome.attempted == 2
+        assert outcome.verified == ("mitski",)
+        assert outcome.failed == ("boom",)
+        assert outcome.upstream_answered  # one real citation came back
+        assert "errored" in outcome.summary_line()
+        # the exploded artist keeps everything it had
+        boom = cache.get_artist("boom")
+        assert boom is not None and boom.identity.sources
+        assert cache.artist_fetched_at("boom") == "2026-05-31"
+    finally:
+        cache.close()
+
+
+def test_every_lookup_raising_is_not_upstream_agreement() -> None:
+    lastfm = _lastfm()
+    cache = Cache(":memory:")
+    try:
+        cache.put_artist(
+            enrich_artist("mitski", "Mitski", lastfm, _wikidata_enricher("2026-05-31")),
+            fetched_at="2026-05-31",
+        )
+        outcome = refresh_catalog(cache, lastfm, _RaisingEnricher(), fetched_at="2026-07-01")
+        assert outcome.failed == ("mitski",)
+        assert outcome.changes == ()
+        assert not outcome.upstream_answered
+        kept = cache.get_artist("mitski")
+        assert kept is not None and kept.identity.gender is Gender.WOMAN
     finally:
         cache.close()
 

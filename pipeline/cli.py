@@ -71,6 +71,16 @@ _BASELINE_METRICS = frozenset({"precision_at_k", "recall_at_k", "map_at_k"})
 #: See ``pipeline.ingest.ingest``'s ``enrich_top`` for why this is bounded.
 DEFAULT_ENRICH_TOP = 50
 
+#: Cached artists one `lavender refresh --user` run re-asks upstream about.
+#: Bounded for the same reason ``DEFAULT_ENRICH_TOP`` is: MusicBrainz and
+#: Wikidata are ~1 req/s and a real catalog runs to thousands of artists, so a
+#: whole-catalog refresh is a sequence of resumable runs, not one long one.
+DEFAULT_REFRESH_LIMIT = 100
+
+#: How many protected artists `lavender refresh --user` names before summarising.
+#: The count is always reported in full; only the listing is capped.
+_PROTECTED_PREVIEW = 20
+
 
 class LiveModeError(RuntimeError):
     """A live command was asked for without what live mode needs."""
@@ -298,9 +308,114 @@ def _cmd_eval_real(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_refresh_live(args: argparse.Namespace) -> int:
+    """LIVE: re-ask upstream about artists already in the cache, and fold in corrections.
+
+    The read half of the correction round-trip. ``lavender ingest`` records what
+    MusicBrainz and Wikidata said on the day it ran; this re-asks, so an edit
+    landed upstream since then — including one the operator filed themselves via
+    ``lavender pending-corrections add`` — can reach the local catalog.
+
+    Bounded on purpose. Upstream is ~1 req/s and a real listening history holds
+    thousands of artists, so ``--limit`` caps a run and ``--artist`` targets one.
+    Re-running resumes: everything already fetched is served from the HTTP cache
+    until ``--ttl-days`` ages it out, so the second pass costs only what expired.
+    """
+    from datetime import date
+
+    today = date.today().isoformat()
+    try:
+        api_key = _require_api_key()
+    except LiveModeError as exc:
+        print(f"error: {exc}", file=sys.stderr)  # noqa: T201
+        return 2
+    with Cache(args.db) as cache:
+        if args.artist is not None:
+            if cache.get_artist(args.artist) is None:
+                print(f"no such artist in cache: {args.artist}", file=sys.stderr)  # noqa: T201
+                return 1
+            targets: list[str] = [args.artist]
+        else:
+            # Stalest first, not insertion order: a re-sourced artist gets
+            # today's lineage date and sorts to the back, so the next bounded
+            # run picks up where this one stopped instead of re-walking the
+            # same head of the catalog forever.
+            targets = cache.stalest_artist_ids(args.limit)
+        # Expire *before* re-enriching, so the refetch below is a real one. The
+        # ordering matters: expiring rows that nothing then re-fetches would
+        # quietly strip the cached similarity graph `lavender recommend --user`
+        # reads, and a thinner recommendation list is not a visible failure.
+        expired = cache.expire_http_cache(ttl_days=args.ttl_days, now=today)
+        print(f"expired {expired} stale http-cache row(s)")  # noqa: T201
+        print(f"re-asking upstream about {len(targets)} cached artist(s) …", flush=True)  # noqa: T201
+        source = LastfmClient(api_key, cache)
+        enricher = _live_enricher(cache, retrieved_at=today, ttl_days=args.ttl_days)
+        outcome = refresh_catalog(
+            cache,
+            source,
+            enricher,
+            fetched_at=today,
+            artist_ids=targets,
+        )
+        # Artist keys are MBIDs for most of a real catalog, so resolve display
+        # names while the cache is still open — a wall of UUIDs is not a report.
+        names = {
+            artist_id: (artist.name if (artist := cache.get_artist(artist_id)) else artist_id)
+            for artist_id in outcome.protected[:_PROTECTED_PREVIEW]
+        }
+    print(outcome.summary_line())  # noqa: T201
+    for change in outcome.changes:
+        print(  # noqa: T201
+            f"{names.get(change.artist_id, change.artist_id)}: {change.source_kind} "
+            f"{change.old_value} -> {change.new_value} (retrieved {change.retrieved_at})"
+        )
+    if outcome.protected:
+        print(  # noqa: T201
+            "kept an existing citation where upstream returned nothing — an unreachable "
+            "source and a retracted claim are indistinguishable here, so neither is "
+            "applied automatically. Review and use `lavender corrections add` to drop one:"
+        )
+        for artist_id in outcome.protected[:_PROTECTED_PREVIEW]:
+            print(f"  {names.get(artist_id, artist_id)} ({artist_id})")  # noqa: T201
+        remaining = len(outcome.protected) - _PROTECTED_PREVIEW
+        if remaining > 0:
+            # Say the real total. A truncated list that looks complete is the
+            # same lie this command exists to stop telling.
+            print(  # noqa: T201
+                f"  … and {remaining} more (listed {_PROTECTED_PREVIEW} of "
+                f"{len(outcome.protected)})"
+            )
+    pending_path = getattr(args, "pending_corrections", None) or pending_corrections.default_path(
+        args.db
+    )
+    # The one place this may be True. `upstream_answered` is not "we tried" — it
+    # is "at least one citation came back over the wire", which is the only
+    # evidence that an upstream edit *could* have been observed. Passing True
+    # after a silent total failure would close every filed correction as
+    # reconciled against an upstream nobody read.
+    reconcile_outcome = pending_corrections.reconcile_after_refresh(
+        pending_path,
+        list(outcome.changes),
+        upstream_queried=outcome.upstream_answered,
+        observed_at=today,
+    )
+    for line in reconcile_outcome.report_lines():
+        print(line)  # noqa: T201
+    if not outcome.upstream_answered and outcome.attempted:
+        print(  # noqa: T201
+            "error: nothing was verified against upstream — check the network and re-run",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
 def _cmd_refresh(args: argparse.Namespace) -> int:
     """Exercise cache refresh with demo fixtures; no upstream enricher is wired."""
     from datetime import date
+
+    if getattr(args, "user", None):
+        return _cmd_refresh_live(args)
 
     catalog = demo_catalog()
     if args.artist:
@@ -760,15 +875,30 @@ def main(argv: list[str] | None = None) -> int:
     p_doctor.set_defaults(func=_cmd_doctor)
 
     p_ref = sub.add_parser(
-        "refresh", help="DEMO ONLY: rewrite fixture cache; no upstream identity re-enrichment"
+        "refresh",
+        help="re-ask upstream about cached artists (--user), or rewrite the fixture cache",
     )
     p_ref.add_argument("--db", default=str(DEFAULT_DB_PATH), help="cache database path")
+    p_ref.add_argument(
+        "--user",
+        default=None,
+        help="re-enrich the catalog this listener ingested, against the live "
+        "MusicBrainz/Wikidata sources. Omit for the DEMO-ONLY fixture rewrite.",
+    )
     p_ref.add_argument("--artist", default=None, help="refresh only this artist_id")
+    p_ref.add_argument(
+        "--limit",
+        type=_positive_int,
+        default=DEFAULT_REFRESH_LIMIT,
+        help=f"with --user, how many cached artists to re-ask about in one run "
+        f"(default: {DEFAULT_REFRESH_LIMIT}). Upstream is ~1 req/s, so a whole "
+        f"catalog is many runs; each one resumes from the HTTP cache.",
+    )
     p_ref.add_argument(
         "--ttl-days",
         type=_nonnegative_int,
         default=DEFAULT_HTTP_TTL_DAYS,
-        help="expire demo http-cache rows older than this many days",
+        help="expire http-cache rows older than this many days before refetching",
     )
     p_ref.add_argument(
         "--pending-corrections",

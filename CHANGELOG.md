@@ -12,6 +12,24 @@ tag, not backfilled to an earlier commit date.
 
 ## [Unreleased]
 
+### Added
+- `lavender refresh --user <name>` re-asks MusicBrainz/Wikidata about artists
+  already in the cache, closing the upstream-correction round-trip: a filed
+  pending correction can now be reconciled against an observation, which the
+  demo-only refresh could never do. Bounded by `--limit`/`--artist` against a
+  ~1 req/s upstream, and resumable through the HTTP cache.
+
+### Fixed
+- A refresh can no longer erase a cited identity when nothing answers. The
+  enricher reports an upstream failure as "no evidence", which is byte-identical
+  to "upstream holds no claim"; on the refresh path that would have written an
+  evidence-free artist over every sourced one and reported **zero changes** while
+  doing it, since the source diff walks the *new* sources. Only an artist that
+  comes back carrying sources is written; anything else keeps its label and its
+  original `fetched_at` lineage date, is named in the report, and leaves
+  `upstream_queried` false so no correction is reconciled against an upstream
+  nobody read. A wholly silent run now exits non-zero instead of zero.
+
 - Release authorization now runs from reviewed `main` through the immutable
   portfolio authorizer, builds and signs the exact selected commit, and hands
   only verified assets to a checkout-free publisher that rechecks the tag
