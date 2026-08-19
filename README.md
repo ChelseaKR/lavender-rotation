@@ -64,7 +64,7 @@ These are hard rules, each enforced by a merge-blocking test (see
 ## Project status
 
 The offline demo and full pipeline are implemented and gated: `make verify` runs
-formatting/lint/SAST, strict typing, 744 tests at 96% coverage, dependency and
+formatting/lint/SAST, strict typing, 756 tests at 96% coverage, dependency and
 secret scans, axe/pa11y renders plus browser-driven keyboard/reflow/reduced-motion
 specs (Playwright, required in CI), offline multiworld evaluation with
 regression/fairness gates, and the i18n declaration gate. CodeQL, zizmor, OSV,
@@ -78,15 +78,29 @@ payloads (`tests/test_live_enrichment.py`) rather than against the network, so t
 suite still opens no socket. Still open: review-gated manual screen-reader/keyboard
 sign-offs, and the two live-mode limits below — see [`docs/audits/`](./docs/audits/).
 
-`lavender refresh` is still deliberately labeled **demo-only**. A live `EnrichmentSource`
-now exists, and `refresh_catalog` has always had a branch that would use it, but the
-shipped command still walks the fixture catalog and prints that limitation on every
-run. Wiring the two together is a separate change from ingest, because it is what
-makes the corrections ledger start *acting* on upstream observations. Until then it
-**reconciles nothing** — a filed correction survives every refresh until a real
-upstream source is observed asserting the value that was proposed. A refresh that
-moves only a retrieval date is not evidence of an edit, and a change to some *other*
-value marks the row superseded rather than deleting it.
+`lavender refresh --user <you>` closes the other half: it re-asks MusicBrainz and
+Wikidata about artists already in your cache, so an edit that landed upstream since
+your ingest — including one you filed yourself — can reach the local catalog, and the
+corrections ledger finally *acts* on an upstream observation. A refresh that moves
+only a retrieval date is not evidence of an edit, and a change to some *other* value
+marks the row superseded rather than deleting it. Without `--user` the command is
+unchanged and still prints its **demo-only** banner.
+
+The live leg refuses to read silence as agreement. The enricher renders every upstream
+failure as "no evidence", which is indistinguishable from "upstream holds no claim" —
+harmless on ingest, where both mean `unknown`, but on refresh it would overwrite a
+citation you paid for and report zero changes doing it. So only an artist that comes
+back *carrying sources* is written; anything else keeps its existing label **and** its
+original `fetched_at`, because that date is a claim the artist was checked that day.
+A run where nothing came back exits non-zero, says the upstream was unreachable, and
+reconciles no corrections. A genuine upstream retraction is therefore not applied
+automatically — it is listed for you to act on with `lavender corrections add`, which
+is the direction this project errs in everywhere else too.
+
+Bounded on purpose: upstream is ~1 req/s and a real catalog runs to thousands of
+artists, so `--limit` (default 100) caps a run and `--artist` targets one. Re-running
+resumes — everything already fetched is served from the HTTP cache until `--ttl-days`
+ages it out. There is still no scheduler; a re-check is you running the command again.
 
 The second live-mode limit is coverage of *your* upstream data, not of this code:
 Last.fm supplies an MBID for only some artists, and a name that matches two

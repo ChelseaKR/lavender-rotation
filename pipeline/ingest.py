@@ -434,6 +434,76 @@ def diff_identity_labels(
     return _diff_sources(artist_id, old.sources, new.sources)
 
 
+def _is_sourced(artist: Artist) -> bool:
+    """Whether this artist carries at least one citation on either identity axis."""
+    return bool(_identity_sources(artist))
+
+
+@dataclass(frozen=True)
+class RefreshOutcome:
+    """What a live re-enrichment actually established — and what it could not.
+
+    The source branch needs a vocabulary the dict branch does not, because it is
+    the only one that can be *lied to by silence*.
+    :class:`~pipeline.enrich.MusicBrainzEnricher` deliberately renders every
+    upstream failure — a timeout, a 503, a malformed payload — as "no evidence",
+    which is exactly what "upstream holds no claim about this artist" also looks
+    like. On the *ingest* path that conflation is correct and conservative: both
+    mean the artist stays first-class ``UNKNOWN``, and nothing is lost.
+
+    On the *refresh* path it inverts. Here a cited label already exists, and
+    writing back an empty re-enrichment would delete a citation the operator's
+    ingest paid for — on the strength of a signal that cannot distinguish
+    "Wikidata retracted the claim" from "we never reached Wikidata". A refresh
+    run against a dead network would otherwise erase every sourced identity in
+    the cache and report zero changes while doing it, because
+    :func:`diff_identity_sources` walks the *new* sources and an empty set has
+    nothing to report.
+
+    So this type keeps the two apart. Only an artist that came back *carrying
+    sources* is written; everything else is counted, named, and reported. The
+    cost is that a genuine upstream retraction is not auto-applied — it surfaces
+    in ``protected`` for a human to act on via the corrections ledger, which is
+    the direction this project already errs in: a label is sourced or absent,
+    never inferred, and never dropped on ambiguous evidence.
+    """
+
+    attempted: int
+    verified: tuple[str, ...]
+    unverified: tuple[str, ...]
+    protected: tuple[str, ...]
+    failed: tuple[str, ...]
+    changes: tuple[IdentityLabelChange, ...]
+
+    @property
+    def upstream_answered(self) -> bool:
+        """Positive proof that at least one upstream document was actually read.
+
+        Not ``attempted > 0`` and not ``failed == ()``: a run in which every
+        lookup returned an empty document tried hard and failed silently. Only a
+        citation coming back over the wire proves the far end spoke.
+        """
+        return bool(self.verified)
+
+    def summary_line(self) -> str:
+        """One honest sentence — never reports a clean pass over an unread upstream."""
+        if not self.attempted:
+            return "no cached artists to refresh"
+        if not self.upstream_answered:
+            return (
+                f"upstream returned nothing for all {self.attempted} artist(s) — "
+                "treating this as unreachable, not as agreement; nothing was rewritten"
+            )
+        bits = [f"{len(self.verified)} of {self.attempted} artist(s) re-sourced from upstream"]
+        if self.protected:
+            bits.append(f"{len(self.protected)} kept their existing citation after an empty answer")
+        if self.unverified:
+            bits.append(f"{len(self.unverified)} unconfirmed")
+        if self.failed:
+            bits.append(f"{len(self.failed)} errored")
+        return "; ".join(bits)
+
+
 @overload
 def refresh_catalog(
     cache: Cache, catalog_or_source: dict[str, Artist], *, fetched_at: str
@@ -447,7 +517,8 @@ def refresh_catalog(
     enricher: EnrichmentSource,
     *,
     fetched_at: str,
-) -> list[IdentityLabelChange]: ...
+    artist_ids: Optional[Sequence[str]] = ...,
+) -> RefreshOutcome: ...
 
 
 def refresh_catalog(
@@ -456,13 +527,20 @@ def refresh_catalog(
     enricher: Optional[EnrichmentSource] = None,
     *,
     fetched_at: str,
-) -> list[LabelChange] | list[IdentityLabelChange]:
-    """Re-persist or dependency-injected re-enrich a catalog, reporting changes.
+    artist_ids: Optional[Sequence[str]] = None,
+) -> list[LabelChange] | RefreshOutcome:
+    """Re-persist, or re-enrich from upstream, a cached catalog — reporting changes.
 
     Passing a dict compares and writes already-enriched objects; it performs no
-    network fetch. Passing both a ``ScrobbleSource`` and ``EnrichmentSource`` calls
-    those sources for every cached artist. The shipped CLI uses the dict/demo branch
-    because no live ``EnrichmentSource`` is implemented yet (deferred FIX-01).
+    network fetch, and returns the label-level changes. Passing both a
+    ``ScrobbleSource`` and an ``EnrichmentSource`` re-fetches every cached artist
+    (or just ``artist_ids``, to bound a run against a rate-limited upstream) and
+    returns a :class:`RefreshOutcome` — see there for why the source branch
+    cannot report a bare list of changes honestly.
+
+    A lookup that raises costs that artist, not the run: a refresh over a
+    real listening history walks thousands of artists at ~1 req/s, and one 503
+    nine minutes in must not discard the nine minutes.
     """
     if isinstance(catalog_or_source, dict):
         label_changes: list[LabelChange] = []
@@ -475,20 +553,61 @@ def refresh_catalog(
 
     if enricher is None:
         raise TypeError("source refresh requires an EnrichmentSource")
-    source_changes: list[IdentityLabelChange] = []
-    for artist_id in cache.list_artist_ids():
+    targets = list(artist_ids) if artist_ids is not None else cache.list_artist_ids()
+    changes: list[IdentityLabelChange] = []
+    verified: list[str] = []
+    unverified: list[str] = []
+    protected: list[str] = []
+    failed: list[str] = []
+    attempted = 0
+    for artist_id in targets:
         cached = cache.get_artist(artist_id)
-        if cached is None:  # pragma: no cover - id came from the same cache
+        if cached is None:
             continue
-        refreshed = enrich_artist(
-            artist_id,
-            cached.name,
-            catalog_or_source,
-            enricher,
-            listeners=cached.listeners,
-            playcount=cached.playcount,
-            cache=cache,
-        )
-        source_changes.extend(diff_identity_sources(cached, refreshed))
-        cache.put_artist(refreshed, fetched_at=fetched_at)
-    return source_changes
+        attempted += 1
+        try:
+            refreshed = enrich_artist(
+                artist_id,
+                cached.name,
+                catalog_or_source,
+                enricher,
+                listeners=cached.listeners,
+                playcount=cached.playcount,
+                cache=cache,
+            )
+        except Exception:
+            log.exception(
+                "stage=refresh event=failed artist_id=%s enricher=%s",
+                artist_id,
+                type(enricher).__name__,
+            )
+            failed.append(artist_id)
+            continue
+        if _is_sourced(refreshed):
+            verified.append(artist_id)
+            changes.extend(diff_identity_sources(cached, refreshed))
+            cache.put_artist(refreshed, fetched_at=fetched_at)
+            continue
+        # Nothing came back. Do not write, and do not advance the lineage date:
+        # ``fetched_at`` is a claim that this artist was checked on that day, and
+        # an empty answer is not evidence that anyone answered.
+        unverified.append(artist_id)
+        if _is_sourced(cached):
+            protected.append(artist_id)
+    outcome = RefreshOutcome(
+        attempted=attempted,
+        verified=tuple(verified),
+        unverified=tuple(unverified),
+        protected=tuple(protected),
+        failed=tuple(failed),
+        changes=tuple(changes),
+    )
+    log.info(
+        "stage=refresh event=end attempted=%d verified=%d unverified=%d protected=%d failed=%d",
+        outcome.attempted,
+        len(outcome.verified),
+        len(outcome.unverified),
+        len(outcome.protected),
+        len(outcome.failed),
+    )
+    return outcome
