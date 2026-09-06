@@ -1324,6 +1324,65 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def _cmd_census(args: argparse.Namespace) -> int:
+    """Aggregate identity coverage over one cached world. Counts only, no network.
+
+    The world is the same one every other surface reads (`_load_world`): the
+    demo catalog, or the operator's own cache under `--user`. The population is
+    deliberately the *listening history plus the enriched rows*, not just the
+    rows: a cache with one enriched artist out of a thousand must not report
+    100% sourced coverage.
+    """
+    from datetime import date
+
+    from pipeline.census import census
+
+    as_of = args.as_of or date.today().isoformat()
+    with Cache(args.db) as cache:
+        try:
+            profile, catalog, _source = _load_world(cache, args)
+        except LiveModeError as exc:
+            print(f"error: {exc}", file=sys.stderr)  # noqa: T201
+            return 2
+        is_demo = (getattr(args, "user", DEMO_USER) or DEMO_USER) == DEMO_USER
+        # The demo world is a fixture, not a cache: it has no lineage dates, and
+        # reading the cache's would attribute another world's timestamps to it.
+        fetched_at = (
+            {}
+            if is_demo
+            else {artist_id: cache.artist_fetched_at(artist_id) for artist_id in catalog}
+        )
+        local_ids = (
+            [] if is_demo else [artist_id for artist_id, _ev, _at in cache.list_corrections()]
+        )
+    pending_path = getattr(args, "pending_corrections", None) or pending_corrections.default_path(
+        args.db
+    )
+    pending_ids = (
+        []
+        if is_demo
+        else [entry.artist_id for entry in pending_corrections.list_corrections(pending_path)]
+    )
+
+    report = census(
+        catalog,
+        as_of=as_of,
+        known_artist_ids=[*profile.play_counts, *catalog],
+        fetched_at=fetched_at,
+        local_correction_ids=local_ids,
+        pending_correction_ids=pending_ids,
+    )
+    rendered = report.to_json() if args.json or args.out else report.to_text()
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(rendered, encoding="utf-8")
+        print(f"wrote {out}")  # noqa: T201
+        return 0
+    print(rendered, end="")  # noqa: T201
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The whole CLI surface, as an inspectable object.
 
@@ -1486,6 +1545,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_report.add_argument("--out", default="my-discoveries.html")
     _add_world_args(p_report)
     p_report.set_defaults(func=_cmd_report)
+
+    p_census = sub.add_parser(
+        "census",
+        help="aggregate identity coverage over a cached world (counts only, no artist list)",
+    )
+    p_census.add_argument(
+        "--json", action="store_true", help="emit the JSON document instead of the text table"
+    )
+    p_census.add_argument(
+        "--out",
+        default=None,
+        help="write the JSON document to a file (implies --json)",
+    )
+    p_census.add_argument(
+        "--as-of",
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="the date lineage ages are measured against (default: today). Explicit so a "
+        "committed census can be regenerated and compared without today's date changing it.",
+    )
+    _add_world_args(p_census)
+    p_census.set_defaults(func=_cmd_census)
 
     p_doctor = sub.add_parser("doctor", help="diagnose env, data location, and cache health")
     p_doctor.add_argument(

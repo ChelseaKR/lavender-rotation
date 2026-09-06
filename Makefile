@@ -125,6 +125,18 @@ security: ## Stage 4 — dependency vulnerability + secret scan
 render: ## Regenerate the committed static dashboard render (docs/audits/dashboard.html)
 	$(PYTHON) -m app.build_static
 
+# The committed demo census (docs/audits/census-demo.json). Same split as
+# `render`/`eval-check`: `make test` compares the committed file against a
+# regeneration and never writes it, and this target is how you regenerate it on
+# purpose. `--as-of` is read back out of the committed file so a regeneration is
+# not silently re-dated by the calendar — a date is the only field in it that
+# today could change, and a gate that fails every midnight teaches people to
+# ignore it.
+census: ## Regenerate the committed demo census (docs/audits/census-demo.json)
+	$(PYTHON) -m pipeline.cli census \
+		--as-of "$$($(PYTHON) -c 'import json,pathlib; print(json.loads(pathlib.Path("docs/audits/census-demo.json").read_text())["as_of"])')" \
+		--out docs/audits/census-demo.json
+
 a11y: ## Stage 5 — audit the COMMITTED render plus pinned light/dark renders (0 violations in BOTH schemes)
 	@test -f $(A11Y_HTML) || { \
 		echo "a11y: $(A11Y_HTML) is missing — run 'make render' and commit it" >&2; exit 1; }
@@ -256,7 +268,7 @@ mutation: $(PYTHON) ## Mutation-test identity.py + rerank.py (CQ-47; fails under
 stamp: ## Write the derived value into every docs figure that has drifted (see `make test`)
 	$(PYTHON) scripts/docs_figures.py --write
 
-audit: render a11y eval ## Regenerate all committed responsible-tech artifacts
+audit: render census a11y eval ## Regenerate all committed responsible-tech artifacts
 	$(PYTHON) -m pytest -q >/dev/null
 	@$(PYTHON) scripts/writeup-check.py
 	@echo "✓ audit artifacts regenerated under docs/audits/"
