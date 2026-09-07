@@ -226,3 +226,98 @@ def test_the_committed_demo_census_names_no_artist() -> None:
         assert artist.artist_id not in text
         assert artist.name not in text
     assert DEMO_USER not in text
+
+
+def test_no_identifier_escapes_even_from_an_adversarial_world() -> None:
+    """The privacy claim has to hold for *any* world, not just the demo one.
+
+    The demo sentinel above proves it for the catalog this repo ships. This
+    proves it for a world built to leak: every free-form string an artist can
+    carry — id, display name, gender citation, orientation citation, lineup
+    citation, front-person name — is a distinctive token, and none of them may
+    appear in either rendering. It is what lets the CodeQL taint suppression in
+    `pipeline/cli.py` rest on a gate rather than on a reading of the code.
+    """
+    from pipeline.models import (
+        Artist,
+        BandComposition,
+        FrontPerson,
+        IdentityBasis,
+        IdentityLabel,
+        Orientation,
+        QueerIdentity,
+        Source,
+    )
+
+    tokens = {
+        "id": "ZZTOKENID",
+        "name": "ZZTOKENNAME",
+        "gender_citation": "https://example.org/ZZTOKENGENDER",
+        "orientation_citation": "https://example.org/ZZTOKENORIENT",
+        "lineup_citation": "https://example.org/ZZTOKENLINEUP",
+        "front": "ZZTOKENFRONT",
+    }
+    front_label = IdentityLabel(
+        gender=Gender.WOMAN,
+        basis=IdentityBasis.SELF_IDENTIFIED,
+        sources=(
+            Source(
+                kind=SourceKind.ARTIST_STATEMENT,
+                citation=tokens["gender_citation"],
+                retrieved_at="2026-05-31",
+            ),
+        ),
+    )
+    artist = Artist(
+        artist_id=tokens["id"],
+        name=tokens["name"],
+        identity=IdentityLabel(
+            gender=Gender.WOMAN,
+            basis=IdentityBasis.SELF_IDENTIFIED,
+            sources=(
+                Source(
+                    kind=SourceKind.WIKIDATA_P21,
+                    citation=tokens["gender_citation"],
+                    retrieved_at="2026-05-31",
+                ),
+            ),
+        ),
+        queer=QueerIdentity(
+            orientation=Orientation.LESBIAN,
+            orientation_sources=(
+                Source(
+                    kind=SourceKind.WIKIDATA_P91,
+                    citation=tokens["orientation_citation"],
+                    retrieved_at="2026-05-31",
+                ),
+            ),
+        ),
+        composition=BandComposition(
+            members_fronting=(
+                FrontPerson(name=tokens["front"], role="lead", identity=front_label),
+            ),
+            sources=(
+                Source(
+                    kind=SourceKind.DISCOGS_LINEUP,
+                    citation=tokens["lineup_citation"],
+                    retrieved_at="2026-05-31",
+                ),
+            ),
+        ),
+    )
+
+    report = census(
+        {tokens["id"]: artist},
+        as_of=_AS_OF,
+        known_artist_ids=[tokens["id"], "ZZTOKENNEVER"],
+        fetched_at={tokens["id"]: "2026-08-01"},
+        local_correction_ids=[tokens["id"]],
+        pending_correction_ids=[tokens["id"]],
+    )
+    rendered = report.to_json() + report.to_text()
+
+    assert report.total_artists == 2
+    assert report.with_local_correction == 1
+    for label, token in tokens.items():
+        assert token not in rendered, f"the {label} escaped into the census"
+    assert "ZZTOKEN" not in rendered

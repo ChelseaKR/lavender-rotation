@@ -1373,12 +1373,36 @@ def _cmd_census(args: argparse.Namespace) -> int:
         pending_correction_ids=pending_ids,
     )
     rendered = report.to_json() if args.json or args.out else report.to_text()
+    # CodeQL follows the taint from the operator's cache into `rendered` and
+    # flags both the file write and the print. The flow is real; the leak is
+    # not, and the reason is structural rather than careful:
+    #
+    # `Census.to_dict()` emits integers under fixed keys — the `Gender`,
+    # `IdentityBasis` and `SourceKind` member names, the age-bucket labels, and
+    # the `unknown_reason` codes, all module constants. The only free-form
+    # strings in the whole document are `schema_version`, the unsupported-reason
+    # sentence (a constant), and `as_of`, which is the caller's own `--as-of` or
+    # today's date. No artist id, name, or citation URL can reach it.
+    #
+    # That is asserted, not asserted-by-comment:
+    # `tests/test_census.py::test_no_identifier_escapes_even_from_an_adversarial_world`
+    # runs a world whose every free-form field is a distinctive token and fails
+    # if any of them appears in either rendering, and two more sentinels cover
+    # the demo world and the committed artifact. Being aggregate-only is the
+    # whole reason this command exists in this shape (ideation E2 was rejected
+    # for proposing the per-artist version), so if that ever stops being true
+    # those tests fail before this suppression matters.
+    #
+    # The query stays armed everywhere else — the CI gate skips only results
+    # CodeQL itself reports as suppressed in source.
     if args.out:
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
+        # codeql[py/clear-text-storage-sensitive-data]
         out.write_text(rendered, encoding="utf-8")
         print(f"wrote {out}")  # noqa: T201
         return 0
+    # codeql[py/clear-text-logging-sensitive-data]
     print(rendered, end="")  # noqa: T201
     return 0
 
