@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ChelseaKR/lavender-rotation/blob/main/schemas/refresh.schema.json",
+  "title": "lavender refresh --json",
+  "description": "One refresh run. 'mode' says whether upstream was actually asked. Every count under 'upstream' is null in demo mode rather than zero, because a zero is a measurement of an upstream this run never contacted -- and 'upstream.answered' is positive proof that a citation came back over the wire, not the absence of a failure.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "mode",
+    "database",
+    "summary",
+    "expired_http_cache_rows",
+    "upstream",
+    "changes",
+    "reconciliation"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "command": {
+      "type": "string",
+      "const": "refresh"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "live",
+        "demo"
+      ],
+      "description": "'demo' rewrites the fixture catalog and queries no upstream identity source at all."
+    },
+    "database": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "expired_http_cache_rows": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "upstream": {
+      "type": "object",
+      "required": [
+        "queried",
+        "answered",
+        "attempted",
+        "verified",
+        "unverified",
+        "failed",
+        "protected"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "queried": {
+          "type": "boolean"
+        },
+        "answered": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "True only when at least one citation came back over the wire. null when nothing was asked: 'we did not look' is not 'nothing had changed'."
+        },
+        "attempted": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "verified": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "unverified": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "failed": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "protected": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Artists whose existing citation was kept because upstream said nothing about it. The console prints a preview; this list is complete, and 'count' is beside it so a truncating consumer cannot mistake one for the other.",
+          "required": [
+            "count",
+            "artist_ids"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "artist_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "changes": {
+      "type": "array",
+      "description": "Cited source values that moved on this run, one entry per source.",
+      "items": {
+        "type": "object",
+        "required": [
+          "artist_id",
+          "source_kind",
+          "old_value",
+          "new_value",
+          "retrieved_at"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "artist_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_kind": {
+            "type": "string"
+          },
+          "old_value": {
+            "type": "string"
+          },
+          "new_value": {
+            "type": "string"
+          },
+          "retrieved_at": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "reconciliation": {
+      "type": "object",
+      "required": [
+        "upstream_queried",
+        "reconciled",
+        "superseded",
+        "still_open"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "upstream_queried": {
+          "type": "boolean",
+          "description": "False means no upstream edit could have landed, so an empty 'reconciled' list says nothing about the filed corrections."
+        },
+        "reconciled": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "artist_id",
+              "source_kind",
+              "proposed_value"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "artist_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_kind": {
+                "type": "string"
+              },
+              "proposed_value": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "superseded": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "artist_id",
+              "source_kind",
+              "proposed_value",
+              "superseded_by_value"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "artist_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "source_kind": {
+                "type": "string"
+              },
+              "proposed_value": {
+                "type": "string"
+              },
+              "superseded_by_value": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "still_open": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

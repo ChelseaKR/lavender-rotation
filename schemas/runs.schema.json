@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ChelseaKR/lavender-rotation/blob/main/schemas/runs.schema.json",
+  "title": "lavender runs --json",
+  "description": "One 'runs' invocation. 'action' says which of the three it was, and every field the other two do not fill is null rather than empty. 'unreadable' is a first-class list beside 'runs': a listing that silently dropped a manifest it could not parse would publish a shorter history as a complete one.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "action",
+    "count",
+    "runs",
+    "unreadable",
+    "manifest",
+    "pruned"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "command": {
+      "type": "string",
+      "const": "runs"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "list",
+        "show",
+        "prune"
+      ],
+      "description": "Which of the three verbs ran."
+    },
+    "count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "Readable manifests listed; null when this run did not list."
+    },
+    "runs": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "surface",
+          "created_at",
+          "lens_name",
+          "lens_strength",
+          "k",
+          "listener_digest"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "surface": {
+            "type": "string",
+            "minLength": 1
+          },
+          "created_at": {
+            "type": "string",
+            "minLength": 1
+          },
+          "lens_name": {
+            "type": "string"
+          },
+          "lens_strength": {
+            "type": "number"
+          },
+          "k": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "listener_digest": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "unreadable": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "error"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "error": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "manifest": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "One run manifest, verbatim from pipeline.runs, which carries its own schema_version. null unless the action was 'show'."
+    },
+    "pruned": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "removed",
+        "kept"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "removed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kept": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}
