@@ -9,12 +9,31 @@ name: ci
 # docs/audits/branch-ruleset.json is the committed copy of that posture, and
 # ADR 0001 ("Correction, 2026-08-29") records where it and the server differ.
 # 3.12 and 3.13 are the whole supported set (ADR 0004, requires-python
-# ">=3.12"), so the weekly and on-demand runs cover exactly the same two
+# ">=3.12"), so the merge, weekly and on-demand runs cover exactly the same two
 # runtimes the PR gate does; there is no wider compatibility matrix to schedule.
 # `make verify` runs the exact same stages locally — CI just invokes that one
 # target instead of re-listing its steps, so the two cannot drift (CICD-27).
 
+# `push: [main]` was removed on 2026-07-16 (#43) with a reason written into
+# this comment: the full supported-version matrix "runs weekly and on demand
+# instead of four more times after every merge". That reason was true then and
+# is not now — #85 deleted the matrix ternary on 2026-08-15, so every event has
+# run the same two runtimes since, and a merge run costs the same two jobs the
+# pull-request gate ran rather than four more. What the removal cost is
+# measured: of the last 40 commits on `main` (2026-09-10), **8 carry a `ci` run
+# on that exact SHA**, and every one of the 8 is a `schedule` or
+# `workflow_dispatch` run — not one is a merge. `main`'s HEAD has never been
+# verified by this workflow.
+#
+# The defence that does survive is not the one written down: the ruleset sets
+# `strict_required_status_checks_policy`, so a branch must be current with
+# `main` to merge and the merged tree therefore equals the tree the PR gate
+# read. That covers the merge path and nothing else — `bypass_actors` grants
+# the repository-admin role `bypass_mode: always`, so a direct push to `main`
+# is possible today and would carry no verdict at all.
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
   schedule:
@@ -24,9 +43,17 @@ on:
 permissions:
   contents: read
 
+# A pull-request run is superseded by the next push to the same pull request,
+# so cancelling in progress is right there and the group is the PR number.
+# Every other event keys on the commit and never cancels. Keyed on
+# `github.ref` with `cancel-in-progress: true` — what this was until the `push`
+# trigger came back — two merges landing minutes apart would share the group
+# `ci-refs/heads/main`, and the second would evict the first: a commit on
+# `main` left with a cancelled run, which reads as a failure, proves nothing,
+# and is indistinguishable from a job killed by its own timeout.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
