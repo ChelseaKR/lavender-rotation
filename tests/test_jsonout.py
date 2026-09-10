@@ -30,7 +30,7 @@ from typing import Any
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from pipeline import jsonout
+from pipeline import cli, jsonout
 from pipeline.cli import main
 from pipeline.doctor import NETWORK_EGRESS_MODULES
 
@@ -77,12 +77,17 @@ def test_every_document_has_its_own_schema_version() -> None:
     when only one document moved."""
     assert set(jsonout.SCHEMA_VERSIONS) == {
         "recommend",
+        "report",
         "export",
         "doctor",
         "error",
         "corrections",
         "pending_corrections",
         "diff",
+        "feedback",
+        "refresh",
+        "eval",
+        "runs",
     }
 
 
@@ -735,3 +740,160 @@ def test_the_diff_text_rendering_is_unchanged_when_json_is_not_asked_for(
     out = capsys.readouterr().out
     assert out.startswith("20260101T000000 -> 20260102T000000")
     assert "{" not in out
+
+
+# ---------------------------------------------------------------------------
+# The five surfaces #121 was still open for: report, feedback, refresh, eval,
+# runs. Each one is a document with a committed schema, and each carries one
+# distinction the text rendering had been keeping in prose.
+# ---------------------------------------------------------------------------
+
+
+def test_report_output_validates_and_still_writes_the_page(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """`--json` describes the run; it does not replace the artifact."""
+    out = tmp_path / "discoveries.html"
+    code, document = run_json(capsys, ["report", "--json", "--k", "5", "--out", str(out)])
+    assert code == 0
+    assert_valid(document, "report")
+    assert out.is_file(), "report --json stopped writing the page it exists to write"
+    assert document["written_to"] == str(out)
+    assert document["bytes_written"] == len(out.read_bytes())
+
+
+def test_report_and_recommend_describe_the_same_ranking(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """One serialisation of a pick list, not two that can drift.
+
+    The dashboard once showed one ranking while measuring another; both verbs
+    build their picks through the same function so that cannot recur here.
+    """
+    _, report = run_json(
+        capsys, ["report", "--json", "--k", "5", "--out", str(tmp_path / "r.html")]
+    )
+    _, recommend = run_json(capsys, ["recommend", "--json", "--k", "5", "--lens", "0.5"])
+    assert [p["artist_id"] for p in report["recommendations"]] == [
+        p["artist_id"] for p in recommend["recommendations"]
+    ]
+
+
+def test_feedback_output_validates(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    code, document = run_json(
+        capsys,
+        ["feedback", "--artist", "a1", "--up", "--db", str(tmp_path / "cache.db"), "--json"],
+    )
+    assert code == 0
+    assert_valid(document, "feedback")
+    assert document["vote"] == "up"
+
+
+def test_runs_list_output_validates(capsys: pytest.CaptureFixture[str]) -> None:
+    code, document = run_json(capsys, ["runs", "list", "--json"])
+    assert code == 0
+    assert_valid(document, "runs")
+    assert document["action"] == "list"
+
+
+def test_a_manifest_that_cannot_be_read_is_not_counted_as_a_run(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two lists, because they are two facts.
+
+    Folding an unreadable file into the rows publishes it as a run that
+    happened; dropping it reports a smaller population as a complete one. The
+    text rendering already kept them apart and the document has to as well.
+    """
+    broken = tmp_path / "deadbeef.json"
+    broken.write_text("{ not json", encoding="utf-8")
+    monkeypatch.setattr(cli, "list_manifest_paths", lambda: [broken])
+    code, document = run_json(capsys, ["runs", "list", "--json"])
+    assert code == 0
+    assert_valid(document, "runs")
+    assert document["runs"] == []
+    assert [row["name"] for row in document["unreadable"]] == ["deadbeef"]
+
+
+def test_refresh_demo_reports_null_upstream_counts_rather_than_zeroes(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """The demo branch queries nothing, so it counts nothing.
+
+    `attempted: 0` beside `answered: false` is what a live run that reached
+    nothing looks like. A demo run must not be able to produce it -- that is
+    the one distinction `RefreshOutcome` was written to keep.
+    """
+    code, document = run_json(capsys, ["refresh", "--db", str(tmp_path / "cache.db"), "--json"])
+    assert code == 0
+    assert_valid(document, "refresh")
+    assert document["mode"] == "demo"
+    assert document["upstream"]["queried"] is False
+    for field in ("answered", "attempted", "verified", "unverified", "failed", "protected"):
+        assert document["upstream"][field] is None, (
+            f"the demo branch published a count for {field}, which no upstream supplied"
+        )
+
+
+def test_eval_output_validates_and_reports_no_baseline_as_null(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """`false` would say nothing regressed. Nothing was compared."""
+    code, document = run_json(
+        capsys,
+        [
+            "eval",
+            "--json",
+            "--out",
+            str(tmp_path / "eval.json"),
+            "--baseline",
+            str(tmp_path / "absent.json"),
+        ],
+    )
+    assert code in (0, 1)
+    assert_valid(document, "eval")
+    assert document["regressed_vs_baseline"] is None
+    assert document["baseline_present"] is False
+
+
+def test_eval_names_the_guarantees_that_passed_over_an_empty_segment(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """A guarantee with nothing to violate is not a guarantee that held.
+
+    These are `UNMEASURED:` sentences on stderr today, invisible to anything
+    reading the exit code.
+    """
+    _, document = run_json(
+        capsys,
+        [
+            "eval",
+            "--json",
+            "--out",
+            str(tmp_path / "eval.json"),
+            "--baseline",
+            str(tmp_path / "absent.json"),
+        ],
+    )
+    for item in document["unmeasured_guarantees"]:
+        assert item["guarantee"]
+        assert item["note"]
+        assert isinstance(item["base_count"], int)
+
+
+def test_the_text_renderings_of_the_five_new_surfaces_are_unchanged(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """Without `--json`, every one of them prints what it always printed."""
+    for argv in (
+        ["report", "--k", "3", "--out", str(tmp_path / "a.html")],
+        ["feedback", "--artist", "a1", "--up", "--db", str(tmp_path / "c.db")],
+        ["runs", "list"],
+        ["refresh", "--db", str(tmp_path / "c.db")],
+    ):
+        capsys.readouterr()
+        assert cli.main(argv) == 0
+        out = capsys.readouterr().out
+        assert out, f"{argv[0]} printed nothing without --json"
+        with pytest.raises(json.JSONDecodeError):
+            json.loads(out)

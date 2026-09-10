@@ -82,6 +82,11 @@ SCHEMA_VERSIONS: dict[str, int] = {
     "corrections": 1,
     "pending_corrections": 1,
     "diff": 1,
+    "report": 1,
+    "feedback": 1,
+    "refresh": 1,
+    "eval": 1,
+    "runs": 1,
 }
 
 _SCHEMA_BASE = "https://github.com/ChelseaKR/lavender-rotation/blob/main/schemas"
@@ -160,24 +165,14 @@ def _coverage(coverage: IdentityCoverage) -> dict[str, Any]:
     }
 
 
-def recommend_document(
-    *,
-    recommendations: Sequence[Any],
-    coverage: IdentityCoverage,
-    listener: str,
-    lens_name: str,
-    lens_strength: float,
-    explore: float,
-    hide_sourced_men: bool,
-    k: int,
-    content_filter_description: str,
-) -> dict[str, Any]:
-    """One ``recommend`` run.
+def _picks(recommendations: Sequence[Any]) -> list[dict[str, Any]]:
+    """One entry per recommendation, identity block included.
 
-    Deliberately carries no timestamp and no run id. Both would change between
-    two runs of the same query, and a byte-identical document is the only way a
-    reviewer can tell a ranking change from a bookkeeping one. The run manifest
-    already records when a run happened; ``lavender runs`` is where that lives.
+    Shared by ``recommend`` and ``report`` so the two cannot describe the same
+    ranking differently. ``report`` renders an HTML page from exactly these
+    recommendations, and a second, drifting serialisation of them is how the
+    dashboard came to show one ranking while measuring another (see
+    ``app/observability.py``).
     """
     from recommender.why import why_this_artist
 
@@ -198,6 +193,28 @@ def recommend_document(
                 "identity": _identity(why, rec.artist.identity.gender),
             }
         )
+    return picks
+
+
+def recommend_document(
+    *,
+    recommendations: Sequence[Any],
+    coverage: IdentityCoverage,
+    listener: str,
+    lens_name: str,
+    lens_strength: float,
+    explore: float,
+    hide_sourced_men: bool,
+    k: int,
+    content_filter_description: str,
+) -> dict[str, Any]:
+    """One ``recommend`` run.
+
+    Deliberately carries no timestamp and no run id. Both would change between
+    two runs of the same query, and a byte-identical document is the only way a
+    reviewer can tell a ranking change from a bookkeeping one. The run manifest
+    already records when a run happened; ``lavender runs`` is where that lives.
+    """
     return {
         "schema_version": SCHEMA_VERSIONS["recommend"],
         "command": "recommend",
@@ -211,7 +228,274 @@ def recommend_document(
             "content_filter": content_filter_description,
         },
         "identity_coverage": _coverage(coverage),
-        "recommendations": picks,
+        "recommendations": _picks(recommendations),
+    }
+
+
+def report_document(
+    *,
+    recommendations: Sequence[Any],
+    coverage: IdentityCoverage,
+    exposure_panel: Mapping[str, Any],
+    listener: str,
+    lens_name: str,
+    lens_strength: float,
+    hide_sourced_men: bool,
+    k: int,
+    content_filter_description: str,
+    written_to: str,
+    bytes_written: int,
+) -> dict[str, Any]:
+    """One ``report`` run: the data behind the page, and where the page went.
+
+    The HTML is not embedded. It is a rendering of the picks below, and a
+    document carrying both would let the two disagree -- which is the drift this
+    command's own ``observability_inputs`` seam exists to prevent. What the
+    caller cannot get any other way is the *input*: the same picks, the same
+    coverage, and the fairness panel the page prints, in a shape a script can
+    read without parsing markup.
+
+    ``report`` exposes no ``--explore``, so the query block reports the 0.0 the
+    run actually used rather than omitting a knob and leaving a reader to guess
+    which default applied.
+    """
+    return {
+        "schema_version": SCHEMA_VERSIONS["report"],
+        "command": "report",
+        "query": {
+            "listener": listener,
+            "k": k,
+            "lens_name": lens_name,
+            "lens_strength": lens_strength,
+            "explore": 0.0,
+            "hide_sourced_men": hide_sourced_men,
+            "content_filter": content_filter_description,
+        },
+        "written_to": written_to,
+        "bytes_written": bytes_written,
+        "identity_coverage": _coverage(coverage),
+        "recommendations": _picks(recommendations),
+        "exposure_panel": dict(exposure_panel),
+    }
+
+
+def feedback_document(
+    *, listener: str, artist_id: str, vote: str, recorded_at: str, database: str
+) -> dict[str, Any]:
+    """One thumbs vote, recorded.
+
+    ``vote`` is the word the caller typed rather than the ``+1``/``-1`` the cache
+    stores, because the stored integer is an implementation detail and a script
+    switching on it would be pinned to one.
+    """
+    if vote not in ("up", "down"):
+        raise ValueError(f"unknown vote: {vote}")
+    return {
+        "schema_version": SCHEMA_VERSIONS["feedback"],
+        "command": "feedback",
+        "database": database,
+        "listener": listener,
+        "artist_id": artist_id,
+        "vote": vote,
+        "recorded_at": recorded_at,
+    }
+
+
+def _change(change: Any) -> dict[str, Any]:
+    return {
+        "artist_id": change.artist_id,
+        "source_kind": change.source_kind,
+        "old_value": change.old_value,
+        "new_value": change.new_value,
+        "retrieved_at": change.retrieved_at,
+    }
+
+
+def _reconciliation(outcome: Any) -> dict[str, Any]:
+    """What reconciliation did, with the reason it may have done nothing.
+
+    ``upstream_queried`` is carried rather than inferred from an empty
+    ``reconciled`` list. "No filed correction had landed upstream" and "no
+    upstream source was consulted, so none could have" are different findings
+    and the counts are identical in both.
+    """
+    return {
+        "upstream_queried": outcome.upstream_queried,
+        "reconciled": [
+            {
+                "artist_id": row.artist_id,
+                "source_kind": row.source_kind,
+                "proposed_value": row.proposed_value,
+            }
+            for row in outcome.reconciled
+        ],
+        "superseded": [
+            {
+                "artist_id": row.artist_id,
+                "source_kind": row.source_kind,
+                "proposed_value": row.proposed_value,
+                "superseded_by_value": row.superseded_by_value,
+            }
+            for row in outcome.superseded
+        ],
+        "still_open": len(outcome.superseded) + len(outcome.still_open),
+    }
+
+
+def refresh_document(
+    *,
+    mode: str,
+    database: str,
+    summary: str,
+    expired_http_cache_rows: int,
+    changes: Sequence[Any],
+    reconciliation: Any,
+    outcome: Any | None = None,
+) -> dict[str, Any]:
+    """One ``refresh`` run, in either of its two modes.
+
+    The live branch re-asks upstream; the demo branch rewrites the fixture
+    catalog and queries nothing. Both are reported through one document with a
+    ``mode`` discriminator, and every field the demo branch cannot supply is
+    ``null`` rather than zero -- a demo run reporting ``attempted: 0`` alongside
+    ``upstream_answered: false`` would be indistinguishable from a live run that
+    reached nothing, which is the single distinction this command's own
+    :class:`~pipeline.ingest.RefreshOutcome` was written to keep.
+
+    ``upstream_answered`` is ``outcome.upstream_answered``: positive proof that
+    a citation came back over the wire, not ``failed == ()``. And ``protected``
+    carries **every** artist id, not the console's preview of the first few,
+    with ``count`` beside it so a truncating consumer cannot mistake the list it
+    holds for the whole of it.
+    """
+    if mode not in ("live", "demo"):
+        raise ValueError(f"unknown refresh mode: {mode}")
+    upstream: dict[str, Any]
+    if outcome is None:
+        upstream = {
+            # Not zeroes. Nothing was asked, so there is no count of what
+            # answered; a zero here is a measurement of an upstream this run
+            # never contacted.
+            "queried": False,
+            "answered": None,
+            "attempted": None,
+            "verified": None,
+            "unverified": None,
+            "failed": None,
+            "protected": None,
+        }
+    else:
+        upstream = {
+            "queried": True,
+            "answered": outcome.upstream_answered,
+            "attempted": outcome.attempted,
+            "verified": len(outcome.verified),
+            "unverified": len(outcome.unverified),
+            "failed": len(outcome.failed),
+            "protected": {
+                "count": len(outcome.protected),
+                "artist_ids": list(outcome.protected),
+            },
+        }
+    return {
+        "schema_version": SCHEMA_VERSIONS["refresh"],
+        "command": "refresh",
+        "mode": mode,
+        "database": database,
+        "summary": summary,
+        "expired_http_cache_rows": expired_http_cache_rows,
+        "upstream": upstream,
+        "changes": [_change(change) for change in changes],
+        "reconciliation": _reconciliation(reconciliation),
+    }
+
+
+#: The named verdicts ``eval`` returns 0 or 1 on. Each is a separate claim, and
+#: collapsing them into one boolean is what left the ``other``-retention half
+#: unchecked for as long as it was (#68).
+EVAL_VERDICTS: tuple[str, ...] = (
+    "hybrid_beats_popularity",
+    "multiworld_hybrid_beats_popularity",
+    "unknown_retention_all_lenses",
+    "other_retention_all_lenses",
+    "no_score_reduced_any_artist",
+)
+
+
+def eval_document(
+    *,
+    k: int,
+    verdicts: Mapping[str, bool],
+    regressed_vs_baseline: bool | None,
+    baseline_path: str,
+    unmeasured_guarantees: Sequence[Mapping[str, Any]],
+    written_to: str,
+    report: Mapping[str, Any],
+) -> dict[str, Any]:
+    """One ``eval`` run: the verdict first, the report body beside it.
+
+    ``eval`` already printed its report as JSON, and that is not the same thing
+    as having a document. The report says what the metrics were; only the exit
+    code said whether the run *passed*, and the reasons it did not lived in
+    ``FAIL:`` sentences on stderr. Both are here, named.
+
+    Two fields carry the honesty this command already practises in prose:
+
+    * ``regressed_vs_baseline`` is ``null`` when no baseline file was present.
+      ``false`` would report that nothing regressed, which is a claim about a
+      comparison nobody ran.
+    * ``unmeasured_guarantees`` lists every retention guarantee that passed
+      because its segment was empty. Those are printed as ``UNMEASURED:``
+      warnings today and are invisible to anything reading the exit code -- a
+      guarantee that had nothing to violate is not a guarantee that held.
+    """
+    missing = set(EVAL_VERDICTS) - set(verdicts)
+    if missing:
+        raise ValueError(f"eval verdicts missing: {sorted(missing)}")
+    passed = all(verdicts[name] for name in EVAL_VERDICTS) and not bool(regressed_vs_baseline)
+    return {
+        "schema_version": SCHEMA_VERSIONS["eval"],
+        "command": "eval",
+        "ok": True,
+        "k": k,
+        "passed": passed,
+        "verdicts": {name: bool(verdicts[name]) for name in EVAL_VERDICTS},
+        "regressed_vs_baseline": regressed_vs_baseline,
+        "baseline_path": baseline_path,
+        "baseline_present": regressed_vs_baseline is not None,
+        "unmeasured_guarantees": [dict(item) for item in unmeasured_guarantees],
+        "written_to": written_to,
+        "report": dict(report),
+    }
+
+
+def runs_document(
+    *,
+    action: str,
+    runs: Sequence[Mapping[str, Any]] | None = None,
+    unreadable: Sequence[Mapping[str, Any]] | None = None,
+    manifest: Mapping[str, Any] | None = None,
+    pruned: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """One ``runs`` invocation. ``action`` says which of the three it was.
+
+    ``unreadable`` is a first-class list beside ``runs``, not a silent omission
+    and not an error. The text listing already names an unreadable manifest and
+    keeps going, because one bad file must not hide every good one; a JSON
+    listing that dropped those rows would publish a shorter history as a
+    complete one.
+    """
+    if action not in ("list", "show", "prune"):
+        raise ValueError(f"unknown runs action: {action}")
+    return {
+        "schema_version": SCHEMA_VERSIONS["runs"],
+        "command": "runs",
+        "action": action,
+        "count": None if runs is None else len(runs),
+        "runs": None if runs is None else [dict(row) for row in runs],
+        "unreadable": None if unreadable is None else [dict(row) for row in unreadable],
+        "manifest": None if manifest is None else dict(manifest),
+        "pruned": None if pruned is None else dict(pruned),
     }
 
 
@@ -467,6 +751,159 @@ def _provenance_schema() -> dict[str, Any]:
     }
 
 
+def _query_schema() -> dict[str, Any]:
+    """The knobs a ranking run was asked for. Shared by ``recommend`` and ``report``."""
+    return {
+        "type": "object",
+        "required": [
+            "listener",
+            "k",
+            "lens_name",
+            "lens_strength",
+            "explore",
+            "hide_sourced_men",
+            "content_filter",
+        ],
+        "additionalProperties": False,
+        "properties": {
+            "listener": {"type": "string"},
+            "k": {"type": "integer", "minimum": 1},
+            "lens_name": {"type": "string"},
+            "lens_strength": {"type": "number", "minimum": 0, "maximum": 1},
+            "explore": {"type": "number", "minimum": 0, "maximum": 1},
+            "hide_sourced_men": {"type": "boolean"},
+            "content_filter": {"type": "string"},
+        },
+    }
+
+
+def _coverage_schema() -> dict[str, Any]:
+    """Identity coverage over one ranking. Shared by ``recommend`` and ``report``.
+
+    One definition rather than a copy per document: a second, drifting copy of a
+    shape whose whole job is to say a share may be ``null`` is exactly how the
+    ``0.0``-for-``null`` defect gets back in through the other surface.
+    """
+    return {
+        "type": "object",
+        "required": [
+            "total",
+            "sourced",
+            "self_identified",
+            "band_composition",
+            "unknown",
+            "women",
+            "nonbinary",
+            "men",
+            "other",
+            "sourced_share",
+            "unknown_share",
+            "summary",
+        ],
+        "additionalProperties": False,
+        "properties": {
+            "total": {"type": "integer", "minimum": 0},
+            "sourced": {"type": "integer", "minimum": 0},
+            "self_identified": {"type": "integer", "minimum": 0},
+            "band_composition": {"type": "integer", "minimum": 0},
+            "unknown": {"type": "integer", "minimum": 0},
+            "women": {"type": "integer", "minimum": 0},
+            "nonbinary": {"type": "integer", "minimum": 0},
+            "men": {"type": "integer", "minimum": 0},
+            "other": {"type": "integer", "minimum": 0},
+            "sourced_share": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "maximum": 1,
+                "description": (
+                    "null over an empty run. A zero would read as a "
+                    "measured share, and there is none to measure."
+                ),
+            },
+            "unknown_share": {
+                "type": ["number", "null"],
+                "minimum": 0,
+                "maximum": 1,
+            },
+            "summary": {"type": "string"},
+        },
+    }
+
+
+def _picks_schema() -> dict[str, Any]:
+    """One ranking's picks. Shared by ``recommend`` and ``report``.
+
+    This is where the no-inference guarantee is structural, so it has exactly
+    one definition: ``inferred`` is pinned to ``false`` and ``sourced_gender``
+    is drawn from the resolver's own enum, in which ``unknown`` is a value. A
+    per-document copy of this shape is a second place for a nullable gender to
+    appear, which is the failure the guarantee is written against.
+    """
+    return {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "required": ["rank", "artist_id", "artist_name", "score", "why", "identity"],
+            "additionalProperties": False,
+            "properties": {
+                "rank": {"type": "integer", "minimum": 1},
+                "artist_id": {"type": "string", "minLength": 1},
+                "artist_name": {"type": "string", "minLength": 1},
+                "score": {"type": "number"},
+                "why": {
+                    "type": "object",
+                    "required": ["headline", "reasons", "rank_shift"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "headline": {"type": "string", "minLength": 1},
+                        "reasons": {"type": "array", "items": {"type": "string"}},
+                        "rank_shift": {"type": "string"},
+                    },
+                },
+                "identity": {
+                    "type": "object",
+                    "required": [
+                        "basis",
+                        "sourced_gender",
+                        "statement",
+                        "inferred",
+                        "conflict_note",
+                        "provenance",
+                        "queer_provenance",
+                    ],
+                    "additionalProperties": False,
+                    "properties": {
+                        "basis": _enum(
+                            [basis.value for basis in IdentityBasis],
+                            "How the identity was established. Never 'inferred'.",
+                        ),
+                        "sourced_gender": _enum(
+                            [gender.value for gender in Gender],
+                            (
+                                "'unknown' is a value, not a gap: an artist "
+                                "with no sourced identity is first class here "
+                                "and is never down-ranked for it."
+                            ),
+                        ),
+                        "statement": {"type": "string", "minLength": 1},
+                        "inferred": {
+                            "type": "boolean",
+                            "const": False,
+                            "description": (
+                                "Pinned. Identity in this system is sourced or "
+                                "unknown; there is no third state."
+                            ),
+                        },
+                        "conflict_note": {"type": "string"},
+                        "provenance": _provenance_schema(),
+                        "queer_provenance": _provenance_schema(),
+                    },
+                },
+            },
+        },
+    }
+
+
 def recommend_schema() -> dict[str, Any]:
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -490,133 +927,429 @@ def recommend_schema() -> dict[str, Any]:
         "properties": {
             "schema_version": {"type": "integer", "const": SCHEMA_VERSIONS["recommend"]},
             "command": {"type": "string", "const": "recommend"},
-            "query": {
+            "query": _query_schema(),
+            "identity_coverage": _coverage_schema(),
+            "recommendations": _picks_schema(),
+        },
+    }
+
+
+def report_schema() -> dict[str, Any]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": f"{_SCHEMA_BASE}/report.schema.json",
+        "title": "lavender report --json",
+        "description": (
+            "The data behind the HTML discovery report, plus where the page was "
+            "written. The picks and the coverage block are the same shapes "
+            "'recommend' publishes, from the same builder, so a script cannot be "
+            "handed two different descriptions of one ranking. The HTML itself is "
+            "not embedded: it is a rendering of these picks, and carrying both "
+            "would let the two disagree."
+        ),
+        "type": "object",
+        "required": [
+            "schema_version",
+            "command",
+            "query",
+            "written_to",
+            "bytes_written",
+            "identity_coverage",
+            "recommendations",
+            "exposure_panel",
+        ],
+        "additionalProperties": False,
+        "properties": {
+            "schema_version": {"type": "integer", "const": SCHEMA_VERSIONS["report"]},
+            "command": {"type": "string", "const": "report"},
+            "query": _query_schema(),
+            "written_to": {"type": "string", "minLength": 1},
+            "bytes_written": {"type": "integer", "minimum": 0},
+            "identity_coverage": _coverage_schema(),
+            "recommendations": _picks_schema(),
+            "exposure_panel": {
                 "type": "object",
-                "required": [
-                    "listener",
-                    "k",
-                    "lens_name",
-                    "lens_strength",
-                    "explore",
-                    "hide_sourced_men",
-                    "content_filter",
-                ],
-                "additionalProperties": False,
-                "properties": {
-                    "listener": {"type": "string"},
-                    "k": {"type": "integer", "minimum": 1},
-                    "lens_name": {"type": "string"},
-                    "lens_strength": {"type": "number", "minimum": 0, "maximum": 1},
-                    "explore": {"type": "number", "minimum": 0, "maximum": 1},
-                    "hide_sourced_men": {"type": "boolean"},
-                    "content_filter": {"type": "string"},
-                },
+                "description": (
+                    "The fairness panel the page prints, verbatim from "
+                    "app.observability. Its retention and rank-shift maps are "
+                    "keyed by lens strength and by segment, which come from the "
+                    "run rather than from this schema, so 'object' is the honest "
+                    "bound here. tests/test_jsonout.py carries the constraint "
+                    "this cannot: every share and every retention value is a "
+                    "number or null, never a zero standing in for an empty top-k."
+                ),
             },
-            "identity_coverage": {
+        },
+    }
+
+
+def feedback_schema() -> dict[str, Any]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": f"{_SCHEMA_BASE}/feedback.schema.json",
+        "title": "lavender feedback --json",
+        "description": (
+            "One thumbs vote, recorded. 'vote' is the word rather than the "
+            "signed integer the cache stores, so a consumer is not pinned to an "
+            "internal representation."
+        ),
+        "type": "object",
+        "required": [
+            "schema_version",
+            "command",
+            "database",
+            "listener",
+            "artist_id",
+            "vote",
+            "recorded_at",
+        ],
+        "additionalProperties": False,
+        "properties": {
+            "schema_version": {"type": "integer", "const": SCHEMA_VERSIONS["feedback"]},
+            "command": {"type": "string", "const": "feedback"},
+            "database": {"type": "string", "minLength": 1},
+            "listener": {"type": "string", "minLength": 1},
+            "artist_id": {"type": "string", "minLength": 1},
+            "vote": _enum(["up", "down"], "Which way the listener voted."),
+            "recorded_at": {"type": "string", "minLength": 1},
+        },
+    }
+
+
+def _identity_change_schema(description: str) -> dict[str, Any]:
+    return {
+        "type": "array",
+        "description": description,
+        "items": {
+            "type": "object",
+            "required": ["artist_id", "source_kind", "old_value", "new_value", "retrieved_at"],
+            "additionalProperties": False,
+            "properties": {
+                "artist_id": {"type": "string", "minLength": 1},
+                "source_kind": {"type": "string"},
+                "old_value": {"type": "string"},
+                "new_value": {"type": "string"},
+                "retrieved_at": {"type": "string"},
+            },
+        },
+    }
+
+
+def refresh_schema() -> dict[str, Any]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": f"{_SCHEMA_BASE}/refresh.schema.json",
+        "title": "lavender refresh --json",
+        "description": (
+            "One refresh run. 'mode' says whether upstream was actually asked. "
+            "Every count under 'upstream' is null in demo mode rather than zero, "
+            "because a zero is a measurement of an upstream this run never "
+            "contacted -- and 'upstream.answered' is positive proof that a "
+            "citation came back over the wire, not the absence of a failure."
+        ),
+        "type": "object",
+        "required": [
+            "schema_version",
+            "command",
+            "mode",
+            "database",
+            "summary",
+            "expired_http_cache_rows",
+            "upstream",
+            "changes",
+            "reconciliation",
+        ],
+        "additionalProperties": False,
+        "properties": {
+            "schema_version": {"type": "integer", "const": SCHEMA_VERSIONS["refresh"]},
+            "command": {"type": "string", "const": "refresh"},
+            "mode": _enum(
+                ["live", "demo"],
+                (
+                    "'demo' rewrites the fixture catalog and queries no upstream "
+                    "identity source at all."
+                ),
+            ),
+            "database": {"type": "string", "minLength": 1},
+            "summary": {"type": "string", "minLength": 1},
+            "expired_http_cache_rows": {"type": "integer", "minimum": 0},
+            "upstream": {
                 "type": "object",
                 "required": [
-                    "total",
-                    "sourced",
-                    "self_identified",
-                    "band_composition",
-                    "unknown",
-                    "women",
-                    "nonbinary",
-                    "men",
-                    "other",
-                    "sourced_share",
-                    "unknown_share",
-                    "summary",
+                    "queried",
+                    "answered",
+                    "attempted",
+                    "verified",
+                    "unverified",
+                    "failed",
+                    "protected",
                 ],
                 "additionalProperties": False,
                 "properties": {
-                    "total": {"type": "integer", "minimum": 0},
-                    "sourced": {"type": "integer", "minimum": 0},
-                    "self_identified": {"type": "integer", "minimum": 0},
-                    "band_composition": {"type": "integer", "minimum": 0},
-                    "unknown": {"type": "integer", "minimum": 0},
-                    "women": {"type": "integer", "minimum": 0},
-                    "nonbinary": {"type": "integer", "minimum": 0},
-                    "men": {"type": "integer", "minimum": 0},
-                    "other": {"type": "integer", "minimum": 0},
-                    "sourced_share": {
-                        "type": ["number", "null"],
-                        "minimum": 0,
-                        "maximum": 1,
+                    "queried": {"type": "boolean"},
+                    "answered": {
+                        "type": ["boolean", "null"],
                         "description": (
-                            "null over an empty run. A zero would read as a "
-                            "measured share, and there is none to measure."
+                            "True only when at least one citation came back over "
+                            "the wire. null when nothing was asked: 'we did not "
+                            "look' is not 'nothing had changed'."
                         ),
                     },
-                    "unknown_share": {
-                        "type": ["number", "null"],
-                        "minimum": 0,
-                        "maximum": 1,
-                    },
-                    "summary": {"type": "string"},
-                },
-            },
-            "recommendations": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "required": ["rank", "artist_id", "artist_name", "score", "why", "identity"],
-                    "additionalProperties": False,
-                    "properties": {
-                        "rank": {"type": "integer", "minimum": 1},
-                        "artist_id": {"type": "string", "minLength": 1},
-                        "artist_name": {"type": "string", "minLength": 1},
-                        "score": {"type": "number"},
-                        "why": {
-                            "type": "object",
-                            "required": ["headline", "reasons", "rank_shift"],
-                            "additionalProperties": False,
-                            "properties": {
-                                "headline": {"type": "string", "minLength": 1},
-                                "reasons": {"type": "array", "items": {"type": "string"}},
-                                "rank_shift": {"type": "string"},
+                    "attempted": {"type": ["integer", "null"], "minimum": 0},
+                    "verified": {"type": ["integer", "null"], "minimum": 0},
+                    "unverified": {"type": ["integer", "null"], "minimum": 0},
+                    "failed": {"type": ["integer", "null"], "minimum": 0},
+                    "protected": {
+                        "type": ["object", "null"],
+                        "description": (
+                            "Artists whose existing citation was kept because "
+                            "upstream said nothing about it. The console prints a "
+                            "preview; this list is complete, and 'count' is beside "
+                            "it so a truncating consumer cannot mistake one for "
+                            "the other."
+                        ),
+                        "required": ["count", "artist_ids"],
+                        "additionalProperties": False,
+                        "properties": {
+                            "count": {"type": "integer", "minimum": 0},
+                            "artist_ids": {
+                                "type": "array",
+                                "items": {"type": "string", "minLength": 1},
                             },
                         },
-                        "identity": {
+                    },
+                },
+            },
+            "changes": _identity_change_schema(
+                "Cited source values that moved on this run, one entry per source."
+            ),
+            "reconciliation": {
+                "type": "object",
+                "required": ["upstream_queried", "reconciled", "superseded", "still_open"],
+                "additionalProperties": False,
+                "properties": {
+                    "upstream_queried": {
+                        "type": "boolean",
+                        "description": (
+                            "False means no upstream edit could have landed, so "
+                            "an empty 'reconciled' list says nothing about the "
+                            "filed corrections."
+                        ),
+                    },
+                    "reconciled": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["artist_id", "source_kind", "proposed_value"],
+                            "additionalProperties": False,
+                            "properties": {
+                                "artist_id": {"type": "string", "minLength": 1},
+                                "source_kind": {"type": "string"},
+                                "proposed_value": {"type": "string"},
+                            },
+                        },
+                    },
+                    "superseded": {
+                        "type": "array",
+                        "items": {
                             "type": "object",
                             "required": [
-                                "basis",
-                                "sourced_gender",
-                                "statement",
-                                "inferred",
-                                "conflict_note",
-                                "provenance",
-                                "queer_provenance",
+                                "artist_id",
+                                "source_kind",
+                                "proposed_value",
+                                "superseded_by_value",
                             ],
                             "additionalProperties": False,
                             "properties": {
-                                "basis": _enum(
-                                    [basis.value for basis in IdentityBasis],
-                                    "How the identity was established. Never 'inferred'.",
-                                ),
-                                "sourced_gender": _enum(
-                                    [gender.value for gender in Gender],
-                                    (
-                                        "'unknown' is a value, not a gap: an artist "
-                                        "with no sourced identity is first class here "
-                                        "and is never down-ranked for it."
-                                    ),
-                                ),
-                                "statement": {"type": "string", "minLength": 1},
-                                "inferred": {
-                                    "type": "boolean",
-                                    "const": False,
-                                    "description": (
-                                        "Pinned. Identity in this system is sourced or "
-                                        "unknown; there is no third state."
-                                    ),
-                                },
-                                "conflict_note": {"type": "string"},
-                                "provenance": _provenance_schema(),
-                                "queer_provenance": _provenance_schema(),
+                                "artist_id": {"type": "string", "minLength": 1},
+                                "source_kind": {"type": "string"},
+                                "proposed_value": {"type": "string"},
+                                "superseded_by_value": {"type": ["string", "null"]},
                             },
                         },
                     },
+                    "still_open": {"type": "integer", "minimum": 0},
+                },
+            },
+        },
+    }
+
+
+def eval_schema() -> dict[str, Any]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": f"{_SCHEMA_BASE}/eval.schema.json",
+        "title": "lavender eval --json",
+        "description": (
+            "One offline eval run: the verdict, then the report it was read "
+            "from. Each gate is named separately rather than collapsed into "
+            "'passed', and 'unmeasured_guarantees' lists every retention "
+            "guarantee that held only because its segment was empty -- a "
+            "guarantee with nothing to violate is not a guarantee that held."
+        ),
+        "type": "object",
+        "required": [
+            "schema_version",
+            "command",
+            "ok",
+            "k",
+            "passed",
+            "verdicts",
+            "regressed_vs_baseline",
+            "baseline_path",
+            "baseline_present",
+            "unmeasured_guarantees",
+            "written_to",
+            "report",
+        ],
+        "additionalProperties": False,
+        "properties": {
+            "schema_version": {"type": "integer", "const": SCHEMA_VERSIONS["eval"]},
+            "command": {"type": "string", "const": "eval"},
+            "ok": {
+                "type": "boolean",
+                "const": True,
+                "description": (
+                    "The command ran. A failing gate is a result, not a refusal: "
+                    "read 'passed'. Only a refused run emits the error document."
+                ),
+            },
+            "k": {"type": "integer", "minimum": 1},
+            "passed": {"type": "boolean"},
+            "verdicts": {
+                "type": "object",
+                "required": list(EVAL_VERDICTS),
+                "additionalProperties": False,
+                "properties": {name: {"type": "boolean"} for name in EVAL_VERDICTS},
+            },
+            "regressed_vs_baseline": {
+                "type": ["boolean", "null"],
+                "description": (
+                    "null when no baseline file was present. false would report "
+                    "that nothing regressed, which is a claim about a comparison "
+                    "nobody ran."
+                ),
+            },
+            "baseline_path": {"type": "string", "minLength": 1},
+            "baseline_present": {"type": "boolean"},
+            "unmeasured_guarantees": {
+                "type": "array",
+                "description": (
+                    "A retention guarantee whose segment never appeared in pure "
+                    "taste's top-k passed without testing anything. Printed as an "
+                    "UNMEASURED warning on stderr today, and invisible to anything "
+                    "reading the exit code."
+                ),
+                "items": {
+                    "type": "object",
+                    "required": ["guarantee", "base_count", "note"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "guarantee": {"type": "string", "minLength": 1},
+                        "base_count": {"type": "integer", "minimum": 0},
+                        "note": {"type": "string", "minLength": 1},
+                    },
+                },
+            },
+            "written_to": {"type": "string", "minLength": 1},
+            "report": {
+                "type": "object",
+                "description": (
+                    "The eval report, verbatim -- the same object the command "
+                    "already wrote to --out. Its inner keys come from the metric "
+                    "set and the fixture worlds rather than from this schema, so "
+                    "'object' is the honest bound; the envelope above is the part "
+                    "this document contracts."
+                ),
+            },
+        },
+    }
+
+
+def runs_schema() -> dict[str, Any]:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": f"{_SCHEMA_BASE}/runs.schema.json",
+        "title": "lavender runs --json",
+        "description": (
+            "One 'runs' invocation. 'action' says which of the three it was, and "
+            "every field the other two do not fill is null rather than empty. "
+            "'unreadable' is a first-class list beside 'runs': a listing that "
+            "silently dropped a manifest it could not parse would publish a "
+            "shorter history as a complete one."
+        ),
+        "type": "object",
+        "required": [
+            "schema_version",
+            "command",
+            "action",
+            "count",
+            "runs",
+            "unreadable",
+            "manifest",
+            "pruned",
+        ],
+        "additionalProperties": False,
+        "properties": {
+            "schema_version": {"type": "integer", "const": SCHEMA_VERSIONS["runs"]},
+            "command": {"type": "string", "const": "runs"},
+            "action": _enum(["list", "show", "prune"], "Which of the three verbs ran."),
+            "count": {
+                "type": ["integer", "null"],
+                "minimum": 0,
+                "description": "Readable manifests listed; null when this run did not list.",
+            },
+            "runs": {
+                "type": ["array", "null"],
+                "items": {
+                    "type": "object",
+                    "required": [
+                        "run_id",
+                        "surface",
+                        "created_at",
+                        "lens_name",
+                        "lens_strength",
+                        "k",
+                        "listener_digest",
+                    ],
+                    "additionalProperties": False,
+                    "properties": {
+                        "run_id": {"type": "string", "minLength": 1},
+                        "surface": {"type": "string", "minLength": 1},
+                        "created_at": {"type": "string", "minLength": 1},
+                        "lens_name": {"type": "string"},
+                        "lens_strength": {"type": "number"},
+                        "k": {"type": "integer", "minimum": 1},
+                        "listener_digest": {"type": "string"},
+                    },
+                },
+            },
+            "unreadable": {
+                "type": ["array", "null"],
+                "items": {
+                    "type": "object",
+                    "required": ["name", "error"],
+                    "additionalProperties": False,
+                    "properties": {
+                        "name": {"type": "string", "minLength": 1},
+                        "error": {"type": "string", "minLength": 1},
+                    },
+                },
+            },
+            "manifest": {
+                "type": ["object", "null"],
+                "description": (
+                    "One run manifest, verbatim from pipeline.runs, which carries "
+                    "its own schema_version. null unless the action was 'show'."
+                ),
+            },
+            "pruned": {
+                "type": ["object", "null"],
+                "required": ["removed", "kept"],
+                "additionalProperties": False,
+                "properties": {
+                    "removed": {"type": "integer", "minimum": 0},
+                    "kept": {"type": "integer", "minimum": 0},
                 },
             },
         },
@@ -1092,6 +1825,11 @@ def diff_schema() -> dict[str, Any]:
 
 SCHEMAS: dict[str, Callable[[], dict[str, Any]]] = {
     "recommend.schema.json": recommend_schema,
+    "report.schema.json": report_schema,
+    "feedback.schema.json": feedback_schema,
+    "refresh.schema.json": refresh_schema,
+    "eval.schema.json": eval_schema,
+    "runs.schema.json": runs_schema,
     "export.schema.json": export_schema,
     "doctor.schema.json": doctor_schema,
     "corrections.schema.json": corrections_schema,

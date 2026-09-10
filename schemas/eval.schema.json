@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ChelseaKR/lavender-rotation/blob/main/schemas/eval.schema.json",
+  "title": "lavender eval --json",
+  "description": "One offline eval run: the verdict, then the report it was read from. Each gate is named separately rather than collapsed into 'passed', and 'unmeasured_guarantees' lists every retention guarantee that held only because its segment was empty -- a guarantee with nothing to violate is not a guarantee that held.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "ok",
+    "k",
+    "passed",
+    "verdicts",
+    "regressed_vs_baseline",
+    "baseline_path",
+    "baseline_present",
+    "unmeasured_guarantees",
+    "written_to",
+    "report"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "command": {
+      "type": "string",
+      "const": "eval"
+    },
+    "ok": {
+      "type": "boolean",
+      "const": true,
+      "description": "The command ran. A failing gate is a result, not a refusal: read 'passed'. Only a refused run emits the error document."
+    },
+    "k": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "passed": {
+      "type": "boolean"
+    },
+    "verdicts": {
+      "type": "object",
+      "required": [
+        "hybrid_beats_popularity",
+        "multiworld_hybrid_beats_popularity",
+        "unknown_retention_all_lenses",
+        "other_retention_all_lenses",
+        "no_score_reduced_any_artist"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "hybrid_beats_popularity": {
+          "type": "boolean"
+        },
+        "multiworld_hybrid_beats_popularity": {
+          "type": "boolean"
+        },
+        "unknown_retention_all_lenses": {
+          "type": "boolean"
+        },
+        "other_retention_all_lenses": {
+          "type": "boolean"
+        },
+        "no_score_reduced_any_artist": {
+          "type": "boolean"
+        }
+      }
+    },
+    "regressed_vs_baseline": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "null when no baseline file was present. false would report that nothing regressed, which is a claim about a comparison nobody ran."
+    },
+    "baseline_path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "baseline_present": {
+      "type": "boolean"
+    },
+    "unmeasured_guarantees": {
+      "type": "array",
+      "description": "A retention guarantee whose segment never appeared in pure taste's top-k passed without testing anything. Printed as an UNMEASURED warning on stderr today, and invisible to anything reading the exit code.",
+      "items": {
+        "type": "object",
+        "required": [
+          "guarantee",
+          "base_count",
+          "note"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "guarantee": {
+            "type": "string",
+            "minLength": 1
+          },
+          "base_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "written_to": {
+      "type": "string",
+      "minLength": 1
+    },
+    "report": {
+      "type": "object",
+      "description": "The eval report, verbatim -- the same object the command already wrote to --out. Its inner keys come from the metric set and the fixture worlds rather than from this schema, so 'object' is the honest bound; the envelope above is the part this document contracts."
+    }
+  }
+}

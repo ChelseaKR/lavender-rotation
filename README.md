@@ -45,18 +45,34 @@ recommendation surface also takes `--explore` (0 to 1), an identity-blind serend
 slider that trades relevance for tag-space diversity among the movable picks; it is 0 by
 default, and it never moves a rank-protected one.
 
-**Machine-readable output.** `recommend`, `export`, `doctor`, `corrections` and
-`pending-corrections` each take `--json` and emit one versioned document described
-by a committed schema under [`schemas/`](schemas/). The point is not convenience:
-it makes several of this project's guarantees checkable by someone who does not
-trust it.
+**Machine-readable output.** Every user-facing command — `recommend`, `report`,
+`export`, `feedback`, `doctor`, `refresh`, `corrections`, `pending-corrections`,
+`eval`, `runs` and `diff` — takes `--json` and emits one versioned document
+described by a committed schema under [`schemas/`](schemas/). The point is not
+convenience: it makes several of this project's guarantees checkable by someone
+who does not trust it.
 
 ```sh
 lavender recommend --json | jq '.recommendations[].identity | {basis, sourced_gender, inferred}'
 lavender doctor --json    | jq '.egress_allowlist'
 lavender corrections --json | jq '.corrections[] | {artist_id, citation}'
+lavender refresh --json   | jq '.upstream'          # null counts, not zeroes, in demo mode
+lavender eval --json      | jq '{passed, regressed_vs_baseline, unmeasured_guarantees}'
 ```
 
+- **A count nobody measured is `null`, not `0`.** `refresh --json` in demo mode
+  queries no upstream, so `upstream.attempted`, `.answered` and the rest come
+  back `null`: `attempted: 0` beside `answered: false` is what a *live* run that
+  reached nothing looks like, and the two must not be confusable. `eval --json`
+  reports `regressed_vs_baseline: null` when no baseline file was present,
+  because `false` would claim a comparison nobody ran.
+- **`eval --json` publishes the guarantees that passed over an empty segment.**
+  A retention guarantee whose segment never appeared in pure taste's top-k had
+  nothing to violate. Those are `UNMEASURED:` sentences on stderr otherwise, and
+  invisible to anything reading the exit code.
+- **`runs --json` keeps an unreadable manifest out of the run list.** It is in
+  `unreadable` instead: folding it into `runs` would publish it as a run that
+  happened, and dropping it would report a smaller population as a complete one.
 - **Identity is never inferred, structurally.** The `recommend` schema pins
   `inferred` to `false` and has no slot for a guessed value; a pick whose basis
   is `unknown` carries no provenance, and a sourced gender without provenance is
@@ -180,7 +196,7 @@ These are hard rules, each enforced by a merge-blocking test (see
 ## Project status
 
 The offline demo and full pipeline are implemented and gated: `make verify` runs
-formatting/lint/SAST, strict typing, 1287 tests at 96% coverage, dependency and
+formatting/lint/SAST, strict typing, 1298 tests at 96% coverage, dependency and
 secret scans, axe/pa11y renders plus browser-driven keyboard/reflow/reduced-motion
 specs (Playwright, required in CI), offline multiworld evaluation with
 regression/fairness gates, and the i18n declaration gate. CodeQL, zizmor, OSV,

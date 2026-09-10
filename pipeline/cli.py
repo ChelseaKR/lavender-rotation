@@ -19,7 +19,7 @@ import json
 import math
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import cast
@@ -36,6 +36,7 @@ from recommender.content_filters import (
 )
 from recommender.coverage import identity_coverage
 from recommender.eval import (
+    EvalResult,
     check_regression,
     eval_real,
     evaluate,
@@ -81,10 +82,15 @@ from pipeline.jsonout import (
     doctor_document,
     emit,
     error_document,
+    eval_document,
     export_document,
+    feedback_document,
     pending_correction_filed_document,
     pending_corrections_document,
     recommend_document,
+    refresh_document,
+    report_document,
+    runs_document,
 )
 from pipeline.lastfm import CachedLastfm, LastfmClient, ScrobbleSource
 from pipeline.logconfig import LOG_FORMATS, configure_logging
@@ -350,7 +356,9 @@ def _load_eval_baseline(path: Path) -> tuple[dict[str, float], float]:
     return metrics, tolerance
 
 
-def _warn_unmeasured_guarantees(guarantees: dict[str, object], *, k: int) -> None:
+def _warn_unmeasured_guarantees(
+    guarantees: dict[str, object], *, k: int, quiet: bool = False
+) -> list[dict[str, object]]:
     """Say loudly when a retention guarantee passed over an empty segment.
 
     A guarantee whose segment never appeared in pure taste's top-k had nothing to
@@ -361,18 +369,73 @@ def _warn_unmeasured_guarantees(guarantees: dict[str, object], *, k: int) -> Non
     stopped scoring 1.0 it was indistinguishable from a real pass.
     """
 
+    unmeasured: list[dict[str, object]] = []
     for label, measured_key, count_key in (
         ("unknown-identity", "unknown_retention_measured", "unknown_base_count"),
         ("sourced-Gender.OTHER", "other_retention_measured", "other_base_count"),
     ):
         if not bool(guarantees[measured_key]):
-            print(  # noqa: T201
-                f"UNMEASURED: no {label} artist was in pure taste's top-{k}, so the "
-                f"{label} retention guarantee passed without testing anything "
-                f"({count_key}={guarantees[count_key]}). The eval world needs such an "
-                "artist for this guarantee to mean anything.",
-                file=sys.stderr,
+            note = (
+                f"no {label} artist was in pure taste's top-{k}, so the {label} "
+                "retention guarantee passed without testing anything. The eval "
+                "world needs such an artist for this guarantee to mean anything."
             )
+            unmeasured.append(
+                {
+                    "guarantee": label,
+                    "base_count": int(cast("int", guarantees[count_key])),
+                    "note": note,
+                }
+            )
+            if not quiet:
+                print(f"UNMEASURED: {note} ({count_key}={guarantees[count_key]})", file=sys.stderr)  # noqa: T201
+    return unmeasured
+
+
+def _eval_regression(
+    results: Mapping[str, EvalResult],
+    report: dict[str, object],
+    baseline_path: Path,
+) -> dict[str, object] | None:
+    """Compare this run against the committed baseline, or say there was none.
+
+    Returns ``None`` when no baseline file exists, which is what keeps
+    ``regressed_vs_baseline`` honest downstream: a first run on a fresh clone
+    has not shown that nothing regressed, it has shown that nothing was
+    compared.
+    """
+    if not baseline_path.is_file():
+        print(f"no baseline at {baseline_path} — skipping regression check", file=sys.stderr)  # noqa: T201
+        return None
+    baseline_metrics, tolerance = _load_eval_baseline(baseline_path)
+    regression = check_regression(results["hybrid"], baseline_metrics, tolerance=tolerance)
+    report["regression_vs_baseline"] = regression
+    return regression
+
+
+def _emit_eval_document(
+    *,
+    k: int,
+    verdicts: Mapping[str, bool],
+    regression: Mapping[str, object] | None,
+    baseline_path: Path,
+    unmeasured: Sequence[Mapping[str, object]],
+    out: Path,
+    report: Mapping[str, object],
+) -> int:
+    document = eval_document(
+        k=k,
+        verdicts=verdicts,
+        # `None` rather than `False` when no baseline file was present:
+        # "nothing regressed" is a claim about a comparison nobody ran.
+        regressed_vs_baseline=None if regression is None else bool(regression["regressed"]),
+        baseline_path=str(baseline_path),
+        unmeasured_guarantees=unmeasured,
+        written_to=str(out),
+        report=report,
+    )
+    print(emit(document), end="")  # noqa: T201
+    return 0 if document["passed"] else 1
 
 
 def _cmd_eval(args: argparse.Namespace) -> int:
@@ -390,26 +453,20 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     # fresh clone (or before docs/audits/eval-baseline.json is ever created)
     # must still pass.
     baseline_path = Path(args.baseline)
-    regression: dict[str, object] | None = None
-    if baseline_path.is_file():
-        try:
-            baseline_metrics, tolerance = _load_eval_baseline(baseline_path)
-        except ValueError as exc:
-            print(f"invalid eval baseline: {exc}", file=sys.stderr)  # noqa: T201
-            return 2
-        regression = check_regression(
-            results["hybrid"],
-            baseline_metrics,
-            tolerance=tolerance,
-        )
-        report["regression_vs_baseline"] = regression
-    else:
-        print(f"no baseline at {baseline_path} — skipping regression check", file=sys.stderr)  # noqa: T201
+    try:
+        regression = _eval_regression(results, report, baseline_path)
+    except ValueError as exc:
+        print(f"invalid eval baseline: {exc}", file=sys.stderr)  # noqa: T201
+        return 2
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print(json.dumps(report, indent=2))  # noqa: T201
+    as_json = bool(getattr(args, "json", False))
+    if not as_json:
+        # Under `--json` the report is the document's `report` key, so printing
+        # it here as well would put two JSON documents on one stream.
+        print(json.dumps(report, indent=2))  # noqa: T201
 
     beat_baseline = bool(report["hybrid_beats_popularity"])
     guarantees = cast("dict[str, object]", fairness["guarantees"])
@@ -419,8 +476,24 @@ def _cmd_eval(args: argparse.Namespace) -> int:
     # both and only the unknown half was ever checked.
     other_retained = bool(guarantees["other_retention_all_lenses"])
     no_score_reduced = bool(guarantees["no_score_reduced_any_artist"])
-    _warn_unmeasured_guarantees(guarantees, k=args.k)
+    unmeasured = _warn_unmeasured_guarantees(guarantees, k=args.k, quiet=as_json)
     regressed = bool(regression is not None and regression["regressed"])
+    if as_json:
+        return _emit_eval_document(
+            k=args.k,
+            verdicts={
+                "hybrid_beats_popularity": beat_baseline,
+                "multiworld_hybrid_beats_popularity": bool(multiworld["hybrid_beats_popularity"]),
+                "unknown_retention_all_lenses": unknown_retained,
+                "other_retention_all_lenses": other_retained,
+                "no_score_reduced_any_artist": no_score_reduced,
+            },
+            regression=regression,
+            baseline_path=baseline_path,
+            unmeasured=unmeasured,
+            out=out,
+            report=report,
+        )
     if not beat_baseline:
         print("FAIL: hybrid did not beat the popularity baseline", file=sys.stderr)  # noqa: T201
     if not unknown_retained:
@@ -472,6 +545,69 @@ def _cmd_eval_real(args: argparse.Namespace) -> int:
     return 0
 
 
+def _say_protected(
+    outcome: object,
+    names: Mapping[str, str],
+    say: Callable[..., None],
+) -> None:
+    """Report the citations kept because upstream said nothing.
+
+    The preview is truncated and the real total is printed beside it. A
+    truncated list that looks complete is the same lie this command exists to
+    stop telling.
+    """
+    protected = list(getattr(outcome, "protected", ()))
+    if not protected:
+        return
+    say(
+        "kept an existing citation where upstream returned nothing — an unreachable "
+        "source and a retracted claim are indistinguishable here, so neither is "
+        "applied automatically. Review and use `lavender corrections add` to drop one:"
+    )
+    for artist_id in protected[:_PROTECTED_PREVIEW]:
+        say(f"  {names.get(artist_id, artist_id)} ({artist_id})")
+    remaining = len(protected) - _PROTECTED_PREVIEW
+    if remaining > 0:
+        say(f"  … and {remaining} more (listed {_PROTECTED_PREVIEW} of {len(protected)})")
+
+
+def _emit_refresh(
+    *,
+    mode: str,
+    database: str,
+    summary: str,
+    expired: int,
+    changes: Sequence[object],
+    reconciliation: object,
+    outcome: object | None,
+) -> None:
+    """One `refresh` document, from either branch.
+
+    `outcome=None` is the demo branch, which queries no upstream: every count
+    of what answered comes out null rather than zero, because a demo run
+    reporting `attempted: 0` beside `answered: false` would be
+    indistinguishable from a live run that reached nothing.
+    """
+    print(  # noqa: T201
+        emit(
+            refresh_document(
+                mode=mode,
+                database=database,
+                summary=summary,
+                expired_http_cache_rows=expired,
+                changes=changes,
+                reconciliation=reconciliation,
+                outcome=outcome,
+            )
+        ),
+        end="",
+    )
+
+
+def _silent(*_args: object, **_kwargs: object) -> None:
+    """Swallow a report line. Used where `--json` owns stdout."""
+
+
 def _cmd_refresh_live(args: argparse.Namespace) -> int:
     """LIVE: re-ask upstream about artists already in the cache, and fold in corrections.
 
@@ -487,6 +623,11 @@ def _cmd_refresh_live(args: argparse.Namespace) -> int:
     """
     from datetime import date
 
+    as_json = bool(getattr(args, "json", False))
+    # Under `--json` the run emits one document and nothing else on stdout.
+    # Diagnostics on stderr are untouched: a caller parsing the document still
+    # wants to be told the network was unreachable.
+    say = _silent if as_json else print
     today = date.today().isoformat()
     try:
         api_key = _require_api_key()
@@ -510,8 +651,8 @@ def _cmd_refresh_live(args: argparse.Namespace) -> int:
         # quietly strip the cached similarity graph `lavender recommend --user`
         # reads, and a thinner recommendation list is not a visible failure.
         expired = cache.expire_http_cache(ttl_days=args.ttl_days, now=today)
-        print(f"expired {expired} stale http-cache row(s)")  # noqa: T201
-        print(f"re-asking upstream about {len(targets)} cached artist(s) …", flush=True)  # noqa: T201
+        say(f"expired {expired} stale http-cache row(s)")
+        say(f"re-asking upstream about {len(targets)} cached artist(s) …", flush=True)
         source = LastfmClient(api_key, cache)
         enricher = _live_enricher(cache, retrieved_at=today, ttl_days=args.ttl_days)
         outcome = refresh_catalog(
@@ -527,28 +668,13 @@ def _cmd_refresh_live(args: argparse.Namespace) -> int:
             artist_id: (artist.name if (artist := cache.get_artist(artist_id)) else artist_id)
             for artist_id in outcome.protected[:_PROTECTED_PREVIEW]
         }
-    print(outcome.summary_line())  # noqa: T201
+    say(outcome.summary_line())
     for change in outcome.changes:
-        print(  # noqa: T201
+        say(
             f"{names.get(change.artist_id, change.artist_id)}: {change.source_kind} "
             f"{change.old_value} -> {change.new_value} (retrieved {change.retrieved_at})"
         )
-    if outcome.protected:
-        print(  # noqa: T201
-            "kept an existing citation where upstream returned nothing — an unreachable "
-            "source and a retracted claim are indistinguishable here, so neither is "
-            "applied automatically. Review and use `lavender corrections add` to drop one:"
-        )
-        for artist_id in outcome.protected[:_PROTECTED_PREVIEW]:
-            print(f"  {names.get(artist_id, artist_id)} ({artist_id})")  # noqa: T201
-        remaining = len(outcome.protected) - _PROTECTED_PREVIEW
-        if remaining > 0:
-            # Say the real total. A truncated list that looks complete is the
-            # same lie this command exists to stop telling.
-            print(  # noqa: T201
-                f"  … and {remaining} more (listed {_PROTECTED_PREVIEW} of "
-                f"{len(outcome.protected)})"
-            )
+    _say_protected(outcome, names, say)
     pending_path = getattr(args, "pending_corrections", None) or pending_corrections.default_path(
         args.db
     )
@@ -564,8 +690,21 @@ def _cmd_refresh_live(args: argparse.Namespace) -> int:
         observed_at=today,
     )
     for line in reconcile_outcome.report_lines():
-        print(line)  # noqa: T201
-    if not outcome.upstream_answered and outcome.attempted:
+        say(line)
+    unreachable = bool(not outcome.upstream_answered and outcome.attempted)
+    if as_json:
+        _emit_refresh(
+            mode="live",
+            database=str(args.db),
+            summary=outcome.summary_line(),
+            expired=expired,
+            changes=outcome.changes,
+            reconciliation=reconcile_outcome,
+            outcome=outcome,
+        )
+    if unreachable:
+        # stderr, and never silenced by `--json`: a caller parsing the
+        # document still has to be told the network was unreachable.
         print(  # noqa: T201
             "error: nothing was verified against upstream — check the network and re-run",
             file=sys.stderr,
@@ -578,6 +717,11 @@ def _cmd_refresh(args: argparse.Namespace) -> int:
     """Exercise cache refresh with demo fixtures; no upstream enricher is wired."""
     from datetime import date
 
+    as_json = bool(getattr(args, "json", False))
+    # Under `--json` the run emits one document and nothing else on stdout.
+    # Diagnostics on stderr are untouched: a caller parsing the document still
+    # wants to be told the network was unreachable.
+    say = _silent if as_json else print
     if getattr(args, "user", None):
         return _cmd_refresh_live(args)
 
@@ -591,7 +735,7 @@ def _cmd_refresh(args: argparse.Namespace) -> int:
     with Cache(args.db) as cache:
         expired = cache.expire_http_cache(ttl_days=args.ttl_days, now=today)
         changes = refresh_catalog(cache, catalog, fetched_at=today)
-    print("DEMO ONLY: rewrote fixture catalog; no upstream identity API was queried")  # noqa: T201
+    say("DEMO ONLY: rewrote fixture catalog; no upstream identity API was queried")
     source_changes = [
         source_change
         for change in changes
@@ -612,7 +756,7 @@ def _cmd_refresh(args: argparse.Namespace) -> int:
     )
     if changes:
         for change in changes:
-            print(  # noqa: T201
+            say(
                 # --- Reviewed suppression: py/clear-text-logging-sensitive-data ---
                 # CodeQL flags the expression below because the attribute is
                 # literally named ``gender``, which its sensitive-data heuristic
@@ -643,10 +787,24 @@ def _cmd_refresh(args: argparse.Namespace) -> int:
                 f"(sources: {len(change.old.sources)} -> {len(change.new.sources)})"
             )
     else:
-        print("no identity-label changes")  # noqa: T201
-    print(f"expired {expired} stale http-cache row(s)")  # noqa: T201
+        say("no identity-label changes")
+    say(f"expired {expired} stale http-cache row(s)")
     for line in outcome.report_lines():
-        print(line)  # noqa: T201
+        say(line)
+    if as_json:
+        # `outcome=None`: this branch queries no upstream, so every count of
+        # what answered is null rather than zero. A demo run reporting
+        # `attempted: 0` beside `answered: false` would be indistinguishable
+        # from a live run that reached nothing.
+        _emit_refresh(
+            mode="demo",
+            database=str(args.db),
+            summary="DEMO ONLY: rewrote fixture catalog; no upstream identity API was queried",
+            expired=expired,
+            changes=source_changes,
+            reconciliation=outcome,
+            outcome=None,
+        )
     return 0
 
 
@@ -1090,38 +1248,88 @@ def _record_run(
         print(f"warning: could not record this run: {exc}", file=sys.stderr)  # noqa: T201
 
 
-def _cmd_runs(args: argparse.Namespace) -> int:
-    if args.runs_action == "prune":
-        removed = prune_manifests(args.keep)
-        print(f"pruned {len(removed)} run manifest(s); kept the newest {args.keep}")  # noqa: T201
+def _runs_prune(args: argparse.Namespace, *, as_json: bool) -> int:
+    removed = prune_manifests(args.keep)
+    if as_json:
+        print(  # noqa: T201
+            emit(
+                runs_document(action="prune", pruned={"removed": len(removed), "kept": args.keep})
+            ),
+            end="",
+        )
         return 0
-    if args.runs_action == "show":
-        try:
-            manifest = read_manifest(find_manifest(args.run_id))
-        except RunManifestError as exc:
-            print(f"error: {exc}", file=sys.stderr)  # noqa: T201
-            return 2
-        print(json.dumps(manifest.to_dict(), indent=2, sort_keys=True))  # noqa: T201
+    print(f"pruned {len(removed)} run manifest(s); kept the newest {args.keep}")  # noqa: T201
+    return 0
+
+
+def _runs_show(args: argparse.Namespace, *, as_json: bool) -> int:
+    try:
+        manifest = read_manifest(find_manifest(args.run_id))
+    except RunManifestError as exc:
+        return _refuse("runs", "not_found", str(exc), as_json=as_json)
+    if as_json:
+        print(emit(runs_document(action="show", manifest=manifest.to_dict())), end="")  # noqa: T201
         return 0
-    paths = list_manifest_paths()
-    if not paths:
-        # An empty list is the answer, not an error: nothing has been run yet.
-        print("no run manifests recorded yet")  # noqa: T201
-        return 0
-    for path in paths:
+    print(json.dumps(manifest.to_dict(), indent=2, sort_keys=True))  # noqa: T201
+    return 0
+
+
+def _read_run_rows() -> tuple[list[Mapping[str, object]], list[Mapping[str, object]]]:
+    """Every recorded run, and every manifest that could not be read.
+
+    Two lists, not one. A file that could not be read is not a run that
+    happened, and folding it into the rows would publish it as one; leaving it
+    out entirely would report a smaller population as a complete one.
+    """
+    listed: list[Mapping[str, object]] = []
+    unreadable: list[Mapping[str, object]] = []
+    for path in list_manifest_paths():
         try:
             manifest = read_manifest(path)
         except RunManifestError as exc:
-            # Named and skipped rather than fatal: one unreadable file must not
-            # hide every readable one, and silence would hide it entirely.
-            print(f"{path.stem}\tUNREADABLE\t{exc}")  # noqa: T201
+            unreadable.append({"name": path.stem, "error": str(exc)})
             continue
+        listed.append(
+            {
+                "run_id": manifest.run_id,
+                "surface": manifest.surface,
+                "created_at": manifest.created_at,
+                "lens_name": manifest.lens_name,
+                "lens_strength": manifest.lens_strength,
+                "k": manifest.k,
+                "listener_digest": manifest.listener_digest,
+            }
+        )
+    return listed, unreadable
+
+
+def _runs_list(*, as_json: bool) -> int:
+    listed, unreadable = _read_run_rows()
+    if as_json:
+        print(emit(runs_document(action="list", runs=listed, unreadable=unreadable)), end="")  # noqa: T201
+        return 0
+    if not listed and not unreadable:
+        # An empty list is the answer, not an error: nothing has been run yet.
+        print("no run manifests recorded yet")  # noqa: T201
+        return 0
+    for bad in unreadable:
+        print(f"{bad['name']}\tUNREADABLE\t{bad['error']}")  # noqa: T201
+    for row in listed:
         print(  # noqa: T201
-            f"{manifest.run_id}\t{manifest.surface}\t{manifest.created_at}\t"
-            f"lens={manifest.lens_name}@{manifest.lens_strength}\tk={manifest.k}\t"
-            f"listener={manifest.listener_digest[:8]}"
+            f"{row['run_id']}\t{row['surface']}\t{row['created_at']}\t"
+            f"lens={row['lens_name']}@{row['lens_strength']}\tk={row['k']}\t"
+            f"listener={str(row['listener_digest'])[:8]}"
         )
     return 0
+
+
+def _cmd_runs(args: argparse.Namespace) -> int:
+    as_json = bool(getattr(args, "json", False))
+    if args.runs_action == "prune":
+        return _runs_prune(args, as_json=as_json)
+    if args.runs_action == "show":
+        return _runs_show(args, as_json=as_json)
+    return _runs_list(as_json=as_json)
 
 
 def _cmd_diff(args: argparse.Namespace) -> int:
@@ -1246,6 +1454,20 @@ def _cmd_feedback(args: argparse.Namespace) -> int:
     with Cache(args.db) as cache:
         cache.record_feedback(feedback, fetched_at=now.date().isoformat())
     direction = "up" if feedback.vote > 0 else "down"
+    if bool(getattr(args, "json", False)):
+        print(  # noqa: T201
+            emit(
+                feedback_document(
+                    listener=args.user,
+                    artist_id=args.artist,
+                    vote=direction,
+                    recorded_at=now.isoformat(),
+                    database=str(args.db),
+                )
+            ),
+            end="",
+        )
+        return 0
     print(f"recorded thumbs-{direction} for {args.artist} ({args.user})")  # noqa: T201
     return 0
 
@@ -1305,6 +1527,29 @@ def _cmd_report(args: argparse.Namespace) -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
+    if bool(getattr(args, "json", False)):
+        # The page is still written. `--json` describes the run, it does not
+        # replace the artifact the verb exists to produce, and the document
+        # says where it went and how large it is so a caller can check.
+        print(  # noqa: T201
+            emit(
+                report_document(
+                    recommendations=recs,
+                    coverage=identity_coverage(recs),
+                    exposure_panel=panel,
+                    listener=profile.username,
+                    lens_name=args.lens_name,
+                    lens_strength=args.lens,
+                    hide_sourced_men=args.hide_sourced_men,
+                    k=args.k,
+                    content_filter_description=content_filter.describe(),
+                    written_to=str(out),
+                    bytes_written=len(html.encode("utf-8")),
+                )
+            ),
+            end="",
+        )
+        return 0
     print(f"wrote {out}")  # noqa: T201
     return 0
 
@@ -1353,6 +1598,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="docs/audits/eval-baseline.json",
         help="committed baseline metrics to regression-check against (AIEV-26/27)",
     )
+    _add_json_flag(p_eval, "eval")
     p_eval.set_defaults(func=_cmd_eval)
 
     p_eval_real = sub.add_parser(
@@ -1476,6 +1722,7 @@ def build_parser() -> argparse.ArgumentParser:
     feedback_vote = p_feedback.add_mutually_exclusive_group(required=True)
     feedback_vote.add_argument("--up", action="store_true")
     feedback_vote.add_argument("--down", action="store_true")
+    _add_json_flag(p_feedback, "feedback")
     p_feedback.set_defaults(func=_cmd_feedback)
 
     p_report = sub.add_parser(
@@ -1485,6 +1732,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_report.add_argument("--lens", type=_unit_interval, default=0.5)
     p_report.add_argument("--out", default="my-discoveries.html")
     _add_world_args(p_report)
+    _add_json_flag(p_report, "report")
     p_report.set_defaults(func=_cmd_report)
 
     p_doctor = sub.add_parser("doctor", help="diagnose env, data location, and cache health")
@@ -1527,6 +1775,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="pending upstream corrections file to reconcile",
     )
+    _add_json_flag(p_ref, "refresh")
     p_ref.set_defaults(func=_cmd_refresh)
 
     p_corr = sub.add_parser(
@@ -1553,14 +1802,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_runs = sub.add_parser(
         "runs", help="browse the manifests each recommend/report/export run records"
     )
+    _add_json_flag(p_runs, "runs")
     runs_sub = p_runs.add_subparsers(dest="runs_action")
-    runs_sub.add_parser("list", help="list recorded runs, oldest first")
+    p_runs_list = runs_sub.add_parser("list", help="list recorded runs, oldest first")
+    _add_json_flag(p_runs_list, "runs")
     p_runs_show = runs_sub.add_parser("show", help="print one run manifest as JSON")
     p_runs_show.add_argument("run_id", help="run id, or an unambiguous prefix of one")
+    _add_json_flag(p_runs_show, "runs")
     p_runs_prune = runs_sub.add_parser("prune", help="delete all but the newest N manifests")
     p_runs_prune.add_argument(
         "--keep", type=_nonnegative_int, default=DEFAULT_KEEP, help="how many to keep"
     )
+    _add_json_flag(p_runs_prune, "runs")
     p_runs.set_defaults(func=_cmd_runs, runs_action="list")
 
     p_diff = sub.add_parser("diff", help="what changed between two recorded runs, and why")
