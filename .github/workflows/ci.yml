@@ -51,10 +51,12 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           persist-credentials: false
-          # gitleaks-action scans the PR's commit range with plain git; a
-          # shallow (depth-1) clone is missing those objects, so the scan
-          # dies with a git usage error on every multi-commit PR. Full
-          # history is the documented gitleaks-action requirement.
+          # Necessary, and on its own NOT sufficient. This decides how much
+          # history lands on disk; what the scanner reads is decided by how it
+          # is invoked. The secret-scan step below carried `fetch-depth: 0`
+          # while it was scanning only a pull request's own commits, which is
+          # exactly what a full-depth checkout plus a range-scoped invocation
+          # looks like from the outside: green, and blind to everything older.
           fetch-depth: 0
 
       # Installs from uv.lock (CQ-09/SEC-13): `--frozen` never re-resolves, so a
@@ -91,17 +93,44 @@ jobs:
         env:
           LAVENDER_E2E_REQUIRE: "1"
 
-      # Dedicated, annotating secret-scan layer (kept alongside `make security`'s
-      # scripts/secret-scan.sh, which falls back to a grep heuristic when the
-      # gitleaks binary isn't installed locally — this is the real gitleaks scan
-      # with PR file annotations).
+      # The real gitleaks scan, kept alongside `make security`'s
+      # scripts/secret-scan.sh, which falls back to a grep heuristic over the
+      # working tree when the gitleaks binary is not installed — which is the
+      # case in this job, since nothing installs it before `make verify` runs.
       - name: Secret scan (gitleaks, annotated)
-        # One annotated scan per workflow is enough; running it inside every
+        # One scan per workflow is enough; running it inside every
         # compatibility-matrix copy only multiplies identical work.
         if: matrix.python-version == '3.12'
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # This step was `gitleaks/gitleaks-action`, which picks its scan range
+        # from the triggering event: on a pull request it scans that pull
+        # request's own commits, on a push of one commit it runs
+        # `--log-opts=-1`, and only on `schedule` or `workflow_dispatch` does it
+        # drop `--log-opts` and read the whole history. This workflow runs on
+        # pull_request, schedule and workflow_dispatch, so the lane that gates a
+        # merge read the PR's commits and nothing older, while the Tuesday cron
+        # read all 183. The `fetch-depth: 0` above did not change that: it
+        # governs what is fetched, never what is read.
+        #
+        # A pinned, checksum-verified binary invoked as `gitleaks git .` with no
+        # `--log-opts` walks the history on every event, so the range no longer
+        # depends on how the run was triggered.
+        run: |
+          set -euo pipefail
+          GL=8.30.1
+          BASE="https://github.com/gitleaks/gitleaks/releases/download/v${GL}"
+          ARCHIVE="gitleaks_${GL}_linux_x64.tar.gz"
+          # --retry retries the DOWNLOAD, never the verdict. A transient
+          # `curl: (35) Recv failure` from github.com turned this required check
+          # red having read zero commits, which is indistinguishable in the
+          # check list from a real finding. `curl -f` plus `set -e` still stop
+          # the job after the last attempt, and the scan itself runs once.
+          curl -sSfL --retry 3 --retry-all-errors --retry-delay 2 \
+            -o "/tmp/${ARCHIVE}" "${BASE}/${ARCHIVE}"
+          curl -sSfL --retry 3 --retry-all-errors --retry-delay 2 \
+            -o /tmp/gitleaks_checksums.txt "${BASE}/gitleaks_${GL}_checksums.txt"
+          (cd /tmp && grep "  ${ARCHIVE}$" gitleaks_checksums.txt | sha256sum --check --strict)
+          tar -xzf "/tmp/${ARCHIVE}" -C /tmp gitleaks
+          /tmp/gitleaks git . --no-banner --redact --exit-code 1
 
       - name: Upload audit artifacts
         if: always()

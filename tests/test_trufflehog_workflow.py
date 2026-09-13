@@ -23,9 +23,17 @@ shows up as a red build when it breaks:
    repository was in exactly that state: the ref said v3.95.8 while the scanner
    downloaded 3.96.0.
 
-3. **`fetch-depth: 0` survives on the checkout.** Without it `actions/checkout`
-   fetches a single commit, and a "full-history" sweep becomes a one-commit scan
-   that still reports success.
+3. **`fetch-depth: 0` survives on the checkout.** A *precondition*, not the
+   cause. Without it `actions/checkout` fetches a single commit and there is
+   nothing on disk to walk; with it, and with a range-scoped invocation, the
+   whole history sits in the checkout while the scanner reads two commits. That
+   is not hypothetical here: `ci.yml`'s gitleaks step carried `fetch-depth: 0`
+   for months while `gitleaks/gitleaks-action` scanned only the pull request's
+   own commits. What a scanner reads is decided by how it is INVOKED. This
+   workflow runs only on `schedule` and `workflow_dispatch`, the two events for
+   which the TruffleHog action resolves its range to `--since-commit ""
+   --branch ""`, so here the invocation is already a whole-history one and this
+   assertion guards the precondition it needs.
 
 The workflow's pin comment is a YAML comment, so it is invisible to a YAML
 parser: these assertions read the file as text on purpose.
@@ -99,7 +107,16 @@ def test_action_ref_and_version_input_name_the_same_release() -> None:
 
 
 def test_checkout_keeps_full_history() -> None:
-    """`fetch-depth: 0` is what makes this a history scan rather than a one-commit scan."""
+    """The precondition for a history scan, and not on its own the cause of one.
+
+    `fetch-depth: 0` decides how much history `actions/checkout` puts on disk. What the
+    scanner reads is decided by how it is invoked -- here, by this workflow running only
+    on `schedule`/`workflow_dispatch`, the two events for which the action resolves its
+    range to `--since-commit "" --branch ""`. Add a `push:` or `pull_request:` trigger
+    and that stops being true while this assertion goes on passing, because the action
+    would then take its range from the event. `ci.yml`'s gitleaks step was in exactly
+    that shape, at full depth, scanning a pull request's own commits.
+    """
     text = _workflow_text()
     assert "actions/checkout@" in text, "the scan no longer checks the repository out"
     assert re.search(r"^\s*fetch-depth:\s*0\s*(#.*)?$", text, flags=re.MULTILINE), (
