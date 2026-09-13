@@ -119,8 +119,15 @@ jobs:
           GL=8.30.1
           BASE="https://github.com/gitleaks/gitleaks/releases/download/v${GL}"
           ARCHIVE="gitleaks_${GL}_linux_x64.tar.gz"
-          curl -sSfL -o "/tmp/${ARCHIVE}" "${BASE}/${ARCHIVE}"
-          curl -sSfL -o /tmp/gitleaks_checksums.txt "${BASE}/gitleaks_${GL}_checksums.txt"
+          # --retry retries the DOWNLOAD, never the verdict. A transient
+          # `curl: (35) Recv failure` from github.com turned this required check
+          # red having read zero commits, which is indistinguishable in the
+          # check list from a real finding. `curl -f` plus `set -e` still stop
+          # the job after the last attempt, and the scan itself runs once.
+          curl -sSfL --retry 3 --retry-all-errors --retry-delay 2 \
+            -o "/tmp/${ARCHIVE}" "${BASE}/${ARCHIVE}"
+          curl -sSfL --retry 3 --retry-all-errors --retry-delay 2 \
+            -o /tmp/gitleaks_checksums.txt "${BASE}/gitleaks_${GL}_checksums.txt"
           (cd /tmp && grep "  ${ARCHIVE}$" gitleaks_checksums.txt | sha256sum --check --strict)
           tar -xzf "/tmp/${ARCHIVE}" -C /tmp gitleaks
           /tmp/gitleaks git . --no-banner --redact --exit-code 1
