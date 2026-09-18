@@ -29,7 +29,7 @@ nonbinary-fronted, man, other, unknown.
    the project's central fairness guarantee.
    → metric *down-ranked-for-unknown = 0*.
 
-3. **Allocational — the lens over-favours already-popular women.**
+3. **Allocational — the lens over-favors already-popular women.**
    *Mitigation:* the boost is bounded (`MAX_BOOST`, `recommender/rerank.py`) so it
    re-orders without erasing the taste signal, and the base score is taste-only
    (popularity is **not** an input to the hybrid — it is only the eval baseline).
@@ -39,7 +39,7 @@ nonbinary-fronted, man, other, unknown.
 4. **Men keep their score; they do not keep their position.** A sourced man keeps
    his exact base score under any lens strength — he simply receives no boost
    (`tests/test_rerank.py`,
-   `tests/test_unknown_first_class.py::test_man_and_unknown_are_not_penalised_*`,
+   `tests/test_unknown_first_class.py::test_man_and_unknown_are_not_penalized_*`,
    and `recommender/exposure.py::assert_no_score_reduced` on emitted output). His
    *list position* can move down, because a boosted artist that rises has to pass
    someone and every other segment is rank-protected. That is the whole of this
@@ -69,7 +69,7 @@ per run (deliberately not target-driven — they measure, they do not set quotas
   unknown retention, mean rank shift by identity segment, and a popularity-tier
   cross-tab across a lens sweep, reported in `eval-report.json`. It shows what the
   bounded lens changes while separately enforcing that unknown **and sourced-`OTHER`**
-  artists are never dropped from top-k, score-penalised, or moved to a worse rank,
+  artists are never dropped from top-k, score-penalized, or moved to a worse rank,
   and that no artist of any identity loses score. `tests/test_exposure.py`,
   `tests/test_rank_protection.py`.
 
@@ -78,7 +78,7 @@ per run (deliberately not target-driven — they measure, they do not set quotas
 | Commitment | Gate | Where |
 |------------|------|-------|
 | Nonbinary representable end-to-end | auto | `tests/test_identity_model.py` |
-| Unknown retained, never penalised | auto | `tests/test_unknown_first_class.py` |
+| Unknown retained, never penalized | auto | `tests/test_unknown_first_class.py` |
 | Sourced `OTHER` retained, never displaced | auto | `tests/test_rank_protection.py`, `assert_other_retained` |
 | No artist of any identity loses score | auto | `tests/test_rank_protection.py`, `assert_no_score_reduced` |
 | The harms note claims only what is checked | auto | `tests/test_lens.py` |
@@ -86,4 +86,4 @@ per run (deliberately not target-driven — they measure, they do not set quotas
 | Per-segment exposure reported per run | auto | `tests/test_exposure.py`, `eval-report.json` |
 | Bounded, taste-preserving boost | auto | `tests/test_rerank.py` |
 | Hybrid beats popularity baseline | auto | `tests/test_eval.py`, `eval-report.json` |
-| Representational-harm judgement | review | fairness sign-off on change |
+| Representational-harm judgment | review | fairness sign-off on change |

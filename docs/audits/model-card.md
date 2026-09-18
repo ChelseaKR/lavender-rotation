@@ -79,7 +79,7 @@ scale.
   — that is the intended, safe default, not a bug, but it does mean the values lens has less to
   work with for less-documented artists.
 - **Allocational risk:** the lens is bounded and taste-preserving, but a boost-only design can
-  still over-favour already-popular sourced women within the boosted set (see
+  still over-favor already-popular sourced women within the boosted set (see
   `docs/audits/fairness-identity.md` §3 for the mitigation and its limits).
 
 ## Environmental footprint

@@ -22,7 +22,7 @@ installation is uv-managed and editable everywhere (local `make install` and CI 
 explicitly listing the four packages in `pyproject.toml`), and the test suite imports the packages
 via their installed names with merge-blocking coverage floors that would surface a wrong-package
 import immediately. A migration would churn every import path and historical diff for no
-behavioural gain in a repo with exactly one distribution and one maintainer.
+behavioral gain in a repo with exactly one distribution and one maintainer.
 
 ## Consequences
 

@@ -31,8 +31,8 @@ from recommender.content_filters import (
     NO_FILTER,
     ContentFilter,
     FilterSpecError,
-    normalise_tag,
-    normalise_tags,
+    normalize_tag,
+    normalize_tags,
 )
 from recommender.hybrid import recommend
 
@@ -77,7 +77,7 @@ def test_the_filter_module_is_never_handed_an_artist_at_all() -> None:
     )
 
 
-# --- normalisation -----------------------------------------------------------------------
+# --- normalization -----------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -90,16 +90,16 @@ def test_the_filter_module_is_never_handed_an_artist_at_all() -> None:
     ],
 )
 def test_tag_spellings_that_mean_one_tag_fold_to_one_tag(raw: str, expected: str) -> None:
-    assert normalise_tag(raw) == expected
+    assert normalize_tag(raw) == expected
 
 
 def test_a_bare_string_is_refused_rather_than_iterated_by_character() -> None:
     with pytest.raises(TypeError):
-        normalise_tags("shoegaze")  # type: ignore[arg-type]
+        normalize_tags("shoegaze")  # type: ignore[arg-type]
 
 
 def test_empty_tags_are_dropped_not_kept_as_a_tag() -> None:
-    assert normalise_tags(["shoegaze", "  ", ""]) == frozenset({"shoegaze"})
+    assert normalize_tags(["shoegaze", "  ", ""]) == frozenset({"shoegaze"})
 
 
 # --- 2. absence never excludes ------------------------------------------------------------
@@ -179,7 +179,7 @@ def test_describe_names_every_active_bound_and_the_absence_rule() -> None:
     assert "no known start year, are kept" in line
 
 
-# --- 3. behaviour through the recommender -------------------------------------------------
+# --- 3. behavior through the recommender -------------------------------------------------
 
 
 class _NoSimilarity:
@@ -309,7 +309,7 @@ def _demo_tags() -> set[str]:
     from pipeline.demo import demo_catalog
 
     counts = Counter(
-        normalise_tag(tag) for artist in demo_catalog().values() for tag in artist.tags
+        normalize_tag(tag) for artist in demo_catalog().values() for tag in artist.tags
     )
     return {tag for tag, n in counts.items() if n > 1}
 
@@ -459,7 +459,7 @@ def test_a_payload_cached_before_the_field_existed_decodes_to_unknown() -> None:
 
 def test_an_enricher_without_the_optional_protocol_yields_no_year() -> None:
     """`CareerSpanSource` is a second, optional protocol precisely so that an enricher which
-    does not implement it is not penalised: it yields unknown, and unknown is kept."""
+    does not implement it is not penalized: it yields unknown, and unknown is kept."""
     from pipeline.enrich import FixtureEnricher
     from pipeline.ingest import enrich_artist
 

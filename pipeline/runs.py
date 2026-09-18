@@ -93,7 +93,7 @@ class RunManifestError(ValueError):
 
 
 def _digest(payload: object) -> str:
-    """A short, stable digest of a JSON-serialisable value.
+    """A short, stable digest of a JSON-serializable value.
 
     Used for the profile, the feedback ledger, the listener and the filter. A
     digest compares without disclosing, which is what lets a manifest say "the
@@ -125,7 +125,7 @@ def feedback_digest(votes: Iterable[tuple[str, int]]) -> str:
 
 
 def filter_description(content_filter: ContentFilter | None) -> dict[str, Any]:
-    """Serialise the content filter, keeping "inert" distinct from "absent"."""
+    """Serialize the content filter, keeping "inert" distinct from "absent"."""
     if content_filter is None:
         return {"stated": False, "active": False}
     return {

@@ -4,7 +4,7 @@
 "Fix it at the source" (CONTRIBUTING.md) is the project's stated posture for a
 wrong or missing identity claim, but until now it offered no way to see *what*
 is missing or *which* gap is worth an evening. This turns a local cache into a
-prioritised worklist of MusicBrainz edits, entirely offline — it re-reads the
+prioritized worklist of MusicBrainz edits, entirely offline — it re-reads the
 cached upstream payloads, makes no request, and needs no credential.
 
 The categories are deliberately kept apart, because they are different kinds of

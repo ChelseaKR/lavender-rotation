@@ -9,7 +9,7 @@
 
 | Threat | Vector | Control |
 |--------|--------|---------|
-| Tampering | cache poisoning via malformed external API data | strict shape validation in all parsers (`pipeline/lastfm.py`, `pipeline/enrich.py`); unrecognised values → unknown, never coerced; `tests/test_adapters.py` |
+| Tampering | cache poisoning via malformed external API data | strict shape validation in all parsers (`pipeline/lastfm.py`, `pipeline/enrich.py`); unrecognized values → unknown, never coerced; `tests/test_adapters.py` |
 | Tampering | corrupt cache row asserting an unsourced identity | model invariants re-run on load — fails closed (`tests/test_cache_serde.py::test_corrupt_cache_row_*`) |
 | Info disclosure | API key leakage | key from env only; secret scan merge-blocking (`scripts/secret-scan.sh`, CI gitleaks) |
 | Info disclosure | listening data exfiltration | local-first; no telemetry; network confined to the API client (`tests/test_privacy.py`) |

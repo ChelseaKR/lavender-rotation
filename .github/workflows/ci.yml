@@ -25,7 +25,7 @@ name: ci
 # `workflow_dispatch` run — not one is a merge. `main`'s HEAD has never been
 # verified by this workflow.
 #
-# The defence that does survive is not the one written down: the ruleset sets
+# The defense that does survive is not the one written down: the ruleset sets
 # `strict_required_status_checks_policy`, so a branch must be current with
 # `main` to merge and the merged tree therefore equals the tree the PR gate
 # read. That covers the merge path and nothing else — `bypass_actors` grants

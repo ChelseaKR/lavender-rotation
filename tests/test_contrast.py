@@ -1,7 +1,7 @@
 """Design-token contrast gate (BUG-1 / A11Y-05): both schemes, computed, blocking.
 
 The dark-mode contrast defect happened because ``color-scheme: light dark`` was
-declared with no explicit colours — nothing *verified* the pairs that actually
+declared with no explicit colors — nothing *verified* the pairs that actually
 rendered. This test computes WCAG 2.2 contrast (relative luminance, SC 1.4.3 /
 1.4.6 / 1.4.11) over the declared design tokens for BOTH palettes, so a palette
 edit that breaks either scheme fails the unit suite before pa11y ever runs.
@@ -27,8 +27,8 @@ def _channel(value: int) -> float:
     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
 
-def relative_luminance(hex_colour: str) -> float:
-    h = hex_colour.lstrip("#")
+def relative_luminance(hex_color: str) -> float:
+    h = hex_color.lstrip("#")
     r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
     return 0.2126 * _channel(r) + 0.7152 * _channel(g) + 0.0722 * _channel(b)
 
@@ -59,7 +59,7 @@ def test_both_palettes_declare_the_same_token_set() -> None:
 
 
 def test_sanity_the_checker_rejects_a_bad_pair() -> None:
-    # Guard the guard: near-identical greys must fail, so a broken palette cannot
+    # Guard the guard: near-identical grays must fail, so a broken palette cannot
     # slip through a broken checker.
     assert contrast_ratio("#777777", "#888888") < NON_TEXT
 

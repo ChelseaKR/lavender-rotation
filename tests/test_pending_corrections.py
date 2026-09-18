@@ -9,7 +9,7 @@ retrieval date deleted a person's filed note while reporting success. The test
 below that "verified" this — `test_reconcile_drops_matching_row_and_keeps_others`
 — passed a change whose `old_value` and `new_value` were byte-identical, against
 a row whose `current_value` and `proposed_value` were also identical, and
-asserted the row was dropped. It pinned the defect as correct behaviour. It is
+asserted the row was dropped. It pinned the defect as correct behavior. It is
 rewritten here to assert the absence of the harm instead: a filed row is never
 removed without evidence that upstream now asserts what was proposed.
 """

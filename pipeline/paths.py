@@ -3,7 +3,7 @@ documented, stable data location instead of a cwd-relative ``data/`` folder).
 
 Resolution order:
 
-1. ``LAVENDER_DATA_DIR`` env var, if set to a non-empty value — always honoured,
+1. ``LAVENDER_DATA_DIR`` env var, if set to a non-empty value — always honored,
    any OS. (``WAD_DATA_DIR`` is still read, deprecated, see below.)
 2. Otherwise a platformdirs-style per-OS user-data directory, computed with
    the standard library only (no new dependency): ``~/Library/Application
@@ -57,7 +57,7 @@ _DB_FILENAME = "cache.db"
 def resolve_data_dir() -> Path:
     """Return the absolute directory this project stores its local data in.
 
-    Honours ``LAVENDER_DATA_DIR`` when set to a non-empty (whitespace-stripped)
+    Honors ``LAVENDER_DATA_DIR`` when set to a non-empty (whitespace-stripped)
     value, then the deprecated ``WAD_DATA_DIR``; otherwise falls back to
     :func:`_default_data_dir`. Pure path resolution — does not touch the
     filesystem.

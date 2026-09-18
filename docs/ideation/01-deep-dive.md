@@ -2,7 +2,7 @@
 
 Assessment from a full read of the source, tests, Makefile/CI, and audit docs.
 No test suites or network calls were run for this pass; where a claim depends on
-runtime behaviour, that uncertainty is stated.
+runtime behavior, that uncertainty is stated.
 
 ## Architecture as actually built
 
@@ -25,13 +25,13 @@ Four packages, cleanly layered, all `py.typed`, `mypy --strict`:
   - `pipeline/enrich.py`: pure parsers for MusicBrainz gender / Wikidata P21 /
     Discogs lineup → `IdentityEvidence`, plus `FixtureEnricher`.
   - `pipeline/cache.py` + `pipeline/serde.py`: local SQLite with `fetched_at`
-    lineage on every row; deserialisation re-runs the model invariants so a
+    lineage on every row; deserialization re-runs the model invariants so a
     corrupted cache row fails closed.
   - `pipeline/demo.py`: a hand-built offline world spanning every identity
     basis (sourced women, a sourced nonbinary artist, sourced female-fronted
     bands, sourced men, first-class unknowns).
 - **`recommender/`** — `collaborative.py` (play-weighted similar-artist graph),
-  `content.py` (tag-cosine), `hybrid.py` (convex blend, min-max normalised),
+  `content.py` (tag-cosine), `hybrid.py` (convex blend, min-max normalized),
   `rerank.py` (**boost-only** values lens, `MAX_BOOST = 0.5`, with an inline
   `assert delta >= 0.0`), `explain.py`/`why.py` (the shared `WhyThisArtist`
   object with raw asserted values in provenance), `eval.py` (temporal split,
@@ -48,7 +48,7 @@ Four packages, cleanly layered, all `py.typed`, `mypy --strict`:
 higher due to parametrization — e.g. `tests/test_no_inference.py` parametrizes
 over 17 forbidden tokens; the README's "108 tests" figure is likely stale).
 The suite covers the guardrails from four angles: vocabulary, structure, AST
-scan, and behaviour (`test_no_inference.py`), plus unknown-retention
+scan, and behavior (`test_no_inference.py`), plus unknown-retention
 (`test_unknown_first_class.py`), provenance, serde fail-closed, privacy source
 scans, reproducibility snapshots, export, and a11y.
 
@@ -67,7 +67,7 @@ mirrors it across Python 3.10–3.13 with SHA-pinned actions and
    regressions. This is the most credible "ethics as engineering" artifact in
    the repo and arguably the portfolio's cleanest example of the pattern.
 2. **The boost-only rerank makes the fairness claim mechanical.**
-   "Unknown never penalised" is not a policy; it is arithmetic
+   "Unknown never penalized" is not a policy; it is arithmetic
    (`recommender/rerank.py::values_boost_for_artist` returns 0 or a bounded
    positive number).
 3. **Single source of truth for explanation wording.** `recommender/why.py` is
@@ -136,7 +136,7 @@ mirrors it across Python 3.10–3.13 with SHA-pinned actions and
 10. **Confidence numbers are hand-set.** `_SOURCE_BASE_CONFIDENCE` (0.95 /
     0.80 / 0.70 in `pipeline/identity.py`) is displayed to users as
     "confidence 80%" (`recommender/why.py::artist_identity_phrase`) — an
-    ordinal editorial judgement presented with numeric precision it doesn't
+    ordinal editorial judgment presented with numeric precision it doesn't
     have.
 
 ## Strategic position in the portfolio

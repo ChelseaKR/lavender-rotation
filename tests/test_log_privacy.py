@@ -5,7 +5,7 @@ The diagnostic channel must never become an identity channel: log lines may
 carry stage/timing/count/id data, never identity vocabulary or per-artist
 identity values. Two legs, mirroring ``tests/test_no_inference.py``:
 
-1. **Behavioural** — run the logging-heavy demo pipeline end to end with every
+1. **Behavioral** — run the logging-heavy demo pipeline end to end with every
    ``lavender.*`` record captured, format each record with *both* shipped
    formatters (kv and JSON), and assert no identity vocabulary appears anywhere
    in the stream.
@@ -70,7 +70,7 @@ class _CaptureHandler(logging.Handler):
 def test_demo_pipeline_log_stream_carries_no_identity_vocabulary(
     demo_user, source, enricher
 ) -> None:
-    """Behavioural proof: a real cached ingest run logs no identity vocabulary.
+    """Behavioral proof: a real cached ingest run logs no identity vocabulary.
 
     The demo world contains artists with sourced woman/nonbinary identities, so
     if any log call site leaked identity data this run would produce it.
@@ -193,7 +193,7 @@ def test_every_logger_lives_under_the_configured_namespace() -> None:
     process is configured with, which is the one place this module's docstring
     promises records never go. ``pipeline/paths.py`` logged to ``wad.paths``
     from the rename (ADR 0012) until this test existed, and neither leg above
-    could see it — the behavioural leg captures on the ``lavender`` tree, and
+    could see it — the behavioral leg captures on the ``lavender`` tree, and
     the structural leg reads call *arguments*, not logger names.
     """
     from pipeline.logconfig import _NAMESPACE

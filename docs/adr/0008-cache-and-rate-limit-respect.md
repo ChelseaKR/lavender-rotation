@@ -19,8 +19,8 @@ cache a managed lifecycle.
 All upstream reads go through a local SQLite cache (`pipeline/cache.py`; the file lives in the platform user-data directory resolved by `pipeline/paths.py`) with a
 rate-limit-respecting HTTP response cache (TTL-based staleness, `DEFAULT_HTTP_TTL_DAYS = 30`),
 schema versioning with forward-refusal (a newer-schema DB fails loudly rather than corrupting),
-and scrobble dedupe. The live Last.fm client honours the service's request pacing via an
-injectable sleeper (`pipeline/lastfm.py`), which keeps the pacing behaviour unit-testable without
+and scrobble dedupe. The live Last.fm client honors the service's request pacing via an
+injectable sleeper (`pipeline/lastfm.py`), which keeps the pacing behavior unit-testable without
 real waiting. Cache maintenance is a user-visible verb (`lavender refresh`, `--ttl-days`), not a hidden
 side effect.
 

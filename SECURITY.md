@@ -1,6 +1,6 @@
 # Security Policy
 
-Lavender Rotation is an independent personal open-source project (MIT). It is **local-first**:
+Lavender Rotation is an independent personal open-source project (AGPL-3.0-or-later). It is **local-first**:
 your Last.fm listening history stays on your machine, there is no auth and no server-side account,
 and every egress is opt-in and named: an explicit Last.fm sync (`lavender ingest --user`),
 per-artist identity lookups against MusicBrainz and Wikidata (which receive an artist name or MBID
@@ -68,7 +68,7 @@ identity is *sourced, never inferred*:
 
 | Stage                    | Target                                                            |
 |--------------------------|------------------------------------------------------------------|
-| Acknowledgement & triage | **≤ 72 hours** from receipt (volunteer project — please be patient) |
+| Acknowledgment & triage | **≤ 72 hours** from receipt (volunteer project — please be patient) |
 | Severity assessment      | shared with the triage reply                                      |
 | Fix or mitigation plan   | communicated after triage, prioritized by severity                |
 | Coordinated disclosure   | by mutual agreement; default embargo up to 90 days                |

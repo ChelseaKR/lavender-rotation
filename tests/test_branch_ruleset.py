@@ -12,7 +12,7 @@ a no-bypass ruleset elsewhere in this portfolio took a recovery sweep across
 eighteen repositories.
 
 Correcting the file once is not the fix, because the file can regress. This
-module is the fix: the empty list, and the four neighbouring ways to lose the
+module is the fix: the empty list, and the four neighboring ways to lose the
 bypass, are now test failures.
 
 The checks fail closed, in the same spirit as `tests/test_no_inference.py`:

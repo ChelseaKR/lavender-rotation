@@ -20,7 +20,7 @@ The mechanism is deliberately narrow:
   ``rerank_delta`` stays boost-only and non-negative (its own invariant,
   tested in ``tests/test_rerank.py``); feedback instead nudges
   ``base_score`` in :func:`recommender.hybrid.recommend`, before the lens is
-  applied and the list is re-sorted. That keeps "the lens never penalises
+  applied and the list is re-sorted. That keeps "the lens never penalizes
   unknown identity" and "feedback can raise or lower one artist" as two
   independent, non-interfering guarantees.
 * **Deterministic.** Pure function of ``(artist, feedbacks, strength)``; vote

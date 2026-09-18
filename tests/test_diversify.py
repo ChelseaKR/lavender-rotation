@@ -8,11 +8,11 @@ proves that three ways, in the same spirit as the identity resolver's guard:
 
 1. **Code** — an AST scan of ``recommender/diversify.py``'s own functions
    proves they never read a forbidden attribute/name.
-2. **Behavioural** — ``explore=0`` is a no-op re-order (identity to the input
+2. **Behavioral** — ``explore=0`` is a no-op re-order (identity to the input
    order); higher ``explore`` measurably raises intra-list tag diversity.
 3. **Invariant** — the output is a permutation of the input: same artist_ids,
    same multiset of scores. The diversifier only re-orders; it never
-   penalises or alters a score (the FIX-05 exposure contract survives it).
+   penalizes or alters a score (the FIX-05 exposure contract survives it).
 
 Plus explicit validation of the ``explore`` range.
 """
@@ -98,7 +98,7 @@ def test_diversifier_code_never_reads_a_forbidden_attribute() -> None:
     assert not leaked, f"diversify.py references forbidden attributes: {leaked}"
 
 
-# --- Behavioural -------------------------------------------------------------
+# --- Behavioral -------------------------------------------------------------
 
 
 def test_explore_zero_is_identity_to_input_order() -> None:

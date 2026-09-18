@@ -1,4 +1,4 @@
-"""Cache + serialisation: round-trip fidelity, lineage timestamps, guardrail on load."""
+"""Cache + serialization: round-trip fidelity, lineage timestamps, guardrail on load."""
 
 from __future__ import annotations
 

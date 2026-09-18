@@ -3,7 +3,7 @@
 Every recommendation must show *why* (the signals), the *identity basis*, and the
 *source* of that basis (README + Transparency audit §D). The summary is honest
 about unknown: an unknown artist is described as "surfaced on musical similarity
-alone", never apologised for and never hidden.
+alone", never apologized for and never hidden.
 """
 
 from __future__ import annotations

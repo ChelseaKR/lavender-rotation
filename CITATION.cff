@@ -12,5 +12,5 @@ version: 0.1.0.dev0
 # No tag or release exists yet (see the note above), so no `date-released` is
 # declared: stating one would name a release that does not exist. Add it with the
 # first tag.
-license: MIT
+license: AGPL-3.0-or-later
 repository-code: "https://github.com/ChelseaKR/lavender-rotation"

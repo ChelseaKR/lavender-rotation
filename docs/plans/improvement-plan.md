@@ -39,7 +39,7 @@ worse than no check), then by open-issue severity, then by unfiled defects.
 ### Phase A — guards that are structurally incapable of firing
 
 - **A1. The export leak guard is blind to the queer axis.**
-  `tests/test_export_schema.py` is named in ADR 0011 as one of the defences that
+  `tests/test_export_schema.py` is named in ADR 0011 as one of the defenses that
   became *load-bearing* when the repo started holding orientation and trans
   data. Its `FORBIDDEN_FIELDS` / `FORBIDDEN_CONTENT_TOKENS` lists were written
   before ADR 0011 and contain no queer-axis vocabulary at all: no `queer`,
@@ -81,7 +81,7 @@ worse than no check), then by open-issue severity, then by unfiled defects.
 
 ### Phase C — unfiled defects
 
-Populated from the two sweeps (doc/behaviour drift; input validation and error
+Populated from the two sweeps (doc/behavior drift; input validation and error
 paths). See the log.
 
 ### Phase D — verification
@@ -91,7 +91,7 @@ for every guard added or repaired, both directions recorded.
 
 ### Phase C — unfiled defects (from two sweeps)
 
-Input validation and error paths, ranked; and documentation-vs-behaviour drift.
+Input validation and error paths, ranked; and documentation-vs-behavior drift.
 Everything actually fixed is listed in the log below; everything identified and
 deliberately not fixed is listed under "Identified, not fixed" at the end.
 
@@ -151,7 +151,7 @@ deliberately not fixed is listed under "Identified, not fixed" at the end.
   HTTP-200 error envelope is detected, never cached, and never replayed as data,
   and pagination is bounded by `MAX_PAGES`.
 - C: `refresh_catalog`'s cache read moved inside the per-artist failure
-  boundary, honouring its own docstring; a negative `PRAGMA user_version` now
+  boundary, honoring its own docstring; a negative `PRAGMA user_version` now
   raises `CacheSchemaError` instead of `KeyError`; `average_precision_at_k`
   refuses a non-positive `k`; `--lens` and `--explore` are validated to [0, 1];
   `lavender corrections` refuses an unmappable value or a non-ISO date instead
@@ -162,7 +162,7 @@ deliberately not fixed is listed under "Identified, not fixed" at the end.
   corrections-add invocation that README.md and CONTRIBUTING.md both documented
   and that has never existed (spelled without backticks here on purpose: this
   gate reads code spans, and quoting a broken command in one would trip it). Break/restore recorded.
-- D: documentation corrected against behaviour. Seven governance/audit documents
+- D: documentation corrected against behavior. Seven governance/audit documents
   (model card, data card, residual-risk, AI risk register, identity-data-ethics,
   research roadmap) asserted that no live enrichment client exists and that
   `lavender refresh` is fixture-only. That was true when written and false from
@@ -236,10 +236,10 @@ Recorded rather than silently dropped. None is a regression introduced here.
 - `LastfmRequestError` is caught nowhere outside the module that raises it, so a
   bad `--user`, a revoked key or a dead network gives `lavender ingest` a
   traceback.
-- `MusicBrainzEnricher.resolve_mbid` memoises a *failed* resolution
+- `MusicBrainzEnricher.resolve_mbid` memoizes a *failed* resolution
   indistinguishably from an ambiguous one, so one throttled search poisons every
   later lookup for that artist in the same process.
-- `pending-corrections add --source-kind` has no `choices`, so an unrecognised
+- `pending-corrections add --source-kind` has no `choices`, so an unrecognized
   kind files a row that can never reconcile and offers no edit link.
 - A mid-batch export failure leaves a partly-populated playlist and returns no
   `PlaylistExport` to say so, against `export/base.py`'s stated contract; there

@@ -1,7 +1,7 @@
 name: mutation
 
 # Mutation testing over the safety-critical modules (CQ-47): the no-inference
-# invariant in pipeline/identity.py and the boost-only/never-penalise invariant
+# invariant in pipeline/identity.py and the boost-only/never-penalize invariant
 # in recommender/rerank.py are exactly the code where a silently-weakened test
 # suite would matter most. scripts/mutation-gate.sh fails the job if fewer than
 # 70% of generated mutants are killed by the full unit suite, per module.

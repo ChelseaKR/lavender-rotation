@@ -273,13 +273,13 @@ def test_the_accepted_vocabulary_is_discoverable_from_help(capsys) -> None:
 
 
 def test_the_accepted_vocabulary_is_derived_from_the_resolver() -> None:
-    from pipeline.identity import accepted_gender_values, normalise_asserted_value
+    from pipeline.identity import accepted_gender_values, normalize_asserted_value
     from pipeline.models import SourceKind
 
     accepted = accepted_gender_values()
     assert accepted, "the vocabulary must not be empty"
     for value in accepted:
         assert (
-            normalise_asserted_value(SourceKind.ARTIST_STATEMENT, value) is not None
-            or normalise_asserted_value(SourceKind.WIKIDATA_P21, value) is not None
+            normalize_asserted_value(SourceKind.ARTIST_STATEMENT, value) is not None
+            or normalize_asserted_value(SourceKind.WIKIDATA_P21, value) is not None
         ), f"{value!r} is advertised as accepted but maps to nothing"

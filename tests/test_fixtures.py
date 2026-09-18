@@ -29,7 +29,7 @@ def test_every_world_has_nonempty_split_and_real_positives() -> None:
 
 def test_worlds_are_structurally_independent_populations() -> None:
     """No two worlds should share a username or overlap in artist ids — each
-    is a genuinely separate synthetic population, not a relabelled copy.
+    is a genuinely separate synthetic population, not a relabeled copy.
     """
     usernames: set[str] = set()
     artist_id_sets: list[frozenset[str]] = []
@@ -44,7 +44,7 @@ def test_worlds_are_structurally_independent_populations() -> None:
             assert not (ids_a & ids_b)
 
 
-def test_demo_tuned_world_is_labelled_as_such() -> None:
+def test_demo_tuned_world_is_labeled_as_such() -> None:
     """The one hand-tuned world must be present and named honestly, so the
     caveat text (which names it) stays accurate.
     """

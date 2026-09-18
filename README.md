@@ -2,9 +2,9 @@
 
 **A demo-first music-discovery engine that surfaces new women, nonbinary, and female-fronted artists through an explicit values lens — including a queer lens for sourced queer women and nonbinary artists.** It combines collaborative and content signals with a sourced-identity re-ranker. Identity is never inferred, and "unknown" is a normal, first-class answer.
 
-**Trans women are women here — explicitly.** The three terms in the tagline are not redundant; they cover three different shapes: *women* (solo artists whose sourced self-identification is woman — cis or trans, with no distinction drawn anywhere in the data model), *nonbinary* artists (represented as nonbinary, never folded into another category), and *female-fronted* (band-composition metadata: an act whose sourced lineup/role data shows a woman — cis or trans — fronting it, which is a fact about that lineup, never a claim about the band's other members). A trans woman artist whose self-identification is sourced is surfaced as a woman, full stop. A band fronted by a sourced nonbinary artist is described as fronted by a nonbinary artist — the lens surfaces it, and no one is relabelled to get there.
+**Trans women are women here — explicitly.** The three terms in the tagline are not redundant; they cover three different shapes: *women* (solo artists whose sourced self-identification is woman — cis or trans, with no distinction drawn anywhere in the data model), *nonbinary* artists (represented as nonbinary, never folded into another category), and *female-fronted* (band-composition metadata: an act whose sourced lineup/role data shows a woman — cis or trans — fronting it, which is a fact about that lineup, never a claim about the band's other members). A trans woman artist whose self-identification is sourced is surfaced as a woman, full stop. A band fronted by a sourced nonbinary artist is described as fronted by a nonbinary artist — the lens surfaces it, and no one is relabeled to get there.
 
-**Status:** `Beta` · **Track:** Personal (data/ML + small web app) · **License:** MIT · **Data:** personal/local
+**Status:** `Beta` · **Track:** Personal (data/ML + small web app) · **License:** AGPL-3.0-or-later · **Data:** personal/local
 
 ## Quickstart
 
@@ -47,18 +47,34 @@ recommendation surface also takes `--explore` (0 to 1), an identity-blind serend
 slider that trades relevance for tag-space diversity among the movable picks; it is 0 by
 default, and it never moves a rank-protected one.
 
-**Machine-readable output.** `recommend`, `export`, `doctor`, `corrections` and
-`pending-corrections` each take `--json` and emit one versioned document described
-by a committed schema under [`schemas/`](schemas/). The point is not convenience:
-it makes several of this project's guarantees checkable by someone who does not
-trust it.
+**Machine-readable output.** Every user-facing command — `recommend`, `report`,
+`export`, `feedback`, `doctor`, `refresh`, `corrections`, `pending-corrections`,
+`eval`, `runs` and `diff` — takes `--json` and emits one versioned document
+described by a committed schema under [`schemas/`](schemas/). The point is not
+convenience: it makes several of this project's guarantees checkable by someone
+who does not trust it.
 
 ```sh
 lavender recommend --json | jq '.recommendations[].identity | {basis, sourced_gender, inferred}'
 lavender doctor --json    | jq '.egress_allowlist'
 lavender corrections --json | jq '.corrections[] | {artist_id, citation}'
+lavender refresh --json   | jq '.upstream'          # null counts, not zeroes, in demo mode
+lavender eval --json      | jq '{passed, regressed_vs_baseline, unmeasured_guarantees}'
 ```
 
+- **A count nobody measured is `null`, not `0`.** `refresh --json` in demo mode
+  queries no upstream, so `upstream.attempted`, `.answered` and the rest come
+  back `null`: `attempted: 0` beside `answered: false` is what a *live* run that
+  reached nothing looks like, and the two must not be confusable. `eval --json`
+  reports `regressed_vs_baseline: null` when no baseline file was present,
+  because `false` would claim a comparison nobody ran.
+- **`eval --json` publishes the guarantees that passed over an empty segment.**
+  A retention guarantee whose segment never appeared in pure taste's top-k had
+  nothing to violate. Those are `UNMEASURED:` sentences on stderr otherwise, and
+  invisible to anything reading the exit code.
+- **`runs --json` keeps an unreadable manifest out of the run list.** It is in
+  `unreadable` instead: folding it into `runs` would publish it as a run that
+  happened, and dropping it would report a smaller population as a complete one.
 - **Identity is never inferred, structurally.** The `recommend` schema pins
   `inferred` to `false` and has no slot for a guessed value; a pick whose basis
   is `unknown` carries no provenance, and a sourced gender without provenance is
@@ -177,13 +193,13 @@ These are hard rules, each enforced by a merge-blocking test (see
 - **"Unknown" is first-class** and must never reduce, down-rank, or drop a recommendation; the values lens only ever boosts. This binds the opt-in `--hide-sourced-men` filter too — the one mechanism here that can make an artist disappear. It removes only a *positive* sourced claim (an artist sourced as a man, or an act whose sourced fronting lineup is entirely sourced men) and never an absent one, because filtering on "not values-aligned" would delete every unknown artist — disproportionately the less-documented ones, which on a gender-imbalanced upstream skews against exactly the artists the lens is for. An artist sourced as a gender the lens does not boost (`Gender.OTHER`) holds their pure-taste position too. No artist's score is ever reduced. A sourced man's list *position* can move down — that is the one thing this lens re-allocates, and the lens's harms note says so rather than denying it.
 - **"Female-fronted" is band-composition metadata** (lineup/role), sourced not guessed, and never widened: it means only that a front-person's *own* sourced gender is a woman's. A front-person's gender is rendered as the source stated it, never collapsed into the band-level word.
 - **Every recommendation shows its work:** why + identity basis + source.
-- **Coverage is measured, not asserted.** `lavender census` counts what a cached world actually resolves to — sourced/unknown split, artists per source kind, acts with a sourced lineup, source disagreements, lineage age, and a reason for every unknown. The committed [demo census](./docs/audits/census-demo.json) is regenerated by `make census` and gated against the code. It is aggregate by construction: no artist id, name or citation URL appears in it, because a per-artist identity export is exactly the redistributable dataset this project refuses to create. A reason the cache cannot support (`upstream-unreachable` — a refresh that got no answer is not recorded on the row) is named as unsupported rather than folded into a neighbouring bucket.
+- **Coverage is measured, not asserted.** `lavender census` counts what a cached world actually resolves to — sourced/unknown split, artists per source kind, acts with a sourced lineup, source disagreements, lineage age, and a reason for every unknown. The committed [demo census](./docs/audits/census-demo.json) is regenerated by `make census` and gated against the code. It is aggregate by construction: no artist id, name or citation URL appears in it, because a per-artist identity export is exactly the redistributable dataset this project refuses to create. A reason the cache cannot support (`upstream-unreachable` — a refresh that got no answer is not recorded on the row) is named as unsupported rather than folded into a neighboring bucket.
 - **No redistribution of a scraped musician-identity dataset** — minimize, cite, keep correctable.
 
 ## Project status
 
 The offline demo and full pipeline are implemented and gated: `make verify` runs
-formatting/lint/SAST, strict typing, 1310 tests at 96% coverage, dependency and
+formatting/lint/SAST, strict typing, 1321 tests at 96% coverage, dependency and
 secret scans, axe/pa11y renders plus browser-driven keyboard/reflow/reduced-motion
 specs (Playwright, required in CI), offline multiworld evaluation with
 regression/fairness gates, and the i18n declaration gate. CodeQL, zizmor, OSV,
@@ -215,7 +231,7 @@ A run where nothing came back exits non-zero, says the upstream was unreachable,
 reconciles no corrections. A genuine upstream retraction is therefore not applied
 automatically — it is listed for you to act on with `lavender corrections --artist <id>
 --value <value> --citation <url>`, which is the direction this project errs in everywhere
-else too. (The neighbouring `lavender pending-corrections add` ledger is the other
+else too. (The neighboring `lavender pending-corrections add` ledger is the other
 direction: a change you are proposing *upstream*, waiting for a refresh to observe.)
 
 Bounded on purpose: upstream is ~1 req/s and a real catalog runs to thousands of
@@ -281,6 +297,15 @@ Inherits [`/STANDARDS`](../STANDARDS/). Per-standard declarations (Documentation
 
 Open or human-gated gaps are dispositioned in `docs/RESEARCH-ROADMAP.md` and
 `docs/ideation/`; they are not represented as shipped features.
+
+## License
+
+Lavender Rotation is licensed under the [GNU Affero General Public License, version 3 or
+later](LICENSE) (AGPL-3.0-or-later) from 2026-09-18 onward. Before that it was MIT-licensed,
+and that grant stands: every commit on `main` up to and including `fbe20a8` remains available
+under the MIT License. The project has never cut a tagged release, so there is no MIT-licensed
+release artifact beyond those commits. [`NOTICE`](NOTICE) records the same license history, and
+neither license covers artist-identity data (also in `NOTICE`).
 
 ## Support
 

@@ -42,7 +42,7 @@ MIN_YEAR = 1860
 MAX_YEAR = 2200
 
 
-def normalise_tag(tag: str) -> str:
+def normalize_tag(tag: str) -> str:
     """Fold one tag to the form both sides of a comparison are held to.
 
     Upstream tags arrive as free text with inconsistent case, spacing and separators:
@@ -53,21 +53,21 @@ def normalise_tag(tag: str) -> str:
     return " ".join(tag.replace("-", " ").replace("_", " ").split()).casefold()
 
 
-def normalise_tags(tags: Iterable[str]) -> frozenset[str]:
+def normalize_tags(tags: Iterable[str]) -> frozenset[str]:
     """Fold an iterable of tags, dropping any that fold to nothing.
 
-    A bare string is refused rather than iterated: ``normalise_tags("shoegaze")`` would
+    A bare string is refused rather than iterated: ``normalize_tags("shoegaze")`` would
     otherwise silently mean "the tags s, h, o, e...", and a filter built from it would match
     nothing while looking well-formed.
     """
     if isinstance(tags, str):
         raise TypeError("expected an iterable of tags, not a single string")
-    folded = (normalise_tag(tag) for tag in tags)
+    folded = (normalize_tag(tag) for tag in tags)
     return frozenset(tag for tag in folded if tag)
 
 
 class FilterSpecError(ValueError):
-    """Raised when a filter is specified in a way that cannot be honoured as written."""
+    """Raised when a filter is specified in a way that cannot be honored as written."""
 
 
 @dataclass(frozen=True)
@@ -76,7 +76,7 @@ class ContentFilter:
 
     Every field is optional and the default instance is inert: :meth:`keeps` returns ``True`` for
     everything and :attr:`active` is ``False``, so an existing caller that does not pass one gets
-    exactly today's behaviour.
+    exactly today's behavior.
     """
 
     include_tags: frozenset[str] = frozenset()
@@ -93,12 +93,12 @@ class ContentFilter:
         year_from: Optional[int] = None,
         year_to: Optional[int] = None,
     ) -> ContentFilter:
-        """Normalise and validate a filter from raw CLI input."""
-        include = normalise_tags(include_tags)
-        exclude = normalise_tags(exclude_tags)
+        """Normalize and validate a filter from raw CLI input."""
+        include = normalize_tags(include_tags)
+        exclude = normalize_tags(exclude_tags)
         both = include & exclude
         if both:
-            # Not resolvable in the listener's favour in either direction, so it is refused
+            # Not resolvable in the listener's favor in either direction, so it is refused
             # rather than silently decided. `exclude` winning would return an empty list;
             # `include` winning would return artists the listener asked not to see.
             raise FilterSpecError(
@@ -123,7 +123,7 @@ class ContentFilter:
 
     def keeps_tags(self, tags: Iterable[str]) -> bool:
         """Whether an artist's tags survive the tag half. Absence is always kept."""
-        folded = normalise_tags(tags)
+        folded = normalize_tags(tags)
         if not folded:
             return True
         if self.exclude_tags and (folded & self.exclude_tags):

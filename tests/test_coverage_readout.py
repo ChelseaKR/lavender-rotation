@@ -61,7 +61,7 @@ def test_summary_frames_unknown_respectfully(profile, catalog, source) -> None:
         assert pejorative not in lowered
 
 
-def test_all_unknown_run_is_not_pathologised() -> None:
+def test_all_unknown_run_is_not_pathologized() -> None:
     recs = [_rec(make_artist(f"u{i}"), IdentityBasis.UNKNOWN) for i in range(4)]
     cov = identity_coverage(recs)
     assert cov.unknown == 4

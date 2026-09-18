@@ -5,7 +5,7 @@ It deliberately spans every identity basis the system must handle responsibly:
 * sourced **women** (MusicBrainz gender, Wikidata P21, artist statement),
 * a sourced **nonbinary** solo artist (artist statement),
 * sourced **female-fronted** bands (Discogs lineup, distinct from member gender),
-* sourced **men** (present on musical merit, neither boosted nor penalised), and
+* sourced **men** (present on musical merit, neither boosted nor penalized), and
 * a first-class **unknown** artist (surfaced on similarity alone).
 
 The listening history and similarity graph are tuned so the hybrid recommender

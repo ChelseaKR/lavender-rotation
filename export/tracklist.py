@@ -1,4 +1,4 @@
-"""Turn recommendations into a track list, and serialise it to portable formats.
+"""Turn recommendations into a track list, and serialize it to portable formats.
 
 These are the **credential-free** exports: they work for everyone, with no
 connected account and no network. Each format carries the artist, its rank, and
@@ -102,7 +102,7 @@ def render(
     fmt: ExportFormat,
     playlist_name: str = "Lavender Rotation",
 ) -> str:
-    """Serialise a track list to the requested fallback format."""
+    """Serialize a track list to the requested fallback format."""
     if fmt is ExportFormat.TEXT:
         return to_plaintext(tracks)
     if fmt is ExportFormat.CSV:

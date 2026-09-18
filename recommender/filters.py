@@ -8,7 +8,7 @@ is a re-ranking policy, the other is a subtraction from the result set, and only
 the second can make someone disappear.
 
 They also answer to different owners. The lens is the product's stated value
-judgement, argued for in ``LensSpec.rationale`` and audited in
+judgment, argued for in ``LensSpec.rationale`` and audited in
 ``docs/audits/fairness-identity.md``. A filter is the listener's own preference
 about their own discovery queue, off by default, chosen per run.
 
@@ -17,7 +17,7 @@ implementation — keep only what the lens boosts — is wrong here, and wrong i
 the way this project exists to prevent. ``values_aligned`` is ``False`` for an
 artist whose gender is simply *unknown*, so filtering on it would delete every
 unknown artist from the results: on the listening history this was written
-against, that was 4 of 10 picks and 57 of 88 catalogued artists. Those are not
+against, that was 4 of 10 picks and 57 of 88 cataloged artists. Those are not
 men. They are artists nobody has sourced — disproportionately the less-documented
 ones, which on a gender-imbalanced upstream skews against exactly the artists
 the lens is for. "Unknown is first-class and is never dropped" is a hard
