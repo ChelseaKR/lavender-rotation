@@ -1,9 +1,9 @@
 # Contributing to Lavender Rotation
 
 Thanks for your interest. Lavender Rotation is an independent personal open-source project
-(AGPL-3.0-or-later, unaffiliated with any employer or client). It is a *values-aware* recommender, and the whole
-point of the repo is that its responsible-AI posture is **mechanically enforced rather than
-asserted**. Please read this before opening an issue or a pull request — one invariant, the
+(AGPL-3.0-or-later, unaffiliated with any employer or client). It is a *values-aware*
+recommender, and the whole point of the repo is that its responsible-AI posture is
+**mechanically enforced rather than asserted**. Please read this before opening an issue or a pull request — one invariant, the
 sourced-not-inferred identity rule, is non-negotiable and shapes how code and tests are written.
 
 If you have not yet, read [`README.md`](README.md) for what the project is and why, and

@@ -12,6 +12,16 @@ tag, not backfilled to an earlier commit date.
 
 ## [Unreleased]
 
+### Changed
+
+- **Relicensed from MIT to AGPL-3.0-or-later** (sole-author relicense, 2026-09-18),
+  so derivatives and network deployments stay open. The MIT grant is not withdrawn:
+  every commit on `main` up to and including `fbe20a8` remains available under MIT.
+  No tagged release exists, so there is no MIT-licensed release artifact beyond those
+  commits. `LICENSE` now carries the canonical AGPL-3.0 text under a short history
+  note; `NOTICE`, `pyproject.toml`, `CITATION.cff`, `README.md`, `CONTRIBUTING.md` and
+  `SECURITY.md` name the new license.
+
 ### Added
 
 - `--json` on `report`, `feedback`, `refresh`, `eval` and `runs`, completing the
@@ -625,8 +635,6 @@ tag, not backfilled to an earlier commit date.
   (BL-8, 56628ee).
 
 ### Changed
-- **Relicensed from MIT to AGPL-3.0-or-later** (sole-author relicense): keeps
-  derivatives and network deployments open; prior released snapshots remain MIT.
 - Recorded the supported Python floor of `>=3.12` in the remaining developer-facing
   surfaces (ADR 0004, which supersedes ADR 0002 and ADR 0001's four-version matrix
   provision; `CONTRIBUTING.md`; the committed main-ruleset target now requires only
