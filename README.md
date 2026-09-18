@@ -4,7 +4,7 @@
 
 **Trans women are women here — explicitly.** The three terms in the tagline are not redundant; they cover three different shapes: *women* (solo artists whose sourced self-identification is woman — cis or trans, with no distinction drawn anywhere in the data model), *nonbinary* artists (represented as nonbinary, never folded into another category), and *female-fronted* (band-composition metadata: an act whose sourced lineup/role data shows a woman — cis or trans — fronting it, which is a fact about that lineup, never a claim about the band's other members). A trans woman artist whose self-identification is sourced is surfaced as a woman, full stop. A band fronted by a sourced nonbinary artist is described as fronted by a nonbinary artist — the lens surfaces it, and no one is relabeled to get there.
 
-**Status:** `Beta` · **Track:** Personal (data/ML + small web app) · **License:** MIT · **Data:** personal/local
+**Status:** `Beta` · **Track:** Personal (data/ML + small web app) · **License:** AGPL-3.0-or-later · **Data:** personal/local
 
 ## Quickstart
 
@@ -294,6 +294,15 @@ Inherits [`/STANDARDS`](../STANDARDS/). Per-standard declarations (Documentation
 
 Open or human-gated gaps are dispositioned in `docs/RESEARCH-ROADMAP.md` and
 `docs/ideation/`; they are not represented as shipped features.
+
+## License
+
+Lavender Rotation is licensed under the [GNU Affero General Public License, version 3 or
+later](LICENSE) (AGPL-3.0-or-later) from 2026-09-18 onward. Before that it was MIT-licensed,
+and that grant stands: every commit on `main` up to and including `fbe20a8` remains available
+under the MIT License. The project has never cut a tagged release, so there is no MIT-licensed
+release artifact beyond those commits. [`NOTICE`](NOTICE) records the same license history, and
+neither license covers artist-identity data (also in `NOTICE`).
 
 ## Support
 
