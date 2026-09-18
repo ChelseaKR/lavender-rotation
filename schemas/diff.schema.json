@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ChelseaKR/lavender-rotation/blob/main/schemas/diff.schema.json",
+  "title": "lavender diff <before> <after> --json",
+  "description": "What changed between two recorded runs, and what the record can support saying about why. A cause is named only where exactly one mechanism moved; otherwise the shift reports 'cause-not-determined' and lists the candidates, which is a statement about the evidence rather than about the ranking.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "ok",
+    "before_run_id",
+    "after_run_id",
+    "entered",
+    "left",
+    "shifts",
+    "held",
+    "coverage_delta",
+    "exposure_delta",
+    "changed_inputs",
+    "mixed_fields",
+    "unchanged"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "command": {
+      "type": "string",
+      "const": "diff"
+    },
+    "ok": {
+      "type": "boolean",
+      "const": true
+    },
+    "before_run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "after_run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "entered": {
+      "type": "array",
+      "description": "Artists in the later run's top-k and not the earlier.",
+      "items": {
+        "type": "object",
+        "required": [
+          "artist_id",
+          "name",
+          "rank",
+          "base_rank",
+          "lens_rank",
+          "segment",
+          "basis"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "artist_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "base_rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "lens_rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "segment": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "left": {
+      "type": "array",
+      "description": "Artists in the earlier run's top-k and not the later.",
+      "items": {
+        "type": "object",
+        "required": [
+          "artist_id",
+          "name",
+          "rank",
+          "base_rank",
+          "lens_rank",
+          "segment",
+          "basis"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "artist_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "base_rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "lens_rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "segment": {
+            "type": "string"
+          },
+          "basis": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "shifts": {
+      "type": "array",
+      "description": "Artists in both runs at different displayed ranks.",
+      "items": {
+        "type": "object",
+        "required": [
+          "artist_id",
+          "name",
+          "from_rank",
+          "to_rank",
+          "delta",
+          "cause",
+          "candidates"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "artist_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string"
+          },
+          "from_rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "to_rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "delta": {
+            "type": "integer",
+            "description": "to_rank - from_rank. Negative is a move up the list."
+          },
+          "cause": {
+            "type": "string",
+            "enum": [
+              "lens",
+              "explore",
+              "upstream",
+              "profile",
+              "feedback",
+              "content-filter",
+              "cause-not-determined"
+            ],
+            "description": "The mechanism the record singles out, or 'cause-not-determined' when more than one moved. Never absent: a diff that cannot attribute a shift says so rather than omitting the key."
+          },
+          "candidates": {
+            "type": "array",
+            "description": "Every mechanism that moved. One entry when the cause is named; two or more when it is not.",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "held": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Artists present in both runs at the same rank."
+    },
+    "coverage_delta": {
+      "type": "object",
+      "description": "Change in each recorded coverage figure. A null is 'one side did not record this', never a zero change."
+    },
+    "exposure_delta": {
+      "type": "object",
+      "description": "Change in each recorded exposure share, with the same null rule."
+    },
+    "changed_inputs": {
+      "type": "array",
+      "description": "Upstream inputs whose digest differs between the two runs.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "mixed_fields": {
+      "type": "array",
+      "description": "Fields that make these two runs answers to different questions, compared anyway under --allow-mixed. Empty on a like-for-like diff; a non-empty list is a caveat on every other figure in this document.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "listener_digest",
+          "lens_name",
+          "content_filter"
+        ],
+        "description": "A field a diff refuses to cross by default."
+      }
+    },
+    "unchanged": {
+      "type": "boolean",
+      "description": "True when nothing entered, left, or moved."
+    }
+  }
+}

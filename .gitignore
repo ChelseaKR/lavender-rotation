@@ -31,3 +31,19 @@ node_modules/
 
 # OS
 .DS_Store
+
+# Generated upstream worklist: derived from a personal listening history
+# (artist play counts), so it is local output, never a committed artifact.
+upstream-worklist.md
+upstream-worklist.html
+# `lavender report --out` renders a real listener's picks — taste data, and the
+# file says so in its own privacy footer. Local output, never committed.
+queer-discoveries.html
+*-discoveries.html
+
+# Run manifests. They live under the resolved data directory, which is outside
+# the repository by default — this covers the case where an operator points
+# LAVENDER_DATA_DIR at the checkout. A manifest holds a listener's picks and
+# their ranks, so it is local output for the same reason the report is.
+runs/
+data/runs/

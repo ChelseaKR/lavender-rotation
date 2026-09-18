@@ -1,7 +1,7 @@
 """FIX-04: cache lifecycle — dedupe, TTL, schema versioning/migrations, refresh.
 
 The cache backs *identity claims*, so its lifecycle is a responsible-tech surface:
-a stale cached claim must be re-checkable (TTL / ``wad refresh``), re-ingesting the
+a stale cached claim must be re-checkable (TTL / ``lavender refresh``), re-ingesting the
 same history must not double play weights (dedupe), and a schema mismatch must fail
 loudly rather than silently misread (versioning).
 """
@@ -104,7 +104,7 @@ def test_cached_response_past_ttl_is_a_miss(mem_cache) -> None:
     assert mem_cache.get_cached_response("u://1", ttl_days=30, now="2026-07-09") is None
 
 
-def test_no_ttl_preserves_never_expire_behaviour(mem_cache) -> None:
+def test_no_ttl_preserves_never_expire_behavior(mem_cache) -> None:
     mem_cache.put_cached_response("u://1", "body", "1999-01-01")
     assert mem_cache.get_cached_response("u://1") == "body"
 
@@ -151,7 +151,7 @@ def test_refresh_is_silent_for_unchanged_and_new_artists(mem_cache) -> None:
     assert mem_cache.get_artist("new-artist") is not None  # but the new artist is stored
 
 
-# -- `wad refresh` CLI -------------------------------------------------------------
+# -- `lavender refresh` CLI -------------------------------------------------------------
 
 
 def test_cli_refresh_populates_a_fresh_cache_and_exits_zero(tmp_path, capsys) -> None:
@@ -175,3 +175,339 @@ def test_cli_refresh_rejects_negative_ttl(tmp_path) -> None:
     with pytest.raises(SystemExit) as exc:
         cli_main(["refresh", "--db", str(tmp_path / "c.db"), "--ttl-days", "-1"])
     assert exc.value.code == 2
+
+
+# -- `lavender refresh --user`: the live re-enrichment leg -----------------------------
+
+
+class _DeadEnricher:
+    """What the live enricher returns when nothing upstream answers: no evidence."""
+
+    def gender_evidence(self, artist_id):
+        return []
+
+    def orientation_evidence(self, artist_id):
+        return []
+
+    def composition_evidence(self, artist_id):
+        return [], []
+
+
+def _install_fake_upstream(monkeypatch, enricher) -> None:
+    """Wire the live refresh to an offline enricher; no socket is ever opened."""
+    from pipeline.lastfm import FixtureLastfm
+
+    monkeypatch.setenv("LAVENDER_LASTFM_API_KEY", "test-key-not-a-real-credential")
+    monkeypatch.setattr(
+        "pipeline.cli.LastfmClient",
+        lambda api_key, cache: FixtureLastfm(scrobbles={}, tags={}, similar={}),
+    )
+    monkeypatch.setattr(
+        "pipeline.cli._live_enricher", lambda cache, *, retrieved_at, ttl_days: enricher
+    )
+
+
+def test_cli_refresh_user_without_an_api_key_says_so_and_changes_nothing(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    monkeypatch.delenv("LAVENDER_LASTFM_API_KEY", raising=False)
+    db = tmp_path / "cache.db"
+    with Cache(db) as cache:
+        cache.put_artist(make_artist("cited", gender=Gender.WOMAN), fetched_at="2026-06-01")
+
+    assert cli_main(["refresh", "--db", str(db), "--user", "someone"]) == 2
+
+    assert "LAVENDER_LASTFM_API_KEY" in capsys.readouterr().err
+    with Cache(db) as cache:
+        assert cache.artist_fetched_at("cited") == "2026-06-01"
+
+
+def test_cli_refresh_user_reports_an_unreachable_upstream_instead_of_agreement(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """The absence-as-value guard, end to end through the CLI.
+
+    A totally silent upstream must not exit zero having quietly replaced every
+    cited identity with "unknown" and printed "no identity-label changes".
+    """
+    db = tmp_path / "cache.db"
+    with Cache(db) as cache:
+        cache.put_artist(make_artist("cited", gender=Gender.WOMAN), fetched_at="2026-06-01")
+    _install_fake_upstream(monkeypatch, _DeadEnricher())
+
+    code = cli_main(["refresh", "--db", str(db), "--user", "someone"])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "unreachable" in captured.out
+    assert "nothing was rewritten" in captured.out
+    assert "nothing was verified against upstream" in captured.err
+    with Cache(db) as cache:
+        kept = cache.get_artist("cited")
+        assert kept is not None and kept.identity.gender is Gender.WOMAN
+        assert cache.artist_fetched_at("cited") == "2026-06-01"  # lineage did not advance
+
+
+def test_cli_refresh_user_writes_back_what_upstream_actually_said(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    from pipeline.enrich import FixtureEnricher
+    from pipeline.identity import IdentityEvidence
+    from pipeline.models import SourceKind
+
+    db = tmp_path / "cache.db"
+    with Cache(db) as cache:
+        cache.put_artist(make_artist("cited", gender=Gender.UNKNOWN), fetched_at="2026-06-01")
+    _install_fake_upstream(
+        monkeypatch,
+        FixtureEnricher(
+            gender={
+                "cited": [
+                    IdentityEvidence(
+                        kind=SourceKind.WIKIDATA_P21,
+                        value="Q6581072",
+                        citation="https://www.wikidata.org/wiki/Q16735549",
+                        retrieved_at="2026-08-18",
+                    )
+                ]
+            },
+            composition={},
+        ),
+    )
+
+    code = cli_main(["refresh", "--db", str(db), "--user", "someone"])
+
+    assert code == 0
+    assert "re-sourced from upstream" in capsys.readouterr().out
+    with Cache(db) as cache:
+        updated = cache.get_artist("cited")
+        assert updated is not None and updated.identity.gender is Gender.WOMAN
+
+
+def test_cli_refresh_user_truncates_the_protected_list_but_never_the_count(
+    tmp_path, capsys, monkeypatch
+) -> None:
+    """A truncated list that looks complete is the lie this command exists to stop."""
+    from pipeline.cli import _PROTECTED_PREVIEW
+
+    total = _PROTECTED_PREVIEW + 5
+    db = tmp_path / "cache.db"
+    with Cache(db) as cache:
+        for n in range(total):
+            cache.put_artist(
+                make_artist(f"cited-{n:03d}", gender=Gender.WOMAN), fetched_at="2026-06-01"
+            )
+    _install_fake_upstream(monkeypatch, _DeadEnricher())
+
+    assert cli_main(["refresh", "--db", str(db), "--user", "someone", "--limit", str(total)]) == 1
+
+    out = capsys.readouterr().out
+    assert f"and 5 more (listed {_PROTECTED_PREVIEW} of {total})" in out
+    assert out.count("cited-") == _PROTECTED_PREVIEW
+
+
+def test_stalest_artist_ids_lets_bounded_refresh_runs_make_progress(mem_cache) -> None:
+    """Insertion-order slicing would hand every run the same head of the catalog."""
+    mem_cache.put_artist(make_artist("checked-today"), fetched_at="2026-08-18")
+    mem_cache.put_artist(make_artist("never-rechecked"), fetched_at="2020-01-01")
+    mem_cache.put_artist(make_artist("middling"), fetched_at="2026-01-01")
+
+    assert mem_cache.stalest_artist_ids(2) == ["never-rechecked", "middling"]
+    assert mem_cache.stalest_artist_ids(99) == ["never-rechecked", "middling", "checked-today"]
+
+
+def test_a_verified_refresh_moves_an_artist_to_the_back_of_the_queue(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    """The mechanism that makes several bounded runs add up to a whole catalog."""
+    from pipeline.enrich import FixtureEnricher
+    from pipeline.identity import IdentityEvidence
+    from pipeline.models import SourceKind
+
+    db = tmp_path / "cache.db"
+    with Cache(db) as cache:
+        for artist_id in ("first", "second"):
+            cache.put_artist(make_artist(artist_id, gender=Gender.UNKNOWN), fetched_at="2020-01-01")
+        assert cache.stalest_artist_ids(1) == ["first"]
+
+    _install_fake_upstream(
+        monkeypatch,
+        FixtureEnricher(
+            gender={
+                artist_id: [
+                    IdentityEvidence(
+                        kind=SourceKind.WIKIDATA_P21,
+                        value="Q6581072",
+                        citation="https://www.wikidata.org/wiki/Q16735549",
+                        retrieved_at="2026-08-18",
+                    )
+                ]
+                for artist_id in ("first", "second")
+            },
+            composition={},
+        ),
+    )
+    assert cli_main(["refresh", "--db", str(db), "--user", "someone", "--limit", "1"]) == 0
+    capsys.readouterr()
+
+    with Cache(db) as cache:
+        # the one just refreshed sorts to the back, so the next run gets the other
+        assert cache.stalest_artist_ids(1) == ["second"]
+
+
+def test_cli_refresh_without_user_is_still_the_demo_branch(tmp_path, capsys) -> None:
+    """The live leg is opt-in: the default path must not have changed shape."""
+    assert cli_main(["refresh", "--db", str(tmp_path / "cache.db")]) == 0
+    out = capsys.readouterr().out
+    assert "DEMO ONLY" in out
+    assert "no upstream identity API was queried" in out
+
+
+# -- #70: `lavender refresh` must not delete a filed correction ------------------------
+
+
+def _seed_stale_only_in_retrieved_at(db, artist_id: str) -> str:
+    """Cache a copy of a demo artist differing from the fixture ONLY in the date.
+
+    Returns the citation the seeded source carries. A refresh against the fixture
+    then produces an ``IdentityLabelChange`` whose ``old_value`` and ``new_value``
+    are byte-identical — the exact shape that used to reconcile a pending
+    correction away.
+    """
+    from dataclasses import replace
+
+    from pipeline.demo import demo_catalog
+
+    artist = demo_catalog()[artist_id]
+    stale_sources = tuple(replace(s, retrieved_at="2020-01-01") for s in artist.identity.sources)
+    stale = replace(artist, identity=replace(artist.identity, sources=stale_sources))
+    with Cache(db) as cache:
+        cache.put_artist(stale, fetched_at="2020-01-01")
+    return artist.identity.sources[0].citation
+
+
+def test_cli_refresh_does_not_delete_a_pending_correction(tmp_path, capsys) -> None:
+    """THE #70 regression, end to end through the CLI.
+
+    A person files a note saying an editorial database has their gender wrong.
+    An ordinary refresh — which queries no upstream, and in which the asserted
+    value does not move at all — used to delete that note and report
+    "reconciled 1 pending upstream correction(s)".
+    """
+    from pipeline import corrections
+
+    db = tmp_path / "cache.db"
+    pending = tmp_path / "pending.json"
+    citation = _seed_stale_only_in_retrieved_at(db, "snail-mail")
+    corrections.add_correction(
+        pending,
+        artist_id="snail-mail",
+        source_kind="musicbrainz-gender",
+        citation=citation,
+        current_value="female",
+        proposed_value="nonbinary",
+        note="the editorial record is wrong",
+        filed_at="2026-08-06",
+    )
+
+    exit_code = cli_main(
+        [
+            "refresh",
+            "--artist",
+            "snail-mail",
+            "--db",
+            str(db),
+            "--pending-corrections",
+            str(pending),
+        ]
+    )
+    assert exit_code == 0
+
+    rows = corrections.list_corrections(pending)
+    assert len(rows) == 1, "an ordinary refresh deleted a filed correction"
+    assert rows[0].proposed_value == "nonbinary"
+    out = capsys.readouterr().out
+    # The asserted value moved for nobody, and nothing upstream was consulted —
+    # the report must not claim otherwise.
+    assert "reconciled 0" in out
+    assert "no upstream identity source was queried" in out
+    assert "1 pending correction(s) still open" in out
+    assert "reconciled 1 pending upstream correction(s)" not in out
+
+
+def test_a_negative_schema_stamp_is_a_corrupt_cache_not_a_migration(tmp_path) -> None:
+    """Only the "too new" end of the version check was guarded.
+
+    SQLite stores `PRAGMA user_version` as a signed 32-bit int and accepts
+    negatives. The migration loop starts at `current + 1`, so a stamp of -3
+    looked up `_MIGRATIONS[-2]` and surfaced as a bare `KeyError: -2` out of a
+    constructor that every single command calls.
+    """
+    import sqlite3
+
+    from pipeline.cache import Cache, CacheSchemaError
+
+    db = tmp_path / "corrupt.db"
+    with Cache(db):
+        pass
+    raw = sqlite3.connect(db)
+    raw.execute("PRAGMA user_version = -3")
+    raw.commit()
+    raw.close()
+
+    with pytest.raises(CacheSchemaError, match="not a valid version"):
+        Cache(db)
+
+
+def test_one_unreadable_row_costs_that_artist_not_the_refresh_run(tmp_path) -> None:
+    """`refresh_catalog` promises this in its docstring; the read was outside the try.
+
+    A refresh over a real history walks thousands of artists at roughly one
+    request per second. Aborting the whole walk on the *cache read* — after the
+    rate-limited fetches for every earlier artist had already been paid for —
+    is the failure the docstring says cannot happen.
+    """
+    from unittest.mock import patch
+
+    from pipeline.cache import Cache
+    from pipeline.enrich import FixtureEnricher
+    from pipeline.identity import IdentityEvidence
+    from pipeline.ingest import enrich_artist, refresh_catalog
+    from pipeline.lastfm import FixtureLastfm
+    from pipeline.models import SourceKind
+
+    lastfm = FixtureLastfm(scrobbles={}, tags={"good": (), "bad": ()}, similar={})
+    enricher = FixtureEnricher(
+        gender={
+            aid: [
+                IdentityEvidence(
+                    kind=SourceKind.WIKIDATA_P21,
+                    value="Q6581072",
+                    citation="https://www.wikidata.org/wiki/Q1",
+                    retrieved_at="2026-08-28",
+                )
+            ]
+            for aid in ("good", "bad")
+        },
+        composition={},
+    )
+    with Cache(":memory:") as cache:
+        for aid in ("bad", "good"):
+            cache.put_artist(
+                enrich_artist(aid, aid.title(), lastfm, enricher), fetched_at="2026-05-31"
+            )
+
+        real_get = cache.get_artist
+
+        def _explode_on_one(artist_id: str):
+            if artist_id == "bad":
+                raise ValueError("truncated payload in this row")
+            return real_get(artist_id)
+
+        with patch.object(cache, "get_artist", side_effect=_explode_on_one):
+            outcome = refresh_catalog(cache, lastfm, enricher, fetched_at="2026-08-28")
+
+        assert outcome.failed == ("bad",)
+        assert outcome.verified == ("good",)
+        assert outcome.attempted == 1
+        assert cache.artist_fetched_at("good") == "2026-08-28"

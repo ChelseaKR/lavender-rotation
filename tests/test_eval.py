@@ -104,7 +104,7 @@ def test_check_regression_skips_metrics_absent_from_baseline() -> None:
     assert "precision_at_k" not in result["metrics"]
 
 
-# -- the `wad eval` gate end-to-end (exit codes are the merge-blocking contract) --
+# -- the `lavender eval` gate end-to-end (exit codes are the merge-blocking contract) --
 
 
 def _run_eval(tmp_path, baseline: str | None) -> tuple[int, dict]:
@@ -200,3 +200,58 @@ def test_cli_eval_fails_on_regression_vs_baseline(tmp_path, capsys) -> None:
     assert code == 1
     assert report["regression_vs_baseline"]["regressed"] is True
     assert "regressed vs docs/audits/eval-baseline.json" in capsys.readouterr().err
+
+
+# --- CLI numeric arguments that were not validated ---------------------------
+#
+# `--k` goes through `_positive_int`, `--ttl-days` through `_nonnegative_int`,
+# `--explore` was range-checked deep inside `recommender.diversify` — and
+# `--lens` was checked nowhere. `--lens 5`, `--lens -1`, `--lens nan` and
+# `--lens inf` all parsed, then surfaced as a bare ValueError traceback out of
+# the ranker (and, for `report`, out of a dict comprehension) instead of
+# argparse's clean usage error and exit 2.
+
+
+@pytest.mark.parametrize("command", ["recommend", "export", "report"])
+@pytest.mark.parametrize("value", ["5", "-1", "nan", "inf", "-inf", "banana"])
+def test_lens_strength_outside_the_unit_interval_is_an_argparse_error(
+    command: str, value: str
+) -> None:
+    from pipeline.cli import main
+
+    with pytest.raises(SystemExit) as exc:
+        main([command, "--lens", value])
+    assert exc.value.code == 2, "a bad flag must exit 2, not raise from inside the ranker"
+
+
+@pytest.mark.parametrize("value", ["5", "-1", "nan", "inf"])
+def test_explore_outside_the_unit_interval_is_an_argparse_error(value: str) -> None:
+    from pipeline.cli import main
+
+    with pytest.raises(SystemExit) as exc:
+        main(["recommend", "--explore", value])
+    assert exc.value.code == 2
+
+
+@pytest.mark.parametrize("value", ["0", "0.5", "1", "1.0"])
+def test_the_whole_unit_interval_is_still_accepted(value: str) -> None:
+    """The bound must not be "reject everything", which would also always pass."""
+    from pipeline.cli import _unit_interval
+
+    assert 0.0 <= _unit_interval(value) <= 1.0
+
+
+def test_map_at_k_refuses_a_non_positive_k() -> None:
+    """It divided by `min(len(positives), k)`: ZeroDivisionError at 0, negative MAP below.
+
+    `precision_recall_at_k` short-circuits on an empty top-k and this one did
+    not, so the two halves of the same metric pair disagreed about what k=0
+    means. The CLI never passes one, but `evaluate`/`evaluate_worlds`/
+    `fairness_report`/`eval_real` are public API.
+    """
+    from recommender.eval import average_precision_at_k
+
+    for bad in (0, -1, -5):
+        with pytest.raises(ValueError, match="k must be positive"):
+            average_precision_at_k(["a", "b"], {"a"}, bad)
+    assert average_precision_at_k(["a", "b"], {"a"}, 1) == 1.0

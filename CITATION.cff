@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: Women-Artist Discovery
+title: Lavender Rotation
 message: >-
   If you use this work, please cite it. This is unreleased pre-1.0 development
   software: no git tag or GitHub release exists yet, so cite by commit hash
@@ -8,7 +8,9 @@ message: >-
 authors:
   - family-names: Kelly-Reif
     given-names: Chelsea
-version: 0.1.0
-date-released: 2026-07-17
+version: 0.1.0.dev0
+# No tag or release exists yet (see the note above), so no `date-released` is
+# declared: stating one would name a release that does not exist. Add it with the
+# first tag.
 license: AGPL-3.0-or-later
-repository-code: "https://github.com/ChelseaKR/women-artist-discovery"
+repository-code: "https://github.com/ChelseaKR/lavender-rotation"

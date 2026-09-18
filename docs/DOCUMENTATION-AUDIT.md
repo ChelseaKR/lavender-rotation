@@ -10,9 +10,9 @@ This audit records the documentation sweep and remediation loop for this reposit
 | --- | --- | --- |
 | Entry docs | pass | `README.md` present |
 | Security/process docs | pass | CONTRIBUTING.md, SECURITY.md, CHANGELOG.md |
-| Architecture/planning docs | pass | 11 ADRs; roadmap, 5 ideation docs, and 2 research docs |
-| Safety/privacy/audit docs | pass | 11 safety/privacy/accessibility/audit docs |
-| Validation surface | pass | 38 Python test files; 7 workflow files |
+| Architecture/planning docs | pass | every ADR under `docs/adr/` (13 at the time of writing; `ls docs/adr/*.md | wc -l` is the live count), roadmap, ideation notes, and the research docs |
+| Safety/privacy/audit docs | pass | every doc under `docs/audits/` plus this file and `docs/RESPONSIBLE-TECH-AUDITS.md` |
+| Validation surface | pass | every Python file under `tests/` and every file under `.github/workflows/` (recompute with `git ls-files`; the transcribed counts here went stale within a few merges and nothing noticed) |
 | Local doc links | pass | Authored-doc relative links rechecked; 0 unresolved |
 
 ## Root-Level Documentation Audit
@@ -56,7 +56,7 @@ Root-adjacent template files checked:
 
 Package and workspace metadata:
 
-- Python package `women-artist-discovery` (>=3.10).
+- Python package `lavender-rotation` (>=3.12, ADR 0004).
 
 Source and operations surfaces seen at the repo root:
 
@@ -74,6 +74,7 @@ Workflow files checked:
 
 - `.github/workflows/ci.yml`
 - `.github/workflows/codeql.yml`
+- `.github/workflows/mutation.yml`
 - `.github/workflows/osv-scanner.yml`
 - `.github/workflows/release.yml`
 - `.github/workflows/scorecard.yml`
@@ -84,11 +85,11 @@ Workflow files checked:
 
 | Category | Count | Representative files |
 | --- | ---: | --- |
-| architecture and interfaces | 11 | `docs/adr/0000-record-architecture-decisions.md`, `docs/adr/0004-python-floor-3.12.md`, `docs/adr/0007-sourced-only-identity-unknown-first-class.md`, `docs/adr/0010-release-producing-repository.md`, plus 7 more under `docs/adr/` |
+| architecture and interfaces | every ADR | `docs/adr/0000-record-architecture-decisions.md`, `docs/adr/0004-python-floor-3.12.md`, `docs/adr/0007-sourced-only-identity-unknown-first-class.md`, `docs/adr/0010-release-producing-repository.md`, plus the rest under `docs/adr/` |
 | entry points and repo process | 9 | `.github/PULL_REQUEST_TEMPLATE.md`, `CHANGELOG.md`, `CITATION.cff`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `LICENSE`, `NOTICE`, `README.md`, plus 1 more |
 | other docs | 5 | `CODEOWNERS`, `DEFINITION_OF_DONE.md`, `docs/I18N.md`, `docs/PROJECT-SCOPE.md`, `docs/README.md` |
 | planning and research | 8 | `docs/ROADMAP.md`, `docs/RESEARCH-ROADMAP.md`, `docs/USER-RESEARCH.md`, and `docs/ideation/` |
-| safety, privacy, accessibility, and audits | 11 | `docs/DOCUMENTATION-AUDIT.md`, `docs/RESPONSIBLE-TECH-AUDITS.md`, both accessibility reports, and the audit cards/registers under `docs/audits/` |
+| safety, privacy, accessibility, and audits | all | `docs/DOCUMENTATION-AUDIT.md`, `docs/RESPONSIBLE-TECH-AUDITS.md`, both accessibility reports, and the audit cards/registers under `docs/audits/` |
 | methods writeup | 1 | `docs/writeup/methods.md` |
 
 Full hand-authored doc inventory checked by this pass:

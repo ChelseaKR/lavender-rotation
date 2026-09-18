@@ -19,7 +19,7 @@ from pipeline.logconfig import (
 
 def _our_handlers(logger: logging.Logger) -> list[logging.Handler]:
     """Handlers configure_logging() itself attached (ignores pytest's own caplog
-    handlers, which pytest attaches to any non-propagating logger like ``wad``)."""
+    handlers, which pytest attaches to any non-propagating logger like ``lavender``)."""
     return [
         h for h in logger.handlers if isinstance(h.formatter, KeyValueFormatter | JsonFormatter)
     ]
@@ -27,7 +27,7 @@ def _our_handlers(logger: logging.Logger) -> list[logging.Handler]:
 
 def test_configure_logging_attaches_one_stderr_handler() -> None:
     root = configure_logging()
-    assert root.name == "wad"
+    assert root.name == "lavender"
     ours = _our_handlers(root)
     assert len(ours) == 1
     handler = ours[0]
@@ -46,17 +46,17 @@ def test_configure_logging_is_idempotent() -> None:
     assert len(_our_handlers(second)) == 1  # no duplicate handler added on a second call
 
 
-def test_get_logger_is_under_the_wad_namespace() -> None:
-    log = get_logger("wad.ingest")
-    assert log.name == "wad.ingest"
+def test_get_logger_is_under_the_lavender_namespace() -> None:
+    log = get_logger("lavender.ingest")
+    assert log.name == "lavender.ingest"
     assert log.parent is not None
-    assert log.parent.name == "wad"
+    assert log.parent.name == "lavender"
 
 
 def test_formatter_renders_key_value_pairs() -> None:
     formatter = KeyValueFormatter()
     record = logging.LogRecord(
-        name="wad.ingest",
+        name="lavender.ingest",
         level=logging.INFO,
         pathname=__file__,
         lineno=1,
@@ -66,7 +66,7 @@ def test_formatter_renders_key_value_pairs() -> None:
     )
     line = formatter.format(record)
     assert "level=info" in line
-    assert "logger=wad.ingest" in line
+    assert "logger=lavender.ingest" in line
     assert "msg='stage=fetch event=start'" in line
 
 
@@ -76,7 +76,7 @@ def test_formatter_includes_exception_info() -> None:
         raise ValueError("boom")
     except ValueError:
         record = logging.LogRecord(
-            name="wad.ingest",
+            name="lavender.ingest",
             level=logging.ERROR,
             pathname=__file__,
             lineno=1,
@@ -102,7 +102,7 @@ def test_no_network_handlers_are_ever_configured() -> None:
 
 def _record(msg: str, *, exc: bool = False) -> logging.LogRecord:
     return logging.LogRecord(
-        name="wad.ingest",
+        name="lavender.ingest",
         level=logging.ERROR if exc else logging.INFO,
         pathname=__file__,
         lineno=1,
@@ -116,7 +116,7 @@ def test_json_formatter_emits_one_json_object_with_expected_keys() -> None:
     line = JsonFormatter().format(_record("stage=fetch event=start"))
     payload = json.loads(line)
     assert payload["level"] == "info"
-    assert payload["logger"] == "wad.ingest"
+    assert payload["logger"] == "lavender.ingest"
     assert payload["msg"] == "stage=fetch event=start"
     assert payload["ts"].endswith("Z")
     assert "exc_info" not in payload  # only present when an exception is attached
@@ -155,7 +155,7 @@ def test_configure_logging_rejects_unknown_format() -> None:
 def test_cli_log_format_flag_switches_to_json(capsys: pytest.CaptureFixture[str]) -> None:
     try:
         assert cli_main(["--log-format", "json", "recommend", "--k", "1"]) == 0
-        ours = _our_handlers(logging.getLogger("wad"))
+        ours = _our_handlers(logging.getLogger("lavender"))
         assert len(ours) == 1
         assert isinstance(ours[0].formatter, JsonFormatter)
     finally:

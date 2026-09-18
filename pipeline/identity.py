@@ -25,12 +25,15 @@ from typing import Optional
 from pipeline.models import (
     BAND_COMPOSITION_SOURCES,
     INDIVIDUAL_IDENTITY_SOURCES,
+    ORIENTATION_SOURCES,
     BandComposition,
     FrontPerson,
     Gender,
     IdentityBasis,
     IdentityLabel,
     InferenceForbiddenError,
+    Orientation,
+    QueerIdentity,
     Source,
     SourceKind,
 )
@@ -39,7 +42,7 @@ from pipeline.models import (
 # Maps the *raw values a permitted source asserts* onto our self-ID vocabulary.
 # Trans women are women; trans men are men. Values we cannot responsibly map
 # (e.g. MusicBrainz "Not applicable", an unknown QID) are absent here and thus
-# contribute no gender — leaving the label UNKNOWN. This is a *normalisation*
+# contribute no gender — leaving the label UNKNOWN. This is a *normalization*
 # table for sourced claims, never an inference rule.
 _FREEFORM_VOCAB: dict[str, Gender] = {
     "woman": Gender.WOMAN,
@@ -70,10 +73,69 @@ _WIKIDATA_QID_VOCAB: dict[str, Gender] = {
     "Q1097630": Gender.OTHER,  # intersex
 }
 
+# --- Orientation vocabulary (ADR 0011) --------------------------------------
+# Wikidata P91 ("sexual orientation") item ids. Every QID below was verified
+# against live Wikidata on 2026-08-16 by fetching its English label, because
+# this repo has already shipped three wrong Wikidata entities once and a
+# plausible-looking Q-number is not evidence of anything. (Q43455 — the obvious
+# guess for "queer" — is *ethnology*.)
+_ORIENTATION_QID_VOCAB: dict[str, Orientation] = {
+    "Q6636": Orientation.HOMOSEXUAL,  # homosexuality
+    "Q6649": Orientation.LESBIAN,  # lesbianism
+    "Q592": Orientation.GAY,  # gay
+    "Q43200": Orientation.BISEXUAL,  # bisexuality
+    "Q271534": Orientation.PANSEXUAL,  # pansexuality
+    "Q724351": Orientation.ASEXUAL,  # asexuality
+    "Q23912283": Orientation.DEMISEXUAL,  # demisexuality
+    "Q1035954": Orientation.HETEROSEXUAL,  # heterosexuality
+}
+# What an artist's own words map to. Anything absent contributes nothing —
+# there is no fallback that turns an unrecognized phrase into an orientation.
+_ORIENTATION_FREEFORM_VOCAB: dict[str, Orientation] = {
+    "lesbian": Orientation.LESBIAN,
+    "gay": Orientation.GAY,
+    "homosexual": Orientation.HOMOSEXUAL,
+    "bisexual": Orientation.BISEXUAL,
+    "bi": Orientation.BISEXUAL,
+    "pansexual": Orientation.PANSEXUAL,
+    "pan": Orientation.PANSEXUAL,
+    "queer": Orientation.QUEER,
+    "asexual": Orientation.ASEXUAL,
+    "ace": Orientation.ASEXUAL,
+    "demisexual": Orientation.DEMISEXUAL,
+    "straight": Orientation.HETEROSEXUAL,
+    "heterosexual": Orientation.HETEROSEXUAL,
+}
+
+# --- Trans self-identification (ADR 0011) -----------------------------------
+# Read from values a *gender* source already asserted and this module already
+# stored for provenance — no new fetch, no new field, nothing newly asked of
+# anyone. `Gender` still maps every one of these to WOMAN/MAN/NONBINARY and
+# still draws no cis/trans distinction of its own.
+_TRANS_ASSERTED_VALUES: frozenset[str] = frozenset(
+    {
+        "Q1052281",  # trans woman
+        "Q2449503",  # trans man
+        "Q189125",  # transgender
+        "trans woman",
+        "trans man",
+        "transgender",
+        "transgender female",
+        "transgender male",
+        "transfeminine",
+        "transmasculine",
+    }
+)
+
 # Trust priority when sources are present (higher wins on disagreement).
 _SOURCE_PRIORITY: dict[SourceKind, int] = {
     SourceKind.ARTIST_STATEMENT: 3,
     SourceKind.WIKIDATA_P21: 2,
+    # P91 sits where P21 does — below the artist's own words, and for the same
+    # reason. It is admitted for coverage (ADR 0011) while being, more often
+    # than P21 is, a biographer's characterization rather than a self-statement,
+    # which is why the why-card renders the two differently.
+    SourceKind.WIKIDATA_P91: 2,
     SourceKind.MUSICBRAINZ_GENDER: 1,
 }
 # Base confidence contributed by a single source of each kind.
@@ -85,12 +147,46 @@ _SOURCE_BASE_CONFIDENCE: dict[SourceKind, float] = {
 
 
 #: A MusicBrainz artist URL resolves by MBID, which is a UUID; a Wikidata one
-#: resolves by Q-number. Anything else is a label, not a locator.
+#: resolves by Q-number; a Discogs artist URL resolves by numeric
+#: release-database id followed by a slug. Anything else is a label, not a
+#: locator.
 _MUSICBRAINZ_ARTIST = re.compile(
     r"^https://musicbrainz\.org/artist/"
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
 _WIKIDATA_ENTITY = re.compile(r"^https://www\.wikidata\.org/wiki/Q[1-9][0-9]*$")
+_DISCOGS_ARTIST = re.compile(r"^https://www\.discogs\.com/artist/[1-9][0-9]*-\S+$")
+
+#: Host-scoped locator shapes, applied to **any** source kind. The moment a
+#: citation claims to point into one of these registries, it has to be an
+#: address that registry can actually resolve. A citation that claims no
+#: registry — an interview, a label bio, a Wikipedia section — stays free-form,
+#: which is why this is keyed on host rather than on kind: the original
+#: reasoning ("inventing a pattern for a lineup would reject honest citations")
+#: only ever held for citations that are not registry addresses.
+_REGISTRY_LOCATORS: tuple[tuple[str, str, str], ...] = (
+    (
+        "https://musicbrainz.org/artist/",
+        "musicbrainz.org",
+        "a MusicBrainz artist URL ending in an MBID (UUID)",
+    ),
+    (
+        "https://www.wikidata.org/wiki/",
+        "wikidata.org",
+        "a Wikidata entity URL ending in a Q-number",
+    ),
+    (
+        "https://www.discogs.com/artist/",
+        "discogs.com",
+        "a Discogs artist URL shaped /artist/<id>-<Slug> (Discogs addresses "
+        "artists by numeric id, never by a bare slug)",
+    ),
+)
+_REGISTRY_PATTERNS = {
+    "musicbrainz.org": _MUSICBRAINZ_ARTIST,
+    "wikidata.org": _WIKIDATA_ENTITY,
+    "discogs.com": _DISCOGS_ARTIST,
+}
 
 
 def citation_problem(kind: SourceKind, citation: str) -> Optional[str]:
@@ -103,9 +199,21 @@ def citation_problem(kind: SourceKind, citation: str) -> Optional[str]:
     shipped fixture is held to instead (``tests/test_demo_citations.py``), which
     is where the failure actually was.
 
-    Only the two sources with a machine-checkable identifier scheme are checked.
-    An artist statement or a Discogs lineup is cited by whatever URL carries it,
-    and inventing a pattern for those would reject honest citations.
+    Two layers, answering different questions:
+
+    * **By kind** — a ``MUSICBRAINZ_GENDER`` or ``WIKIDATA_P21`` claim has to cite
+      the registry it names. This is the original check.
+    * **By host** — any citation pointing into a known registry has to be an
+      address that registry can resolve. This is what catches the shape the demo
+      shipped for its two ``DISCOGS_LINEUP`` claims (``/artist/big-thief``):
+      exempt from the by-kind layer, and pointing at a registry that addresses
+      artists by numeric id.
+
+    This function checks the **shape** of an identifier, never its **subject**.
+    ``https://www.wikidata.org/wiki/Q16735549`` is a well-formed Wikidata locator
+    that resolves to a Cypriot footballer; nothing here can tell you it was cited
+    for Mitski. Subject is what ``tests/test_demo_citations.py``'s verified-subject
+    ledger is for.
     """
     text = (citation or "").strip()
     if not text:
@@ -114,6 +222,9 @@ def citation_problem(kind: SourceKind, citation: str) -> Optional[str]:
         return "is not a MusicBrainz artist URL ending in an MBID (UUID)"
     if kind is SourceKind.WIKIDATA_P21 and not _WIKIDATA_ENTITY.match(text):
         return "is not a Wikidata entity URL ending in a Q-number"
+    for prefix, host, expected in _REGISTRY_LOCATORS:
+        if text.startswith(prefix) and not _REGISTRY_PATTERNS[host].match(text):
+            return f"claims {host} but is not {expected}"
     return None
 
 
@@ -146,20 +257,66 @@ class IdentityEvidence:
 
 
 def _map_value(kind: SourceKind, value: str) -> Optional[Gender]:
-    """Normalise one sourced claim to the controlled vocabulary, or ``None``."""
+    """Normalize one sourced claim to the controlled vocabulary, or ``None``."""
     raw = value.strip()
     if kind is SourceKind.WIKIDATA_P21:
         return _WIKIDATA_QID_VOCAB.get(raw)
     return _FREEFORM_VOCAB.get(raw.lower())
 
 
+def accepted_gender_values() -> tuple[str, ...]:
+    """Every raw value a caller may assert for a gender, sorted, for a help message.
+
+    Exposed so ``lavender corrections`` can *refuse* an unmappable value instead
+    of storing it. The controlled vocabulary lives here; a command that has to
+    reproduce it in a help string will get it wrong the first time the
+    vocabulary changes.
+    """
+    return tuple(sorted(_FREEFORM_VOCAB) + sorted(_WIKIDATA_QID_VOCAB))
+
+
+def normalize_asserted_value(kind: SourceKind, value: str) -> Optional[Gender]:
+    """Public name for :func:`_map_value` — what gender a raw asserted value means.
+
+    Callers outside the resolver need this to compare two *asserted* values
+    without re-implementing the vocabulary: ``"female"`` and ``"woman"`` are the
+    same claim, and ``"Q6581072"`` is that claim again from Wikidata. The
+    corrections ledger uses it to decide whether an observed upstream value is
+    the one a person proposed (:mod:`pipeline.corrections`). Returns ``None``
+    for anything the controlled vocabulary does not cover — never a guess.
+    """
+    return _map_value(kind, value)
+
+
+def normalize_asserted_orientation(kind: SourceKind, value: str) -> Optional[Orientation]:
+    """The orientation sibling of :func:`normalize_asserted_value`.
+
+    Same job on the second axis (ADR 0011): decide whether two *asserted* values
+    state the same thing without re-implementing the vocabulary. ``"lesbian"``
+    and Wikidata's ``"Q6649"`` are one claim, and the corrections ledger has to
+    know that to reconcile a filed P91 correction against what upstream now
+    says. Returns ``None`` for anything the controlled vocabulary does not cover
+    — never a guess, and never a widening of one orientation into another.
+
+    Defined here rather than beside :func:`_map_orientation` below because the
+    public normalizers belong together; the private mapper it delegates to is
+    declared later in the module and resolved at call time.
+    """
+    return _map_orientation(kind, value)
+
+
 def resolve_identity(evidence: Sequence[IdentityEvidence]) -> IdentityLabel:
     """Resolve an individual's identity from permitted evidence only.
 
     Returns :data:`~pipeline.models.UNKNOWN_IDENTITY` when no permitted evidence
-    yields a mappable gender. Never raises on unknown input — unknown is a normal,
-    first-class answer.
+    yields a mappable gender. Never raises on *unknown* input — unknown is a
+    normal, first-class answer. It does raise
+    :class:`~pipeline.models.InferenceForbiddenError` on *non-permitted* input:
+    :func:`assert_permitted_only` runs first, so a source kind that is not in
+    the permitted sets fails loudly here rather than being silently skipped by
+    the filter below.
     """
+    assert_permitted_only(evidence)
     # Keep only individual-identity sources that map to a known gender. A
     # band-composition source contributes nothing to a *personal* gender claim.
     mapped: list[tuple[IdentityEvidence, Gender]] = []
@@ -216,6 +373,77 @@ def _compute_confidence(
     return round(min(0.99, best + bonus), 3)
 
 
+def _map_orientation(kind: SourceKind, value: str) -> Optional[Orientation]:
+    """Normalize one sourced orientation claim, or ``None``. Never a guess."""
+    raw = value.strip()
+    if kind is SourceKind.WIKIDATA_P91:
+        return _ORIENTATION_QID_VOCAB.get(raw)
+    return _ORIENTATION_FREEFORM_VOCAB.get(raw.lower())
+
+
+def resolve_queer_identity(evidence: Sequence[IdentityEvidence]) -> QueerIdentity:
+    """Resolve the second axis (ADR 0011) from permitted evidence only.
+
+    Takes the *same* evidence list as :func:`resolve_identity` and reads a
+    different question out of it, which is why nothing new has to be fetched:
+
+    * **Orientation** comes from :data:`~pipeline.models.ORIENTATION_SOURCES`
+      evidence — a P91 claim or the artist's own cited words. A statement the
+      vocabulary does not cover contributes nothing.
+    * **Trans self-identification** comes from the raw value a *gender* source
+      asserted, which this module has always stored on
+      :attr:`~pipeline.models.Source.detail` for provenance. A P21 claim of
+      ``Q1052281`` says "trans woman"; :func:`resolve_identity` maps that to
+      ``WOMAN`` and deliberately forgets the rest, and this reads it.
+
+    Returns the first-class unknown on both halves when nothing maps — the
+    normal answer for almost every artist, and never a negative claim about
+    them. An artist with no sourced orientation is not thereby heterosexual, and
+    one with no sourced trans self-identification is not thereby cis.
+    """
+    assert_permitted_only(evidence)
+    mapped: list[tuple[IdentityEvidence, Orientation]] = []
+    for ev in evidence:
+        if ev.kind not in ORIENTATION_SOURCES:
+            continue
+        orientation = _map_orientation(ev.kind, ev.value)
+        if orientation is not None:
+            mapped.append((ev, orientation))
+
+    orientation = Orientation.UNKNOWN
+    orientation_sources: tuple[Source, ...] = ()
+    if mapped:
+        # Same priority rule as gender: the artist's own words outrank a
+        # third-party registry entry, deterministically.
+        mapped.sort(
+            key=lambda pair: (
+                -_SOURCE_PRIORITY.get(pair[0].kind, 0),
+                pair[0].kind.value,
+                pair[0].citation,
+            )
+        )
+        orientation = mapped[0][1]
+        orientation_sources = tuple(ev.as_source() for ev, _ in mapped)
+
+    trans_sources = tuple(
+        ev.as_source()
+        for ev in evidence
+        if ev.kind in INDIVIDUAL_IDENTITY_SOURCES and _asserts_trans_identity(ev.value)
+    )
+    return QueerIdentity(
+        orientation=orientation,
+        orientation_sources=orientation_sources,
+        trans_self_identified=True if trans_sources else None,
+        trans_sources=trans_sources,
+    )
+
+
+def _asserts_trans_identity(value: str) -> bool:
+    """Whether a raw asserted value is itself a trans self-identification."""
+    raw = value.strip()
+    return raw in _TRANS_ASSERTED_VALUES or raw.lower() in _TRANS_ASSERTED_VALUES
+
+
 def resolve_composition(
     fronts: Sequence[FrontPerson], evidence: Sequence[IdentityEvidence]
 ) -> Optional[BandComposition]:
@@ -224,8 +452,11 @@ def resolve_composition(
     ``fronts`` are the sourced front-people (each with their own resolved,
     possibly-unknown identity). ``evidence`` must be band-composition sources.
     Returns ``None`` when there is no sourced lineup — composition, like
-    identity, defaults to unknown rather than to a guess.
+    identity, defaults to unknown rather than to a guess. Raises
+    :class:`~pipeline.models.InferenceForbiddenError` on non-permitted evidence,
+    for the same reason :func:`resolve_identity` does.
     """
+    assert_permitted_only(evidence)
     comp_sources = tuple(ev.as_source() for ev in evidence if ev.kind in BAND_COMPOSITION_SOURCES)
     if not comp_sources or not fronts:
         return None
@@ -233,11 +464,27 @@ def resolve_composition(
 
 
 def assert_permitted_only(evidence: Sequence[IdentityEvidence]) -> None:
-    """Defensive guard: raise if any evidence carries a non-permitted kind.
+    """Raise if any evidence carries a non-permitted kind. **On the running path.**
 
-    Evidence is normally rejected earlier (at :class:`Source` construction); this
-    gives callers an explicit, early, intention-revealing check.
+    Called at the top of :func:`resolve_identity`, :func:`resolve_composition`
+    and :func:`resolve_queer_identity` — the three entry points where untrusted
+    evidence becomes a label — so this is a guard that executes, not one that
+    documents an intention. Until #72 it had no caller outside its own test,
+    which meant its test proved the ``if`` worked rather than that anything was
+    being guarded. ADR 0011 added the third caller; this sentence said "the two
+    entry points" for as long as there were three, which is how a next axis
+    gets added without one. ``tests/test_no_inference.py`` now derives the
+    caller set from this module's AST and asserts this docstring names it.
+
+    Evidence is *normally* rejected earlier, at :class:`Source` construction, so
+    with today's closed :class:`~pipeline.models.SourceKind` enum this cannot
+    fire. That is exactly what it is for: if a future ``SourceKind`` member is
+    added without being added to a permitted set, the resolver's filter would
+    silently skip it and return ``UNKNOWN``. This turns that silence into a
+    raise.
     """
     for ev in evidence:
-        if ev.kind not in (INDIVIDUAL_IDENTITY_SOURCES | BAND_COMPOSITION_SOURCES):
+        if ev.kind not in (
+            INDIVIDUAL_IDENTITY_SOURCES | ORIENTATION_SOURCES | BAND_COMPOSITION_SOURCES
+        ):
             raise InferenceForbiddenError(f"{ev.kind} is not a permitted source")

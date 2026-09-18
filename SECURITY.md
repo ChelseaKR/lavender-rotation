@@ -1,15 +1,19 @@
 # Security Policy
 
-Women-Artist Discovery is an independent personal open-source project (AGPL-3.0-or-later). It is **local-first**:
+Lavender Rotation is an independent personal open-source project (AGPL-3.0-or-later). It is **local-first**:
 your Last.fm listening history stays on your machine, there is no auth and no server-side account,
-and the only opt-in egress is a user-initiated Spotify playlist export (artist names only). Because
+and every egress is opt-in and named: an explicit Last.fm sync (`lavender ingest --user`),
+per-artist identity lookups against MusicBrainz and Wikidata (which receive an artist name or MBID
+and learn nothing about who asked or what they played), `lavender doctor --check-upstream`'s
+reachability probes, and a user-initiated Spotify or TIDAL playlist export (artist and track names
+only). The allowlist is asserted in `tests/test_privacy.py`. Because
 the app reads a person's listening data and asserts **sourced identity claims about real artists**,
 both a conventional software vulnerability *and* an identity-handling defect are in scope here.
 
 ## Supported versions
 
 **Release stance (2026-07-05): unreleased pre-1.0 development line.** `pyproject.toml` carries
-version `0.1.0` as the in-development source version, but **no git tag and no GitHub release exist
+version `0.1.0.dev0` as the in-development source version, but **no git tag and no GitHub release exist
 yet** — there is no "0.1.x release line" to support. Until the first tag is cut, only `main` is
 supported and security fixes land as new commits.
 
@@ -31,7 +35,7 @@ Report privately, by either:
 
 1. **GitHub Security Advisory** — open a draft advisory via *Security → Report a vulnerability* on
    the repository (preferred; keeps the report, fix, and GHSA linked), **or**
-2. **Email** — `ckellyreif@gmail.com` with subject `SECURITY: women-artist-discovery`.
+2. **Email** — `ckellyreif@gmail.com` with subject `SECURITY: lavender-rotation`.
 
 Please include, as far as you can:
 
@@ -64,7 +68,7 @@ identity is *sourced, never inferred*:
 
 | Stage                    | Target                                                            |
 |--------------------------|------------------------------------------------------------------|
-| Acknowledgement & triage | **≤ 72 hours** from receipt (volunteer project — please be patient) |
+| Acknowledgment & triage | **≤ 72 hours** from receipt (volunteer project — please be patient) |
 | Severity assessment      | shared with the triage reply                                      |
 | Fix or mitigation plan   | communicated after triage, prioritized by severity                |
 | Coordinated disclosure   | by mutual agreement; default embargo up to 90 days                |
@@ -85,7 +89,8 @@ merge-blocking `axe = 0` gate, not a vulnerability) — file those as normal iss
 
 - Keep the default **demo / local** mode unless you have a reason not to; it needs no API key and
   makes no network calls beyond the data-source lookups you initiate.
-- Supply any API credentials (Last.fm, Spotify OAuth) via **environment variables only** — secrets
+- Supply any API credentials (Last.fm, Spotify OAuth, TIDAL OAuth) via **environment variables
+  only** — secrets
   are never committed, and the secret scan blocks them in CI.
 - Run `make security` (dependency audit + secret scan) before deploying and keep dependencies on
   the pinned `uv.lock`.

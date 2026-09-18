@@ -1,7 +1,7 @@
 """Per-run identity-coverage readout — make 'unknown is first-class' *visible*.
 
 The re-rank already knows, for every pick, whether its identity is **sourced**
-(an individual self-identification, or a sourced female-fronted band composition)
+(an individual self-identification, or a sourced band lineup)
 or **unknown** (surfaced on musical similarity alone). This module turns that
 already-computed fact into one honest, render-agnostic readout —
 "N of K picks carry a sourced identity; M were surfaced on similarity alone" —
@@ -9,7 +9,7 @@ so a guarantee that is *mechanically true in code* (unknown is never down-ranked
 never dropped) is also **legible** in the product.
 
 Two framing rules are baked in so the readout can never curdle into a scorecard
-that pathologises the common case:
+that pathologizes the common case:
 
 * **Unknown is first-class.** It is described as "surfaced on musical similarity
   alone" — a normal, expected outcome — never a gap, a miss, or a failure. Source
@@ -33,11 +33,14 @@ class IdentityCoverage:
 
     ``self_identified + band_composition + unknown == total`` and, within the
     self-identified set, ``women + nonbinary + men + other == self_identified``.
+
+    The two fractions are ``None`` over an empty run rather than ``0.0``: with no picks there is
+    no share to report, and a zero would read as a measurement that never happened.
     """
 
     total: int
     self_identified: int  # sourced individual self-ID
-    band_composition: int  # sourced female-fronted lineup (distinct from gender)
+    band_composition: int  # sourced band lineup (distinct from the act's own gender)
     unknown: int  # surfaced on musical similarity alone — first-class
     women: int
     nonbinary: int
@@ -50,12 +53,29 @@ class IdentityCoverage:
         return self.self_identified + self.band_composition
 
     @property
-    def sourced_fraction(self) -> float:
-        return self.sourced / self.total if self.total else 0.0
+    def fractions_measured(self) -> bool:
+        """Whether there was anything to take a fraction of."""
+        return self.total > 0
 
     @property
-    def unknown_fraction(self) -> float:
-        return self.unknown / self.total if self.total else 0.0
+    def sourced_fraction(self) -> float | None:
+        """Share of picks carrying a sourced identity, or ``None`` over no picks.
+
+        A run with no picks used to report ``0.0`` here, which reads as "none of them were
+        sourced" -- a measurement -- when what happened is that there was nothing to measure.
+        The tell is that the two fractions came back ``0.0`` and ``0.0``: over any real run they
+        sum to one, so a pair that does not is not a distribution. ``None`` is the honest value,
+        and ``total`` beside it is the denominator that says why.
+
+        Same rule, same reason, as ``segment_retention`` reporting ``None`` for a segment that
+        was absent from pure taste's top-k (#129).
+        """
+        return self.sourced / self.total if self.total else None
+
+    @property
+    def unknown_fraction(self) -> float | None:
+        """Share of picks surfaced on similarity alone, or ``None`` over no picks."""
+        return self.unknown / self.total if self.total else None
 
     def summary_line(self) -> str:
         """One honest sentence. Unknown is framed as normal, never as a failure."""
@@ -65,7 +85,7 @@ class IdentityCoverage:
         if self.self_identified:
             sourced_bits.append(f"{self.self_identified} self-identified")
         if self.band_composition:
-            sourced_bits.append(f"{self.band_composition} sourced female-fronted")
+            sourced_bits.append(f"{self.band_composition} sourced from a band lineup")
         detail = f" ({', '.join(sourced_bits)})" if sourced_bits else ""
         return (
             f"{self.sourced} of {self.total} picks carry a sourced identity{detail}; "
@@ -80,7 +100,11 @@ class IdentityCoverage:
             ("Self-identified (nonbinary)", self.nonbinary),
             ("Self-identified (man)", self.men),
             ("Self-identified (other)", self.other),
-            ("Sourced female-fronted band", self.band_composition),
+            # Deliberately not "Sourced female-fronted band": this row counts
+            # every pick whose basis is a sourced lineup, and the front-people
+            # are not all women. Naming the row after one of the genders it
+            # covers would misgender the rest.
+            ("Sourced band lineup", self.band_composition),
             ("Unknown — surfaced on similarity alone", self.unknown),
         )
 
@@ -95,8 +119,17 @@ class IdentityCoverage:
             "nonbinary": self.nonbinary,
             "men": self.men,
             "other": self.other,
-            "sourced_fraction": round(self.sourced_fraction, 4),
-            "unknown_fraction": round(self.unknown_fraction, 4),
+            # Null, not zero, over an empty run. A consumer that has to tell "no pick was
+            # sourced" from "there was no pick" cannot do it from a number, and `total` is the
+            # denominator that settles it. `fractions_measured` is published beside them so a
+            # consumer can branch on the flag rather than on a null it might not expect.
+            "fractions_measured": self.fractions_measured,
+            "sourced_fraction": (
+                round(self.sourced_fraction, 4) if self.sourced_fraction is not None else None
+            ),
+            "unknown_fraction": (
+                round(self.unknown_fraction, 4) if self.unknown_fraction is not None else None
+            ),
         }
 
 

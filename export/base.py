@@ -115,7 +115,7 @@ class PkcePair:
 
     The verifier never leaves process memory: it is generated here, held only
     long enough to be passed to the provider's token exchange, and never
-    serialised, logged, or transmitted anywhere except in that POST body
+    serialized, logged, or transmitted anywhere except in that POST body
     over TLS. ``repr=False`` is what makes the "never logged" half of that
     claim true by construction rather than by convention — the generated
     ``repr`` would otherwise print the verifier in any traceback that renders

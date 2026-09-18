@@ -9,11 +9,15 @@ The README guardrails are enforced *here*, in the type system, not merely in tes
    trans women, explicitly: sourced self-identification is the only test, and the
    vocabulary deliberately contains no cis/trans distinction to draw.
 2. ``unknown`` is **first-class.** It is a real :class:`Gender` member and the
-   default for every artist. Downstream code must never penalise it; the re-rank
+   default for every artist. Downstream code must never penalize it; the re-rank
    layer is boost-only (see :mod:`recommender.rerank`).
 3. **"Female-fronted" is band-composition metadata**, kept distinct from any
    individual's gender. It is a *tri-state, sourced* property on
    :class:`BandComposition`, never an inference and never a claim about a person.
+   It is also **narrow**: it says only that a front-person's own sourced gender
+   is ``WOMAN``. A band fronted by a sourced nonbinary artist is *not*
+   "female-fronted" — nonbinary is never a subtype of woman here. The general,
+   category-preserving fact is :attr:`BandComposition.sourced_front_genders`.
 4. Every recommendation carries an :class:`Explanation` with non-empty signals,
    an identity basis, and the sources behind that basis.
 """
@@ -21,6 +25,7 @@ The README guardrails are enforced *here*, in the type system, not merely in tes
 from __future__ import annotations
 
 import enum
+from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from typing import Optional
 
@@ -55,12 +60,17 @@ class Gender(enum.Enum):
         return self.value
 
 
-#: Genders the values-lens is configured to surface (sourced only). This is the
+#: Genders the values-lens is configured to surface (sourced only). This is a
+#: **lens policy** set, never a fact about the world: nothing that *asserts*
+#: something (``BandComposition.female_fronted``, ``sourced_front_genders``,
+#: the rendered identity phrase) may read it, or a future edit to the lens
+#: would silently change what the data model claims. Only the lens and the
+#: re-rank consult it. This is the
 #: canonical aligned set, consumed by :class:`recommender.lens.LensSpec`
 #: (:data:`recommender.lens.VALUES_LENS`) — it lives here, not in
 #: ``recommender``, to avoid a circular import (``recommender`` already depends
 #: on ``pipeline``). Note this is a *re-rank* concern, not an identity concern:
-#: ``UNKNOWN`` is deliberately absent here yet is never penalised — see
+#: ``UNKNOWN`` is deliberately absent here yet is never penalized — see
 #: :mod:`recommender.rerank`. ``Gender.OTHER``'s exclusion is likewise
 #: deliberate, not an oversight: it is a heterogeneous sourced bucket (intersex,
 #: third-gender, terms outside the common vocabulary) that does not map cleanly
@@ -94,6 +104,8 @@ class SourceKind(enum.Enum):
     WIKIDATA_P21 = "wikidata-p21"  # "sex or gender" claim
     MUSICBRAINZ_GENDER = "musicbrainz-gender"  # editorial / self-reported field
     ARTIST_STATEMENT = "artist-statement"  # a cited public self-identification
+    # --- About an individual's sexual orientation (ADR 0011) ------------------
+    WIKIDATA_P91 = "wikidata-p91"  # "sexual orientation" claim
     # --- About band lineup / role (composition only, NOT individual gender) ---
     DISCOGS_LINEUP = "discogs-lineup"
     MUSICBRAINZ_RELATIONSHIP = "musicbrainz-relationship"
@@ -106,12 +118,70 @@ class SourceKind(enum.Enum):
 INDIVIDUAL_IDENTITY_SOURCES: frozenset[SourceKind] = frozenset(
     {SourceKind.WIKIDATA_P21, SourceKind.MUSICBRAINZ_GENDER, SourceKind.ARTIST_STATEMENT}
 )
+#: Sources that may establish an individual's *sexual orientation* (ADR 0011).
+#: Deliberately disjoint from the gender set in what it may conclude: a P91 claim
+#: says nothing about anyone's gender, and a P21 claim says nothing about their
+#: orientation. Keeping the sets separate is what stops one axis leaking into the
+#: other the way a single "identity sources" bag would have allowed.
+ORIENTATION_SOURCES: frozenset[SourceKind] = frozenset(
+    {SourceKind.WIKIDATA_P91, SourceKind.ARTIST_STATEMENT}
+)
 #: Sources that may establish *band composition / lineup*.
 BAND_COMPOSITION_SOURCES: frozenset[SourceKind] = frozenset(
     {SourceKind.DISCOGS_LINEUP, SourceKind.MUSICBRAINZ_RELATIONSHIP, SourceKind.ARTIST_STATEMENT}
 )
 #: Every permitted source kind. Equal to the enum's members, by construction.
-PERMITTED_SOURCES: frozenset[SourceKind] = INDIVIDUAL_IDENTITY_SOURCES | BAND_COMPOSITION_SOURCES
+PERMITTED_SOURCES: frozenset[SourceKind] = (
+    INDIVIDUAL_IDENTITY_SOURCES | ORIENTATION_SOURCES | BAND_COMPOSITION_SOURCES
+)
+
+
+class Orientation(enum.Enum):
+    """Controlled sexual-orientation vocabulary. ``UNKNOWN`` is first-class.
+
+    Values are recorded as the source stated them and are never widened:
+    ``HOMOSEXUAL`` is kept distinct from ``LESBIAN`` and ``GAY`` because
+    deciding which of those a homosexuality claim means would require reading
+    the person's gender into their orientation — a small inference, but exactly
+    the kind this project does not make.
+    """
+
+    LESBIAN = "lesbian"
+    GAY = "gay"
+    HOMOSEXUAL = "homosexual"
+    BISEXUAL = "bisexual"
+    PANSEXUAL = "pansexual"
+    QUEER = "queer"  # stated as "queer", without further specificity
+    ASEXUAL = "asexual"
+    DEMISEXUAL = "demisexual"
+    HETEROSEXUAL = "heterosexual"
+    UNKNOWN = "unknown"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+#: Orientations the queer lens is configured to surface. A **lens policy** set,
+#: never a fact about the world — the same rule that governs
+#: :data:`VALUES_ALIGNED_GENDERS`: nothing that *asserts* something may read it.
+#:
+#: ``ASEXUAL`` and ``DEMISEXUAL`` are deliberately absent, on the
+#: :data:`VALUES_ALIGNED_GENDERS`/``Gender.OTHER`` precedent: whether the ace
+#: spectrum sits under a "queer" lens is genuinely contested among ace people
+#: themselves, so a lens that silently answered it would be making an unstated
+#: claim on their behalf. They are recorded faithfully and simply receive no
+#: boost. ``HETEROSEXUAL`` is likewise recorded and unaligned. Both are revisable
+#: with a stated rationale (ADR 0011), never by a quiet edit.
+QUEER_ORIENTATIONS: frozenset[Orientation] = frozenset(
+    {
+        Orientation.LESBIAN,
+        Orientation.GAY,
+        Orientation.HOMOSEXUAL,
+        Orientation.BISEXUAL,
+        Orientation.PANSEXUAL,
+        Orientation.QUEER,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -223,6 +293,79 @@ class IdentityLabel:
 UNKNOWN_IDENTITY = IdentityLabel()
 
 
+def _validate_orientation_sources(sources: tuple[Source, ...]) -> None:
+    for source in sources:
+        if source.kind not in ORIENTATION_SOURCES:
+            raise InferenceForbiddenError(
+                f"{source.kind} cannot establish an individual's sexual orientation"
+            )
+
+
+@dataclass(frozen=True)
+class QueerIdentity:
+    """The second sourced axis (ADR 0011): orientation, and trans self-identification.
+
+    Deliberately a separate object from :class:`IdentityLabel` rather than two
+    more fields on it. Gender and orientation are different claims from
+    different sources with different failure modes, and keeping them apart is
+    what makes "a P91 claim can never move a gender label, and a P21 claim can
+    never move an orientation" true by construction instead of by care.
+
+    :attr:`trans_self_identified` is **tri-state and never ``False``**, exactly
+    like :attr:`BandComposition.female_fronted`: ``True`` when a permitted
+    source asserted a trans self-identification, ``None`` otherwise. "Not
+    recorded as trans" is not "recorded as cis", and nothing here may be read
+    that way. Note what this does *not* change: :class:`Gender` still draws no
+    cis/trans distinction, and a trans woman's label is still exactly
+    ``Gender.WOMAN``.
+
+    Nothing is collected to populate this that was not already stored. The raw
+    value each source asserted has always been kept for provenance
+    (:attr:`Source.detail`), so a P21 claim of ``Q1052281`` was already in every
+    cache this project wrote; this reads it rather than fetching it.
+    """
+
+    orientation: Orientation = Orientation.UNKNOWN
+    orientation_sources: tuple[Source, ...] = ()
+    trans_self_identified: Optional[bool] = None
+    trans_sources: tuple[Source, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.orientation is Orientation.UNKNOWN:
+            if self.orientation_sources:
+                raise IdentityError("an unknown orientation cannot carry sources")
+        elif not self.orientation_sources:
+            raise UnsourcedIdentityError(
+                f"orientation {self.orientation} has no source — identity is never inferred"
+            )
+        _validate_orientation_sources(self.orientation_sources)
+        if self.trans_self_identified is False:
+            raise IdentityError(
+                "trans_self_identified is tri-state: True when sourced, otherwise None. "
+                "False would assert someone is not trans, which no source here establishes"
+            )
+        if self.trans_self_identified and not self.trans_sources:
+            raise UnsourcedIdentityError(
+                "a trans self-identification has no source — identity is never inferred"
+            )
+        if self.trans_sources:
+            _validate_individual_sources(self.trans_sources)
+
+    @property
+    def is_known(self) -> bool:
+        """True if *either* axis carries a sourced claim."""
+        return self.orientation is not Orientation.UNKNOWN or bool(self.trans_self_identified)
+
+    @property
+    def sources(self) -> tuple[Source, ...]:
+        """Every citation behind this object, for the why-card's provenance list."""
+        return self.orientation_sources + self.trans_sources
+
+
+#: The singleton "no sourced queer claim, and that is a normal answer" object.
+UNKNOWN_QUEER_IDENTITY = QueerIdentity()
+
+
 @dataclass(frozen=True)
 class FrontPerson:
     """A sourced member of a band's fronting lineup.
@@ -238,17 +381,27 @@ class FrontPerson:
 
 @dataclass(frozen=True)
 class BandComposition:
-    """Sourced lineup/role info. ``female_fronted`` is tri-state and sourced.
+    """Sourced lineup/role info, kept strictly separate from any member's gender.
 
-    This is *band-composition metadata*, explicitly not a claim about any
-    member's gender. ``female_fronted`` is:
+    :attr:`sourced_front_genders` is the general fact this class asserts: *which
+    genders the sourced front-people are sourced as*. It preserves every
+    category exactly as the source stated it — nonbinary stays nonbinary, and
+    nothing is widened, collapsed, or defaulted on the way out.
 
-    * ``True``  — there is a sourced front-person whose own sourced identity is a
-      woman or nonbinary person;
-    * ``None``  — unknown (no sources, or no front-person with a known identity).
+    :attr:`female_fronted` is the narrow, historically-named special case of
+    that fact, and is tri-state:
 
-    It is **never** ``False`` by inference: the absence of a sourced
-    woman/nonbinary front is "unknown", not "male-fronted".
+    * ``True``  — a sourced front-person's own sourced gender is ``WOMAN``;
+    * ``None``  — unknown (no sources, no front-person, or no front-person whose
+      sourced gender is ``WOMAN``).
+
+    It is **never** ``False`` by inference: the absence of a sourced woman front
+    is "unknown", not "male-fronted". It is also **never** ``True`` for a band
+    whose only sourced front-person is nonbinary — that band is fronted by a
+    nonbinary artist, and saying "female-fronted" would misgender them on the
+    strength of the very value the source supplied. Callers that want "does this
+    band's sourced lineup match this set of genders" must ask
+    :meth:`has_sourced_front_person_in`, never re-purpose ``female_fronted``.
     """
 
     members_fronting: tuple[FrontPerson, ...] = ()
@@ -262,13 +415,34 @@ class BandComposition:
                 )
 
     @property
+    def sourced_front_genders(self) -> frozenset[Gender]:
+        """The *sourced* genders of this band's front-people. A fact, not a policy.
+
+        Empty when the lineup itself is unsourced or there is no front-person.
+        ``UNKNOWN`` is excluded because it asserts nothing: "no sourced gender
+        for this front-person" is not a gender, and including it would let an
+        absence read as a claim.
+        """
+        if not self.sources:
+            return frozenset()
+        return frozenset(
+            person.identity.gender
+            for person in self.members_fronting
+            if person.identity.gender is not Gender.UNKNOWN
+        )
+
+    def has_sourced_front_person_in(self, genders: Iterable[Gender]) -> bool:
+        """True iff some front-person's *own sourced* gender is in ``genders``.
+
+        The seam a lens asks its own question through, so a lens-policy change
+        can never alter what :attr:`female_fronted` asserts about the world.
+        """
+        return bool(self.sourced_front_genders & frozenset(genders))
+
+    @property
     def female_fronted(self) -> Optional[bool]:
-        if not self.sources or not self.members_fronting:
-            return None
-        for person in self.members_fronting:
-            if person.identity.gender in VALUES_ALIGNED_GENDERS:
-                return True
-        return None
+        """Tri-state: ``True`` iff a front-person's *own sourced* gender is ``WOMAN``."""
+        return True if Gender.WOMAN in self.sourced_front_genders else None
 
 
 @dataclass(frozen=True)
@@ -279,12 +453,29 @@ class Artist:
     name: str
     tags: tuple[str, ...] = ()
     identity: IdentityLabel = field(default_factory=IdentityLabel)
+    #: The second sourced axis (ADR 0011). Defaults to unknown on both halves,
+    #: which is what every artist enriched before that ADR carries.
+    queer: QueerIdentity = field(default_factory=QueerIdentity)
     composition: Optional[BandComposition] = None
+    #: The year this act's MusicBrainz life-span begins, when upstream states one.
+    #: ``None`` is the normal answer and means *unknown*, never "old" and never
+    #: "new": the era filter keeps an artist with no known year, for the same
+    #: reason the lens never down-ranks an artist with no sourced identity.
+    #: It is the act's begin year, not the year of its first release -- see
+    #: ``parse_musicbrainz_life_span_begin``, which says what upstream field it
+    #: reads and what that field does and does not mean.
+    career_start_year: Optional[int] = None
     listeners: int = 0  # popularity proxy, for the baseline + debias check
     playcount: int = 0
 
     @property
+    def sourced_front_genders(self) -> frozenset[Gender]:
+        """The sourced genders of this act's front-people (empty for a solo act)."""
+        return self.composition.sourced_front_genders if self.composition else frozenset()
+
+    @property
     def female_fronted(self) -> Optional[bool]:
+        """Tri-state, and narrow: ``True`` only for a sourced *woman* front-person."""
         return self.composition.female_fronted if self.composition else None
 
     @property
@@ -300,10 +491,15 @@ class Artist:
 
         Unknown returns ``False`` here — but "not aligned" must never translate
         into a penalty; it only means "received no boost". See the re-rank layer.
+
+        The composition leg asks :meth:`BandComposition.has_sourced_front_person_in`
+        rather than reading ``female_fronted``, so a band fronted only by a
+        sourced nonbinary artist is still surfaced by this lens *without* the
+        data model ever having to call that band "female-fronted".
         """
         if self.identity.gender in VALUES_ALIGNED_GENDERS:
             return True
-        return self.female_fronted is True
+        return bool(self.sourced_front_genders & VALUES_ALIGNED_GENDERS)
 
 
 @dataclass(frozen=True)
@@ -335,6 +531,28 @@ class ListeningProfile:
     def known_artist_ids(self) -> frozenset[str]:
         return frozenset(self.play_counts)
 
+    @property
+    def known_artist_names(self) -> frozenset[str]:
+        """Casefolded display names of every artist played — the id check's backstop.
+
+        An artist key is an MBID when the source supplied one and the display
+        name otherwise, and *the same artist can arrive keyed either way from
+        two different endpoints*: Last.fm's scrobble payload may omit an MBID
+        that its similar-artists payload supplies. Excluding candidates by id
+        alone therefore leaks artists the listener plays constantly back to them
+        as "discoveries" — on a real history it put an artist with 462 plays at
+        rank 1.
+
+        Matching on the name as well is deduplication of an artist *record*,
+        never a claim about a person: nothing here reaches the identity
+        resolver, which cannot see a name at all. Its failure mode is
+        deliberately the safe one — two distinct artists who share a name lose a
+        candidate slot, rather than a familiar artist being served back as new.
+        """
+        return frozenset(
+            name.strip().casefold() for name in self.artist_names.values() if name.strip()
+        )
+
     def top_artists(self, n: int) -> list[str]:
         """Artist ids by play count, descending, with id as a stable tie-break."""
         return [
@@ -359,6 +577,14 @@ class Explanation:
     identity_basis: IdentityBasis
     identity_sources: tuple[Source, ...]
     summary: str
+    #: Citations behind ADR 0011's *second* axis — the orientation and trans
+    #: claims a permitted source asserted (#92). Deliberately a separate field
+    #: from :attr:`identity_sources` rather than more entries in it, for the
+    #: same reason :class:`QueerIdentity` is a separate object from
+    #: :class:`IdentityLabel`: keeping them apart is what makes "a P91 claim can
+    #: never be read as a gender basis" true by construction. It carries no
+    #: :class:`IdentityBasis` of its own, because it establishes no gender.
+    queer_sources: tuple[Source, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.signals:
@@ -377,6 +603,15 @@ class Recommendation:
     explanation: Explanation
     rank: int = 0
     base_rank: int = 0  # counterfactual rank at lens_strength=0 (pure taste)
+    #: Position in the lens-applied ordering, stamped by
+    #: :func:`recommender.hybrid.recommend` immediately after
+    #: :func:`recommender.rerank.rerank` and before the identity-blind
+    #: serendipity pass or the listener's `hide_sourced_men` subtraction. It is
+    #: the only rank in the pipeline that reflects the values lens and nothing
+    #: else, which is what makes ``base_rank -> lens_rank`` a statement about
+    #: the lens (#113). ``rank`` is the displayed position and absorbs all
+    #: three mechanisms; the two coincide when both other knobs are off.
+    lens_rank: int = 0
 
     @property
     def score(self) -> float:
@@ -387,3 +622,6 @@ class Recommendation:
 
     def with_base_rank(self, base_rank: int) -> Recommendation:
         return replace(self, base_rank=base_rank)
+
+    def with_lens_rank(self, lens_rank: int) -> Recommendation:
+        return replace(self, lens_rank=lens_rank)

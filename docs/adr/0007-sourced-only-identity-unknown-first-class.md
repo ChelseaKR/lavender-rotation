@@ -23,10 +23,12 @@ field, a cited artist self-statement — `PERMITTED_SOURCES` in `pipeline/models
 deliberately no inference path. Rejected alternative: any name/voice/image/genre-derived labeling.
 The rule is enforced as a *type invariant*, not a convention — an unsourced `IdentityLabel` cannot
 be constructed — with merge-blocking proofs in `tests/test_no_inference.py` (vocabulary,
-structure, AST, and behavioural legs). "Unknown" is first-class: the values lens is boost-only
+structure, AST, and behavioral legs). "Unknown" is first-class: the values lens is boost-only
 (`recommender/rerank.py`), so an unknown-identity pick can never be down-ranked, dropped, or
 reduced (`tests/test_unknown_first_class.py`), and `female_fronted` is tri-state (`True`/`None`,
-never `False` by inference).
+never `False` by inference) and narrow — it asserts only that a front-person's *own* sourced
+gender is `WOMAN`. Every other sourced front-person gender is carried, unflattened, by
+`BandComposition.sourced_front_genders` (`tests/test_front_person_labels.py`).
 
 ## Consequences
 

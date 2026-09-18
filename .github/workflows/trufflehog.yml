@@ -1,6 +1,9 @@
 name: trufflehog
 
-# SEC-19: a scheduled, full-history verified-credentials scan. Complements the
+# SEC-19: a scheduled, full-history credentials scan, reporting on all three of
+# TruffleHog's result tiers (see the note on `extra_args` below — a revoked
+# credential is `unverified`, not `verified`, so a verified-only scan could not
+# fail on the very case this job exists for). Complements the
 # per-push gitleaks-action layer in ci.yml/release.yml, which only ever sees the
 # current diff — this walks the entire repo history on a cadence, independent
 # of any single push.
@@ -21,14 +24,23 @@ concurrency:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
           fetch-depth: 0 # full history — this is the point of a scheduled scan
 
-      - name: TruffleHog full-history scan (verified secrets only)
-        uses: trufflesecurity/trufflehog@00155c9dc586f34d189adc83d3ac2698c2ec551f # v3.95.8
+      - name: TruffleHog full-history scan (verified, unknown and unverified)
+        # The ref and the `version:` input below must name the SAME release, and
+        # tests/test_trufflehog_workflow.py fails the build when they do not.
+        # They had drifted: the ref said v3.95.8 while the scanner downloaded
+        # 3.96.0, because Dependabot rewrites `uses:` and never a `with:` input.
+        # Resolved forward onto the NEWER of the two, 3.96.0, which is the
+        # scanner that was already running: the ref moves up to v3.96.0 and the
+        # `version:` input is untouched, so no scanner change rides along and
+        # the tier widening below is the only behavior change.
+        uses: trufflesecurity/trufflehog@6f3c981e7b77f235fd2702dd74af25fc4b72bf11 # v3.96.0
         with:
           # Explicit, even though the action defaults it to "./": the v3.96.0
           # action resolves base and head to the same commit when path, base
@@ -48,6 +60,32 @@ jobs:
           # trufflehog abort with "flag 'fail' cannot be repeated" (every
           # scheduled run since 2026-07-20 failed on this, scanning nothing).
           #
+          # `--results=verified,unknown,unverified` is load-bearing; the old
+          # `--results=verified` could not fail on the case this job exists for.
+          # TruffleHog sorts a finding into three tiers: `verified` (it
+          # authenticated the credential against the live service), `unknown`
+          # (verification errored out), and `unverified` (it asked, and the
+          # service said no). A credential that leaked and was then REVOKED —
+          # the normal end state of a real leak, and precisely what a scheduled
+          # full-history sweep is for — answers "no", so it lands in
+          # `unverified`. Measured 2026-09-06 on a throwaway clone of this
+          # repository at 3.96.0, with a real-shaped AWS key planted in one
+          # commit and deleted in the next (confirmed present in history and
+          # absent at HEAD before each run):
+          #
+          #   --results=verified                     exit 0,   0 reported
+          #   --results=verified,unknown,unverified  exit 183, unverified_secrets: 1
+          #
+          # `--only-verified` is the same hole under a different name, and so is
+          # `--results=verified,unknown`.
+          #
+          # The usual argument for dropping the tier is committed placeholder
+          # fixtures. That was measured rather than assumed: this repository's
+          # full history (1,972 chunks, 3.4 MB) reports 0 findings under the
+          # widened tier with Lob excluded, so widening costs nothing here. If a
+          # placeholder ever does fire, exclude that detector by name; do not
+          # widen the hole back to a whole tier.
+          #
           # Lob is excluded because 3.96.0's Lob detector matches this repo's
           # pytest function names. A Lob key is `test_` or `live_` followed by
           # alphanumerics, which is also the shape of 414 test names here, and
@@ -57,5 +95,8 @@ jobs:
           # changed between those runs. There is no Lob integration here.
           # Scoped to the one detector rather than excluding tests/ by path,
           # because fixtures are where a real credential is most likely to land
-          # by accident.
-          extra_args: --results=verified --exclude-detectors=Lob
+          # by accident. Re-measured at 3.96.0 with the tier widened: without
+          # this exclusion the same clean history reports 16 "verified" Lob
+          # hits, every one of them a pytest function name, so it is still
+          # load-bearing.
+          extra_args: --results=verified,unknown,unverified --exclude-detectors=Lob

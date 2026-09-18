@@ -12,9 +12,9 @@ Accessibility decisions baked in here:
   scrolls horizontally at 320 px (reflow, verified by the Playwright specs in
   ``tests/test_e2e_a11y.py``),
 * a skip link to ``<main>`` and proper landmarks/heading order,
-* identity is conveyed as **text**, never colour alone,
+* identity is conveyed as **text**, never color alone,
 * the score "chart" ships with a real ``<table>`` data equivalent,
-* upstream correction links are labelled text links, never icon/colour cues.
+* upstream correction links are labeled text links, never icon/color cues.
 """
 
 from __future__ import annotations
@@ -25,8 +25,14 @@ from typing import cast
 
 from pipeline.models import Recommendation
 from recommender.coverage import IdentityCoverage, identity_coverage
+from recommender.rerank import is_rank_protected
 from recommender.upstream import upstream_edit_url
-from recommender.why import ProvenanceItem, WhyThisArtist, why_this_artist
+from recommender.why import (
+    QUEER_SOURCES_HEADING,
+    ProvenanceItem,
+    WhyThisArtist,
+    why_this_artist,
+)
 
 
 def _identity_line(why: WhyThisArtist) -> str:
@@ -62,7 +68,7 @@ def _fix_at_source_link(item: ProvenanceItem) -> str:
 
 
 def _conflict_html(why: WhyThisArtist, aid: str) -> str:
-    """Render source disagreement as text and structure, never colour alone."""
+    """Render source disagreement as text and structure, never color alone."""
     if not why.conflict_note:
         return ""
     return (
@@ -98,6 +104,30 @@ def _provenance_html(why: WhyThisArtist, aid: str) -> str:
     )
 
 
+def _queer_provenance_html(why: WhyThisArtist, aid: str) -> str:
+    """ADR 0011's second axis, under its own heading (#92).
+
+    Absent for almost every artist, and its absence is rendered as nothing at
+    all rather than as a "no queer sources" line: printing an empty state here
+    would turn "nobody sourced this" into a visible negative claim about the
+    artist, which is precisely what the tri-state model refuses to express.
+    """
+    if not why.queer_provenance:
+        return ""
+    items = "".join(
+        f"<li>{escape(p.source_kind)} asserted “{escape(p.asserted_value)}”: "
+        f'<a href="{escape(p.citation)}">{escape(p.citation)}</a> '
+        f'<span class="retrieved">(retrieved {escape(p.retrieved_at)})</span>'
+        + _fix_at_source_link(p)
+        + "</li>"
+        for p in why.queer_provenance
+    )
+    return (
+        f'<p class="sources" id="queer-src-{aid}">{escape(QUEER_SOURCES_HEADING)}:</p>'
+        f"<ul>{items}</ul>"
+    )
+
+
 def _reasons_html(why: WhyThisArtist) -> str:
     items = "".join(f"<li>{escape(r)}</li>" for r in why.reasons)
     return f"<ul>{items}</ul>"
@@ -117,10 +147,22 @@ def _card_html(rec: Recommendation) -> str:
         f'<p class="rank-shift">{_rank_shift_line(why)}</p>'
         f"{_conflict_html(why, aid)}"
         f"<h4>Why this artist</h4>{_reasons_html(why)}"
-        f"{_provenance_html(why, aid)}"
+        f"{_provenance_html(why, aid) + _queer_provenance_html(why, aid)}"
         f'<p class="summary">{escape(rec.explanation.summary)}</p>'
         f"</article>"
     )
+
+
+#: Wording for the "how was this position decided" column. Rank is *not* a pure
+#: function of total score — protected rows hold their pure-taste slot — and a
+#: reader looking at the table used to see a higher-scoring pick below a
+#: lower-scoring one with nothing to explain it (#68).
+POSITION_HELD = "held — pure-taste position"
+POSITION_LENS_ORDERED = "lens-ordered by total"
+
+
+def position_basis(r: Recommendation) -> str:
+    return POSITION_HELD if is_rank_protected(r.artist) else POSITION_LENS_ORDERED
 
 
 def _row_html(r: Recommendation) -> str:
@@ -129,6 +171,7 @@ def _row_html(r: Recommendation) -> str:
         f'<th scope="row">{escape(r.artist.name)}</th>'
         f"<td>{r.base_score:.3f}</td><td>{r.rerank_delta:.3f}</td>"
         f"<td>{r.score:.3f}</td>"
+        f"<td>{escape(position_basis(r))}</td>"
         f"<td>{escape(str(r.explanation.identity_basis))}</td></tr>"
     )
 
@@ -155,12 +198,43 @@ def _table_html(recs: Sequence[Recommendation]) -> str:
     return _scroll_region(
         "Recommendation scores table (scrolls sideways on narrow screens)",
         "<table><caption>Recommendation scores (data-table equivalent of "
-        "the score chart)</caption><thead><tr>"
+        "the score chart). Rank is not a pure function of total: rows marked "
+        f"“{escape(POSITION_HELD)}” keep the position they had before the values "
+        "lens was applied, so a higher-scoring pick can sit below them. The lens "
+        "only ever adds to a score; it never subtracts from one."
+        "</caption><thead><tr>"
         '<th scope="col">Rank</th><th scope="col">Artist</th>'
         '<th scope="col">Taste score</th><th scope="col">Values boost</th>'
-        '<th scope="col">Total</th><th scope="col">Identity basis</th>'
+        '<th scope="col">Total</th><th scope="col">Position</th>'
+        '<th scope="col">Identity basis</th>'
         f"</tr></thead><tbody>{rows}</tbody></table>",
     )
+
+
+def _share_cell(value: float | None) -> str:
+    """One exposure-share cell, or an explicit statement that there was nothing to share out.
+
+    An empty top-k has no shares. Rendering that as a column of "0%" says every segment held
+    none of the slots, which is a measurement; what happened is that there were no slots.
+    """
+
+    if value is None:
+        return '<td class="unmeasured">not measured \u2014 no picks in the top-k</td>'
+    return f"<td>{value:.0%}</td>"
+
+
+def _retention_cell(value: float | None) -> str:
+    """One retention cell, or an explicit statement that nothing was measured.
+
+    A segment with no artist in pure taste's top-k has no retention. Rendering
+    that as "100%" -- which this table did until the empty case stopped scoring
+    1.0 -- told a reader the strongest possible version of a claim nobody had
+    checked, on the panel whose whole purpose is to make the claim checkable.
+    """
+
+    if value is None:
+        return '<td class="unmeasured">not measured \u2014 no artist in this segment</td>'
+    return f"<td>{value:.0%}</td>"
 
 
 def _exposure_panel_html(panel: dict[str, object] | None) -> str:
@@ -172,18 +246,30 @@ def _exposure_panel_html(panel: dict[str, object] | None) -> str:
     current_pct = f"{cast(float, panel['current_lens']):.0%}"
     body = "".join(
         f'<tr><th scope="row">{escape(str(row["segment"]))}</th>'
-        f"<td>{cast(float, row['base_share']):.0%}</td>"
-        f"<td>{cast(float, row['current_share']):.0%}</td></tr>"
+        + _share_cell(cast("float | None", row["base_share"]))
+        + _share_cell(cast("float | None", row["current_share"]))
+        + "</tr>"
         for row in rows
     )
-    retention = cast("dict[str, object]", panel["retention_row"])
-    by_lens = cast("dict[str, float]", retention["by_lens"])
-    retention_headers = "".join(f'<th scope="col">Lens {escape(key)}</th>' for key in by_lens)
-    retention_cells = "".join(f"<td>{value:.0%}</td>" for value in by_lens.values())
+    retention_rows = cast("list[dict[str, object]]", panel["retention_rows"])
+    first_by_lens = cast("dict[str, float | None]", retention_rows[0]["by_lens"])
+    retention_headers = "".join(f'<th scope="col">Lens {escape(key)}</th>' for key in first_by_lens)
+    retention_body = "".join(
+        f'<tr><th scope="row">{escape(str(row["segment"]))}</th>'
+        + "".join(
+            _retention_cell(value)
+            for value in cast("dict[str, float | None]", row["by_lens"]).values()
+        )
+        + "</tr>"
+        for row in retention_rows
+    )
     return (
         "<h2>Fairness observability</h2>"
-        "<p>Exposure changes are shown alongside the merge-blocking "
-        "unknown-retention guarantee.</p>"
+        "<p>Exposure changes are shown alongside the merge-blocking retention "
+        "guarantees. Two segments keep their pure-taste position as well as "
+        "their score: unknown-identity artists, and artists sourced as "
+        "Gender.OTHER. Sourced men keep their exact score but can move down the "
+        "list — that is the whole of what this lens re-allocates.</p>"
         + _scroll_region(
             "Exposure share table (scrolls sideways on narrow screens)",
             f"<table><caption>Top-{k} exposure share by identity segment — base lens "
@@ -192,17 +278,17 @@ def _exposure_panel_html(panel: dict[str, object] | None) -> str:
             f'<th scope="col">Current share</th></tr></thead><tbody>{body}</tbody></table>',
         )
         + _scroll_region(
-            "Unknown-identity retention table (scrolls sideways on narrow screens)",
-            "<table><caption>Unknown-identity retention across the lens</caption><thead><tr>"
-            f'<th scope="col">Identity segment</th>{retention_headers}</tr></thead><tbody><tr>'
-            f'<th scope="row">{escape(str(retention["segment"]))}</th>{retention_cells}'
-            "</tr></tbody></table>",
+            "Rank-protected retention table (scrolls sideways on narrow screens)",
+            "<table><caption>Rank-protected retention across the lens (score, "
+            "top-k presence, and position all preserved)</caption><thead><tr>"
+            f'<th scope="col">Identity segment</th>{retention_headers}</tr></thead>'
+            f"<tbody>{retention_body}</tbody></table>",
         )
     )
 
 
 #: Explicit per-scheme design tokens (BUG-1 fix). The old stylesheet declared
-#: ``color-scheme: light dark`` with **no** explicit colours, so under an OS dark
+#: ``color-scheme: light dark`` with **no** explicit colors, so under an OS dark
 #: theme every pair fell back to UA defaults and produced real axe contrast
 #: failures. Both palettes below are unit-tested against WCAG 2.2 relative
 #: luminance in ``tests/test_contrast.py`` (merge-blocking); the ratios in the
@@ -254,8 +340,8 @@ body {{ font-family: system-ui, sans-serif; max-width: 70ch; margin: 0 auto; pad
 a {{ color: var(--link); }}
 .card {{ border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin: 1rem 0; }}
 .identity {{ font-weight: 600; }}
-.identity::before {{ content: "\\25CF  "; }}  /* glyph paired with text, not colour-only;
-                                                inherits --text, never colour-only meaning */
+.identity::before {{ content: "\\25CF  "; }}  /* glyph paired with text, not color-only;
+                                                inherits --text, never color-only meaning */
 .conflict {{ border: 2px dashed var(--border); border-radius: 6px;
              padding: 0.5rem 0.75rem; margin: 0.5rem 0; }}
 .conflict-heading {{ font-weight: 700; margin: 0 0 0.25rem; }}
@@ -284,30 +370,44 @@ def render_cards_html(
     username: str = "demo",
     scheme: str = "auto",
     exposure_panel: dict[str, object] | None = None,
+    filters_line: str | None = None,
 ) -> str:
     """Render a complete, accessible HTML document for the given recommendations.
 
     ``scheme="auto"`` (the shipped default) responds to ``prefers-color-scheme``;
     ``"light"``/``"dark"`` pin that palette so the a11y gate audits both schemes.
+
+    ``filters_line`` states the listener's identity-blind tag/era narrowing, so a shorter
+    list is never unexplained. It is omitted entirely when no filter is active, which keeps
+    the unfiltered render byte-identical to what it produced before filters existed — that
+    render is a committed gate input (``docs/audits/dashboard.html``), and moving it for a
+    feature nobody switched on would be a change to published evidence in order to add a
+    sentence saying nothing happened.
     """
     cards = "".join(_card_html(r) for r in recs)
     coverage_html = _coverage_html(identity_coverage(recs))
+    filters_html = (
+        f'<p class="filters">{escape(filters_line)}</p>' if filters_line is not None else ""
+    )
     lens_pct = f"{lens_strength:.0%}"
     return (
         "<!doctype html>"
         '<html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        "<title>Women-Artist Discovery — recommendations</title>"
+        "<title>Lavender Rotation — recommendations</title>"
         f"<style>{_style(scheme)}</style></head><body>"
         '<a class="skip" href="#main">Skip to recommendations</a>'
-        "<header><h1>Women-Artist Discovery</h1>"
+        "<header><h1>Lavender Rotation</h1>"
         f"<p>Recommendations for <strong>{escape(username)}</strong>. "
         f"The values lens is set to <strong>{lens_pct}</strong>: it only ever "
         "<em>boosts</em> artists whose identity is sourced as a woman (cis or "
-        "trans — no distinction is drawn), nonbinary person, or a sourced "
-        "female-fronted band. It never lowers anyone's score, and artists with "
-        "unknown identity are surfaced on musical merit alone.</p></header>"
+        "trans — no distinction is drawn) or a nonbinary person, and bands whose "
+        "sourced lineup is fronted by one of them. Each front-person's gender is "
+        "shown as their source stated it. It never lowers anyone's score, and "
+        "artists with unknown identity are surfaced on musical merit alone."
+        "</p></header>"
         '<main id="main">'
+        f"{filters_html}"
         f"{coverage_html}"
         "<h2>Score summary</h2>"
         f"{_table_html(recs)}"

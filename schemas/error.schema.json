@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ChelseaKR/lavender-rotation/blob/main/schemas/error.schema.json",
+  "title": "lavender <command> --json, when the run is refused",
+  "description": "A refusal in the same shape as a result, so a script cannot read a refusal as an empty result.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "ok",
+    "error"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ok": {
+      "type": "boolean",
+      "const": false
+    },
+    "error": {
+      "type": "object",
+      "required": [
+        "kind",
+        "message"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "invalid_filter",
+            "live_mode",
+            "not_found",
+            "invalid_input"
+          ],
+          "description": "Machine-switchable reason."
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

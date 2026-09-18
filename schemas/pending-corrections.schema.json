@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ChelseaKR/lavender-rotation/blob/main/schemas/pending-corrections.schema.json",
+  "title": "lavender pending-corrections --json",
+  "description": "Filed-but-not-yet-reconciled upstream edit requests. Filing records what a person believes is right and why; it edits nothing upstream, because the edit happens in the upstream interface, by that person. 'action' says which of the two things this run did, and the fields the other action would have filled are null rather than empty.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "action",
+    "path",
+    "count",
+    "pending_corrections",
+    "filed"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "command": {
+      "type": "string",
+      "const": "pending-corrections"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "list",
+        "file"
+      ],
+      "description": "Which of the two things this run did."
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "Null when this run filed rather than listed."
+    },
+    "pending_corrections": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object",
+        "required": [
+          "artist_id",
+          "source_kind",
+          "citation",
+          "current_value",
+          "proposed_value",
+          "note",
+          "filed_at",
+          "edit_url",
+          "is_superseded",
+          "superseded_by_value",
+          "superseded_at"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "artist_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "citation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "current_value": {
+            "type": "string"
+          },
+          "proposed_value": {
+            "type": "string",
+            "minLength": 1
+          },
+          "note": {
+            "type": "string"
+          },
+          "filed_at": {
+            "type": "string",
+            "minLength": 1
+          },
+          "edit_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The upstream edit link that was offered, or null when this project knows no edit route for that source kind. Never an empty string: 'no route known' and 'the route is empty' are different statements."
+          },
+          "is_superseded": {
+            "type": "boolean"
+          },
+          "superseded_by_value": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "What a later refresh observed the source asserting instead, or null if none has. The row stays on file either way."
+          },
+          "superseded_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "filed": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "artist_id",
+        "source_kind",
+        "citation",
+        "current_value",
+        "proposed_value",
+        "note",
+        "filed_at",
+        "edit_url",
+        "is_superseded",
+        "superseded_by_value",
+        "superseded_at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artist_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "citation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "current_value": {
+          "type": "string"
+        },
+        "proposed_value": {
+          "type": "string",
+          "minLength": 1
+        },
+        "note": {
+          "type": "string"
+        },
+        "filed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "edit_url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The upstream edit link that was offered, or null when this project knows no edit route for that source kind. Never an empty string: 'no route known' and 'the route is empty' are different statements."
+        },
+        "is_superseded": {
+          "type": "boolean"
+        },
+        "superseded_by_value": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "What a later refresh observed the source asserting instead, or null if none has. The row stays on file either way."
+        },
+        "superseded_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

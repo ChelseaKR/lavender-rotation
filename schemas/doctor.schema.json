@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ChelseaKR/lavender-rotation/blob/main/schemas/doctor.schema.json",
+  "title": "lavender doctor --json",
+  "description": "One diagnostics run, plus the egress allowlist. A reader can see what this tool is permitted to contact without reading its tests.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "ok",
+    "upstream_checked",
+    "checks",
+    "egress_allowlist",
+    "environment_variables_read"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "command": {
+      "type": "string",
+      "const": "doctor"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "upstream_checked": {
+      "type": "boolean",
+      "description": "False unless --check-upstream was given. Without it the run carries no upstream checks at all, and their absence is not a report that every API was reachable."
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "passed",
+          "detail",
+          "hard"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "hard": {
+            "type": "boolean",
+            "description": "False for informational checks, which never fail a run."
+          }
+        }
+      }
+    },
+    "egress_allowlist": {
+      "type": "object",
+      "required": [
+        "modules",
+        "hosts",
+        "note"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "modules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
+    "environment_variables_read": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

@@ -1,28 +1,59 @@
 # Privacy Notes (DPIA-style)
 
 > Instantiates RESPONSIBLE-TECH-AUDITS §C.
-> **Last verified: 2026-05-31 · Recheck cadence: per data-flow change.**
+> **Last verified: 2026-08-16 · Recheck cadence: per data-flow change.**
+>
+> *2026-08-16 — re-verified for ADR 0011 (queer lens).* A second sourced axis is
+> now stored. No new egress: the P91 claim is read from the Wikidata entity
+> already fetched for P21, so the request count is unchanged and no new question
+> is asked of anyone. See "Special-category data" below.
+>
+> *2026-08-15 — re-verified for FIX-01 (live identity enrichment).* One egress
+> module was added (`pipeline/http.py`); one data flow changed from "not shipped"
+> to "shipped, opt-in behind `lavender ingest --user`". What leaves the machine is
+> unchanged in kind: an artist name or MBID goes to a public metadata registry,
+> and nothing about *what or when* anyone listened goes with it.
 
 ## Data inventory
 
 | Data | Sensitivity | Justification | Storage | Retention |
 |------|-------------|---------------|---------|-----------|
 | Last.fm username | low (personal) | identifies whose history to fetch | in-memory / local cache | until cache cleared |
-| Scrobbles (plays) | personal | the recommendation ground truth | `data/cache.db` (local) | until `make clean` |
-| Enriched artist metadata | public | identity + tags + similarity | `data/cache.db` (local) | fixture-rewritten on demand; live re-enrichment not shipped |
-| API responses | public | rate-limit-respecting cache | `data/cache.db` (local) | overwritten on refetch |
+| Scrobbles (plays) | personal | the recommendation ground truth | the local cache DB (see "Local-first" below for the path) | until `make forget` |
+| Enriched artist metadata | public, **incl. Art. 9 special-category** (orientation, trans self-identification — ADR 0011) | identity + tags + similarity | the local cache DB |  re-fetched past the `--ttl-days` horizon; fixture-rewritten on demand |
+| API responses | public | rate-limit-respecting cache | the local cache DB |  overwritten on refetch |
 | Playlist export (opt-in) | personal | user-initiated push of the recommended artist names to Spotify | none (sent, not stored) | n/a — only on click |
 
-No special-category data is *inferred*; identity is only ever **sourced** about
-public figures (artists), never about the user.
+**Special-category data, stated plainly (ADR 0011).** This document used to say
+none was stored. That is no longer true and the change is deliberate: sexual
+orientation is GDPR Art. 9 special-category data outright, and the queer lens
+records it — together with a trans self-identification where a permitted source
+asserted one — about public figures (artists), never about the user, and never
+inferred. What has *not* changed: every claim carries a citation, `unknown` is
+the answer for almost everyone and is never a negative claim about them, nothing
+identity-bearing is ever exported (`tests/test_export_schema.py`), and the cache
+is local-only.
+
+The honest consequence is that one defense got weaker. Before, "this repo cannot
+produce a list of who is trans" was true of the type system — the vocabulary
+could not express it. It is now true of the *process* (no export path, local
+cache, no redistribution), which is a real defense but a weaker kind.
 
 ## Outbound data flows
 
 There are two product data-flow purposes plus one opt-in diagnostic probe:
 
-1. **Last.fm-shaped client / enrichment interfaces** — network-capable Last.fm code
-   is confined to `pipeline/lastfm.py` (asserted by `tests/test_privacy.py`), but no
-   product command currently wires it to a live identity enricher.
+1. **Listening-history fetch and identity enrichment** — network-capable Last.fm
+   code is confined to `pipeline/lastfm.py` and identity-source fetches to
+   `pipeline/http.py` (both asserted by `tests/test_privacy.py`). Since FIX-01
+   one product command wires them together: `lavender ingest --user <you>`, which is
+   opt-in by construction — it requires a username *and* an API key, and no
+   other command reaches upstream. What travels outbound is asymmetric, and
+   deliberately so: the username goes to Last.fm only (which already holds that
+   history), while MusicBrainz and Wikidata receive an artist name or MBID and
+   nothing else. Neither registry learns who asked, what was played, or when.
+   Responses are cached locally, and identity data is never re-exported
+   (`identity-data-ethics.md`, "Non-redistribution").
 2. **Playlist export** (`export/`) — the project's only *user-initiated* egress.
    It is opt-in (nothing leaves on load), runs only when the user clicks
    export/connect, and sends just the recommended **artist names** (a public
@@ -34,10 +65,10 @@ There are two product data-flow purposes plus one opt-in diagnostic probe:
    single, auditable function.
 
    *Secrets:* the Spotify app credentials are read from the environment only
-   (`WAD_SPOTIFY_CLIENT_ID`, `WAD_SPOTIFY_CLIENT_SECRET`, `WAD_SPOTIFY_REDIRECT_URI`)
+   (`LAVENDER_SPOTIFY_CLIENT_ID`, `LAVENDER_SPOTIFY_CLIENT_SECRET`, `LAVENDER_SPOTIFY_REDIRECT_URI`)
    and the OAuth access/refresh tokens are held in memory for the session, never
    written to disk or committed.
-3. **Upstream diagnostics** — `wad doctor --check-upstream` performs explicit,
+3. **Upstream diagnostics** — `lavender doctor --check-upstream` performs explicit,
    opt-in reachability probes and sends no listening history or identity data.
 
 ## Egress registry / allowlist (FIX-07)
@@ -49,7 +80,8 @@ network — enforced across `pipeline/`, `recommender/`, `app/`, and `export/`.
 | Module | What it does | Live transport |
 |--------|---------------|-----------------|
 | `pipeline/lastfm.py` | Last.fm scrobble/tag/similarity fetch, cached, rate-limited | `import requests` (lazy, inside the client) |
-| `pipeline/doctor.py` | Explicit `wad doctor --check-upstream` reachability probes; never runs by default | `import requests` (lazy, inside the opt-in check) |
+| `pipeline/http.py` | The identity-source transport: MusicBrainz + Wikidata GETs, cached, rate-limited to 1 req/s, sending a `User-Agent` with the operator's `LAVENDER_CONTACT` | `import requests` (lazy, inside `CachedHttpFetcher._get`) |
+| `pipeline/doctor.py` | Explicit `lavender doctor --check-upstream` reachability probes; never runs by default | `import requests` (lazy, inside the opt-in check) |
 | `export/base.py` | The shared exporter seam: PKCE/OAuth helpers plus the **one** live transport used by every playlist provider (Spotify, TIDAL, and any future adapter) | `import requests` (lazy, inside `RequestsTransport.request`) |
 
 A new **playlist provider** does not extend this table: `export/base.py` owns the
@@ -58,9 +90,13 @@ only transport in `export/`, so `export/tidal.py` reaches the network exactly as
 construct. That is why this list got shorter, not longer, when the second
 provider landed.
 
-Adding a new live client (e.g. a FIX-01 MusicBrainz/Discogs/Wikidata HTTP
-client) requires updating **both** of the following in the same change, or the
-new client will fail the merge-blocking privacy gate:
+The same discipline is why FIX-01's live enrichment added **one** row rather
+than one per registry: `pipeline/enrich.py` takes its fetcher as a constructor
+argument, so MusicBrainz and Wikidata are both reached through the single
+transport in `pipeline/http.py`, and a future Discogs enricher would be too.
+
+Adding a new live client requires updating **both** of the following in the same
+change, or the new client will fail the merge-blocking privacy gate:
 
 1. This table.
 2. The exact repository-relative module path in `NETWORK_ALLOWED` in
@@ -87,24 +123,32 @@ new client will fail the merge-blocking privacy gate:
 
 ## Handling & commitments
 
-- **Local-first.** Everything lives in a single on-disk SQLite file under `data/`
-  (git-ignored). Nothing about the user's listening leaves the machine *except*
-  when the user explicitly exports a playlist to Spotify, which sends only the
-  recommended artist names (see "Outbound data flows" below).
+- **Local-first.** Everything lives in a single on-disk SQLite file in the
+  platform user-data directory — `~/Library/Application Support/lavender-rotation/cache.db`
+  on macOS, `%APPDATA%\lavender-rotation` on Windows, `$XDG_DATA_HOME/lavender-rotation`
+  elsewhere (`pipeline/paths.py`; `LAVENDER_DATA_DIR` overrides it, and
+  `lavender doctor` prints the resolved path). It is outside the working tree
+  entirely. Nothing about the user's listening leaves the machine *except* when
+  the user explicitly exports a playlist to Spotify or TIDAL, which sends only
+  the recommended artist names (see "Outbound data flows" above).
 - **No telemetry / no third-party analytics.** Enforced by source scan:
   `tests/test_privacy.py` asserts no analytics SDK is imported and that network
-  egress exists **only** in the three modules in the "Egress registry /
+  egress exists **only** in the four modules in the "Egress registry /
   allowlist" above; the cache uses
   stdlib `sqlite3` only. Backed by a runtime socket guard (see below) so the
   claim holds even for indirect/transitive egress.
 - **Exports exclude identity data.** `tests/test_export_schema.py` checks every
   portable format's schema and rendered content so gender, identity basis, and
   provenance cannot silently become a redistributable sidecar.
-- **Data minimisation & lineage.** Only what's needed is stored, each row with a
+- **Data minimization & lineage.** Only what's needed is stored, each row with a
   `fetched_at` timestamp (`pipeline/cache.py`, `tests/test_cache_serde.py`).
-- **Deletion path.** `make clean` removes the local cache (`data/*.db`); there is
-  no remote copy to chase.
-- **Secrets.** Any API key is read from the environment (`WAD_LASTFM_API_KEY`),
+- **Deletion path.** `make forget` deletes the cache at the path above, after
+  printing it and asking for confirmation; there is no remote copy to chase.
+  This used to read "`make clean` removes the local cache (`data/*.db`)", which
+  stopped being true when the cache moved out of the working tree: on a normal
+  install that rule matched nothing, so the documented way to delete personal
+  data deleted none of it. `make clean` is build artifacts only, and says so.
+- **Secrets.** Any API key is read from the environment (`LAVENDER_LASTFM_API_KEY`),
   never committed; secret scan is merge-blocking (`scripts/secret-scan.sh`, CI
   gitleaks).
 

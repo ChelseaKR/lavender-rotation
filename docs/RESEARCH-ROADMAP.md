@@ -1,4 +1,4 @@
-# Research-Backed Roadmap — Women-Artist Discovery
+# Research-Backed Roadmap — Lavender Rotation
 
 Last verified: 2026-07-11
 
@@ -37,12 +37,12 @@ the historical backlog below is not mistaken for open committed work.
 | IDs | Disposition |
 | --- | --- |
 | R1, R4, R5, R6, R9, R10, R11 | Implemented: identity coverage; exposure/retention/rank-shift metrics; explicit popularity-independent wording; artist-statement priority; exact source/runtime egress guards plus identity-free export schemas; trans/intersex end-to-end tests; no-inference documentation and tests. |
-| R2 | Partially implemented by the cited local corrections ledger, pending-upstream queue, and edit links. The CLI refresh is fixture-only, so upstream reconciliation and a public artist opt-out/intake route are not shipped. |
+| R2 | Implemented for the round-trip: cited local corrections ledger, pending-upstream queue, edit links, and `lavender refresh --user`, which re-asks upstream and reconciles a pending correction the record now agrees with — now on a weekly local schedule (`make schedule`, ADR 0013) rather than only when someone remembers. Not shipped: a public artist opt-out/intake route. |
 | R3, R8 | Human-gated: automated axe checks pass in three color schemes, but a real VoiceOver/NVDA walkthrough and dynamic-announcement judgment cannot be fabricated in code. |
 | R7 | Superseded by per-card counterfactual rank-shift wording and the lens-reactive fairness panel, which show what the lens changed without duplicating the whole result set. |
 | R12 | Accepted operational follow-up rather than a product feature: dated audit docs carry recheck cadences; upstream changes are reviewed when dependency/API updates land. |
 | E1, E3, E4, E7, E8, E10 | Implemented: bounded per-artist feedback; cited artist-statement source; static discovery report; LensSpec extension point and guard tests; respectful unknown explainer; reproducible methods writeup. |
-| E9 | Partial: the correction queue and diff/reconciliation helpers exist, but a real re-enrich step is blocked on the deferred live enricher (FIX-01). |
+| E9 | Shipped, including the schedule: the correction queue, the diff/reconciliation helpers, the live re-enrich step (`lavender refresh --user`), and — per ADR 0013 — `make refresh` plus the launchd/cron entry `make schedule` prints, which runs it every 7 days on the operator's own machine. Deliberately not a hosted cron: a runner has no personal cache to refresh. |
 | E2 | Rejected: exporting identity/provenance would conflict with data minimization and the promise not to create a portable musician-identity dataset. Portable exports intentionally contain artist names and non-identity recommendation reasons only. |
 | E5 | Human/ethics-gated. New identity-related lenses need affected-community review and a defensible sourced vocabulary before code. No placeholder BIPOC or similar classifier will be invented. |
 | E6 | Deferred, not represented as shipped. A ListenBrainz adapter needs a separate provider-contract, privacy, and live-data validation pass. |
@@ -52,7 +52,7 @@ the historical backlog below is not mistaken for open committed work.
 ## 1. Framing — how this complements the implementation roadmap
 
 `docs/ROADMAP.md` answers *"what to build and how to prove it's correct."* It already
-encodes the hard guarantees (no-inference test, unknown-never-penalised, provenance,
+encodes the hard guarantees (no-inference test, unknown-never-penalized, provenance,
 beats-popularity eval, axe=0) and the MoSCoW scope. What it does **not** carry is the
 *external evidence* that justifies the product's premise and the *user-/artist-facing*
 gaps between "true in code" and "visible in the product." This roadmap fills exactly

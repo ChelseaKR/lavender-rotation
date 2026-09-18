@@ -8,5 +8,5 @@
     "map_at_k": 0.6875
   },
   "tolerance": 0.10,
-  "note": "AIEV-26/27: `wad eval` fails if any current hybrid metric drops more than `tolerance` (relative) below its baseline value here, in addition to the existing beats-popularity gate. Update this file deliberately (with a rationale in the PR) when a real recommender change intentionally moves these numbers — never silently, and never as a side effect of an ordinary `make eval` run."
+  "note": "AIEV-26/27: `lavender eval` fails if any current hybrid metric drops more than `tolerance` (relative) below its baseline value here, in addition to the existing beats-popularity gate. Update this file deliberately (with a rationale in the PR) when a real recommender change intentionally moves these numbers — never silently, and never as a side effect of an ordinary `make eval` run."
 }

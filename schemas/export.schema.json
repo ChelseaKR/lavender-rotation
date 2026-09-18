@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ChelseaKR/lavender-rotation/blob/main/schemas/export.schema.json",
+  "title": "lavender export --json",
+  "description": "One export run. 'content' is verbatim what the chosen portable format rendered, so this envelope cannot carry a field that format does not already carry.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "format",
+    "playlist_name",
+    "track_count",
+    "generated_at",
+    "written_to",
+    "content"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "command": {
+      "type": "string",
+      "const": "export"
+    },
+    "format": {
+      "type": "string",
+      "enum": [
+        "txt",
+        "csv",
+        "m3u8",
+        "jspf"
+      ],
+      "description": "The portable format rendered."
+    },
+    "playlist_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "track_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "generated_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "written_to": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "null when the export went to stdout."
+    },
+    "content": {
+      "type": "string"
+    }
+  }
+}

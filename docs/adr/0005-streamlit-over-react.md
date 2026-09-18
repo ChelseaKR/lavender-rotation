@@ -19,7 +19,7 @@ a later option"); this ADR is its dated, referenceable form.
 
 Use Streamlit (`app/dashboard.py`) for the interactive dashboard. Keep the render logic that must
 be provable — the accessible HTML of the why cards — in a framework-free static renderer
-(`app/render.py`) shared by `wad report` and the a11y gate, so the merge-blocking pa11y/axe check
+(`app/render.py`) shared by `lavender report` and the a11y gate, so the merge-blocking pa11y/axe check
 does not depend on Streamlit internals.
 
 ## Consequences

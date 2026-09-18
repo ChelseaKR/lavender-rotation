@@ -44,6 +44,8 @@ the guess is on average:
   member's inferred gender (or worse, inferring it from timbre) turns a
   composition fact into a claim about a person. This project keeps
   `female_fronted` as sourced, tri-state *band* metadata, never a personal label
+  — and never a *widened* one: the sourced genders of a band's front-people are
+  carried as themselves, so no one is renamed to fit the band-level word
   — see [`identity-data-ethics.md`](../audits/identity-data-ethics.md).
 
 The response is not to avoid identity-aware recommendation — a values lens is the
@@ -69,36 +71,62 @@ not just at review time:
   `SourceKind` member for a name, voice, image, or genre — the guardrail isn't
   just "don't call the inference function," it's "there is no inference function
   to call." `tests/test_no_inference.py` proves this with a vocabulary check and
-  an AST scan of the resolver, not just a behavioural test.
+  an AST scan, not just a behavioral test. The scan walks every `def` and
+  `async def` in every `pipeline/*.py` module — an allowlist of function names
+  does not maintain itself, and #72 found the previous one covering four of
+  seven functions in one file and passing on a helper that mapped genre tags to
+  a gender. Functions that legitimately touch content tags are named with a
+  reason and held to a stricter taint check (no value derived from a forbidden
+  read may reach an identity constructor), and the scan is itself pointed at a
+  synthetic bypass module and asserted to *fail* on it.
 - **`unknown` as first-class, not a null.** `IdentityLabel()` with no arguments
   *is* a valid, complete identity — `UNKNOWN_IDENTITY`, the module-level
   singleton. Nothing downstream branches on "missing data"; it branches on a
   real enum value that every exhaustive match must handle.
 - **Composition kept separate from personal identity.** `BandComposition
-  .female_fronted` is a sourced, tri-state (`True` / `None`) property of a
-  *band*, built from `FrontPerson` entries whose *own* `identity` is itself a
-  full `IdentityLabel` — never a shortcut that infers a member's gender from the
-  fact that the band is described as female-fronted, or vice versa.
+  .sourced_front_genders` is a sourced set of the genders a band's front-people
+  are *themselves* sourced as, built from `FrontPerson` entries whose own
+  `identity` is a full `IdentityLabel` — never a shortcut that infers a member's
+  gender from a band-level label, or vice versa. `BandComposition
+  .female_fronted` is the narrow, tri-state (`True` / `None`) special case of
+  that set: `True` only when a front-person's own sourced gender is `WOMAN`. A
+  band fronted only by a sourced nonbinary artist is *not* female-fronted; it is
+  nonbinary-fronted, and every surface says so (#69). The lens asks its own
+  question through `has_sourced_front_person_in()`, so widening or narrowing the
+  lens can never change what the model asserts about a band.
 
 The segmentation vocabulary that the rest of this piece reports against —
-`WOMAN` / `NONBINARY` / `FEMALE_FRONTED` / `MAN` / `OTHER` / `UNKNOWN` — is
+`WOMAN` / `NONBINARY` / `FEMALE_FRONTED` / `NONBINARY_FRONTED` / `MAN` /
+`OTHER` / `UNKNOWN` — is
 defined once, in [`recommender/exposure.py`](../../recommender/exposure.py)
 (`SEGMENTS`), and derived purely from `Artist.identity` and `Artist
-.female_fronted` — i.e., purely from the sourced fields above. Segmenting never
-adds a new way to guess; it only reads what §2's guardrails already sourced.
+.sourced_front_genders` — i.e., purely from the sourced fields above. Segmenting
+never adds a new way to guess; it only reads what §2's guardrails already
+sourced, at the granularity the source stated.
 
 ## 3. Boost-only proof
 
-The values lens re-ranks, it never penalizes. That's implemented in
+The values lens never reduces a score, for anyone. That's implemented in
 [`recommender/rerank.py`](../../recommender/rerank.py):
 `values_boost_for_artist` returns `0.0` for any artist that isn't
 *sourced*-aligned (including every `UNKNOWN` artist) and a non-negative boost
-otherwise; `rerank()` asserts `delta >= 0.0`, sorts only the non-unknown
-candidates by boosted score, then reinserts unknown artists in their pure-taste
-slots. By construction, an `UNKNOWN`-identity artist's score and rank are
-invariant to `lens_strength`. The optional identity-blind MMR pass receives only
-the movable candidates; `hybrid.recommend()` reconstructs them around those same
-unknown slots before slicing top-k, so exploration cannot undo the guarantee.
+otherwise; `rerank()` asserts `delta >= 0.0`, sorts only the *unpinned*
+candidates by boosted score, then reinserts the pinned ones in their pure-taste
+slots. The pinned set is `RANK_PROTECTED_GENDERS` = {`UNKNOWN`, `OTHER`}, so
+both an unknown-identity artist's and a sourced-`OTHER` artist's score *and*
+rank are invariant to `lens_strength`. The optional identity-blind MMR pass
+receives only the movable candidates; `hybrid.recommend()` reconstructs them
+around those same pinned slots before slicing top-k, so exploration cannot undo
+the guarantee.
+
+Position is not held for everyone, and the honest statement of that is short: a
+boosted artist that rises has to pass someone, and everyone except sourced men
+is pinned, so the lens's entire re-allocation is exposure moving from sourced
+men to sourced women and nonbinary artists. Pinning men as well would leave
+aligned artists able to permute only among their own base slots — a lens that
+cannot change exposure at any strength. `VALUES_LENS.harms_note` says this in
+those words; until #68 it instead promised that nobody unaligned was ever
+down-ranked, which the ranking did not do.
 
 "True by construction" is a claim about the code. It is only a credible claim
 about the *product* once it's checked against what the pipeline actually emits —
@@ -116,6 +144,24 @@ top-k check as a number:
 > asserted in prose, every time `make audit` runs the test suite. The guard
 > itself is tested too: hostile rank-shift and top-k-drop tests build synthetic violations and confirm
 > `FairnessAssertionError` actually fires — the check isn't a rubber stamp.
+
+`assert_other_retained()` is the identical check over the `OTHER` segment, and
+`assert_no_score_reduced()` is the score half over *every* artist, unscoped to
+any segment or to the top-k. Both were added by #68, which found the lens
+promising them in text the dashboard renders with nothing checking either.
+
+> **The `OTHER` retention guarantee is currently unmeasured, and the report says
+> so.** The demo fixture world holds no artist sourced as `Gender.OTHER`, so no
+> such artist is in pure taste's top-k and there is nothing that could lose score
+> or rank. Until this was fixed the empty case scored **1.0** and
+> `other_retention_all_lenses` went green over it — the strongest form of a claim
+> nobody had checked, in the guarantee added precisely because #68 found a harms
+> note nothing verified. `other_retention` is now `null` per lens,
+> `other_retention_measured` is `false`, `other_base_count` is `0`, and
+> `lavender eval` prints an `UNMEASURED:` line. Giving this guarantee something to
+> measure needs an artist with a **sourced** `OTHER` self-identification in the
+> eval world, which is an identity claim about a real person and therefore a
+> sourcing decision, not a code change.
 
 This is the same guarantee `docs/audits/fairness-identity.md` names as "metric
 *down-ranked-for-unknown = 0*" (finding 2) — `exposure.py` is what turns that
@@ -144,9 +190,26 @@ That primary table is the deliberately hand-tuned demo world, so the audit also
 runs four independent synthetic fixture families. Across all five worlds, the
 hybrid wins 5 `[docs/audits/eval-report.json → multiworld.worlds_hybrid_wins]`
 of 5 `[docs/audits/eval-report.json → multiworld.n_worlds]`, with mean
-MAP@5 delta 0.5375 `[docs/audits/eval-report.json →
+MAP@5 delta 0.6358 `[docs/audits/eval-report.json →
 multiworld.mean_map_delta]`. These remain synthetic tests, but they keep the
 claim from resting on the one fixture designed alongside the recommender.
+
+**Recall@5 used to be evidence in one world only, and was reported as if it were
+evidence in five** (issue #82). The four non-demo fixtures held exactly four
+rankable candidates against `k = 5`, so the top-k was the entire pool and
+`recall_at_k` came out 1.0 for every model in all four — for a perfect ranker, a
+random one and a reversed one alike. The headline `mean_recall_delta` was
+therefore the demo world's 0.5 divided by five. Two changes close that: the
+report now records, per world, whether `k` was smaller than the rankable pool
+(`recall_discriminates`) and averages only over the worlds where recall could
+vary, naming the denominator next to the mean; and the fixtures grew past `k`, so
+today every world contributes: 5
+`[docs/audits/eval-report.json → multiworld.n_worlds_recall_discriminating]` of 5
+`[docs/audits/eval-report.json → multiworld.n_worlds]`, and mean recall@5 delta
+is 0.5 `[docs/audits/eval-report.json → multiworld.mean_recall_delta]` measured
+across all of them. The aggregate verdict also requires a *strict* MAP
+improvement now: a dead heat used to satisfy the condition the README describes
+as "the offline eval must beat the popularity baseline".
 
 Read narrowly: this shows the *hybrid engine* recovers genuine future discoveries
 better than "just recommend what's already popular" — it is not, on its own, a

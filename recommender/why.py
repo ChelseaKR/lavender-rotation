@@ -36,6 +36,14 @@ from pipeline.models import (
     SourceKind,
 )
 
+#: The one place ADR 0011's second axis is named in a rendered surface. Written
+#: once, like every other identity phrase in this module, so the wording cannot
+#: drift between the CLI, the static render, the dashboard and the report. It
+#: says "orientation / trans" rather than "queer" because those are the two
+#: questions the citations answer; "queer" is the *lens's* word for a policy set
+#: (:data:`recommender.lens.QUEER_ORIENTATIONS`), not a claim any source made.
+QUEER_SOURCES_HEADING = "Orientation / trans sources (sourced, never inferred)"
+
 
 @dataclass(frozen=True)
 class ProvenanceItem:
@@ -79,6 +87,13 @@ class WhyThisArtist:
     * ``inferred`` — always ``False``; identity in this system is never guessed.
     * ``conflict_note`` — non-empty, neutral wording of a source disagreement
       (FIX-10); empty string when sources agree (or identity is unknown).
+    * ``queer_provenance`` — the citations behind ADR 0011's second axis
+      (orientation, trans self-identification), kept in their own tuple rather
+      than merged into ``provenance``. They are evidence about a different
+      question from a different source with different failure modes, and a
+      reader must be able to tell which claim rests on which citation. Empty for
+      almost every artist, which is the normal, first-class answer and never
+      means "not queer".
     """
 
     artist_name: str
@@ -90,6 +105,7 @@ class WhyThisArtist:
     inferred: bool = False
     conflict_note: str = ""
     rank_shift: str = "the values lens did not change this pick's position"
+    queer_provenance: tuple[ProvenanceItem, ...] = ()
 
     @property
     def identity_is_known(self) -> bool:
@@ -116,6 +132,13 @@ class WhyThisArtist:
             )
         else:
             lines.append("  Sources: none — identity unknown, surfaced on merit.")
+        if self.queer_provenance:
+            lines.append(f"  {QUEER_SOURCES_HEADING}:")
+            lines.extend(
+                f"    - {p.source_kind} asserted {p.asserted_value!r} "
+                f"({p.citation}, retrieved {p.retrieved_at})"
+                for p in self.queer_provenance
+            )
         return "\n".join(lines)
 
     def to_markdown(self) -> str:
@@ -144,6 +167,14 @@ class WhyThisArtist:
         else:
             parts.append("")
             parts.append("_Sources: none — identity unknown, surfaced on merit._")
+        if self.queer_provenance:
+            parts.append("")
+            parts.append(f"**{QUEER_SOURCES_HEADING}**")
+            parts.extend(
+                f"- {p.source_kind} asserted `{p.asserted_value}` — "
+                f"[{p.citation}]({p.citation}) (retrieved {p.retrieved_at})"
+                for p in self.queer_provenance
+            )
         return "\n".join(parts)
 
 
@@ -159,19 +190,96 @@ def _confidence_tier(label: IdentityLabel) -> str:
     return "cited source"
 
 
+#: Display order for a band's sourced front-person genders, so the rendered
+#: phrase is deterministic regardless of lineup order.
+_FRONT_GENDER_ORDER: tuple[Gender, ...] = (
+    Gender.WOMAN,
+    Gender.NONBINARY,
+    Gender.MAN,
+    Gender.OTHER,
+)
+
+#: How each *sourced* front-person gender is named, as ``(singular, plural)``.
+#: There is deliberately no ``UNKNOWN`` entry — a front-person with no sourced
+#: gender contributes nothing to say — and deliberately no entry that widens one
+#: gender into another. ``OTHER`` describes what is sourced rather than naming a
+#: category the source did not name, because the honest label for that bucket is
+#: not knowable from here.
+_FRONT_GENDER_NOUN: dict[Gender, tuple[str, str]] = {
+    Gender.WOMAN: ("a sourced woman", "sourced women"),
+    Gender.NONBINARY: ("a sourced nonbinary artist", "sourced nonbinary artists"),
+    Gender.MAN: ("a sourced man", "sourced men"),
+    Gender.OTHER: (
+        "a front-person whose sourced self-identification is outside this vocabulary",
+        "front-people whose sourced self-identifications are outside this vocabulary",
+    ),
+}
+
+
+def _join(parts: list[str]) -> str:
+    if len(parts) == 1:
+        return parts[0]
+    if len(parts) == 2:
+        return f"{parts[0]} and {parts[1]}"
+    return f"{', '.join(parts[:-1])}, and {parts[-1]}"
+
+
+def _sourced_front_gender_counts(artist: Artist) -> dict[Gender, int]:
+    """How many front-people carry each *sourced* gender (unknown ones excluded)."""
+    if artist.composition is None or not artist.sourced_front_genders:
+        return {}
+    counts: dict[Gender, int] = {}
+    for person in artist.composition.members_fronting:
+        gender = person.identity.gender
+        if gender is not Gender.UNKNOWN:
+            counts[gender] = counts.get(gender, 0) + 1
+    return counts
+
+
+def band_front_phrase(artist: Artist) -> str:
+    """Name a band's *sourced* front-person genders, or ``""`` when none are sourced.
+
+    This is the one place a band-composition label is written, and it names the
+    genders the lineup source actually asserted. It never widens a category to
+    reach a more familiar word: a band whose only sourced front-person is
+    nonbinary reads as "fronted by a sourced nonbinary artist", never
+    "female-fronted band". The trailing clause is deliberately *not* "distinct
+    from any member's gender" — the phrase is derived from named members' own
+    sourced self-identifications, so claiming otherwise would be false; what it
+    is silent about is everyone else in the band.
+    """
+    counts = _sourced_front_gender_counts(artist)
+    if not counts:
+        return ""
+    fronts = _join(
+        [
+            _FRONT_GENDER_NOUN[gender][0 if counts[gender] == 1 else 1]
+            for gender in _FRONT_GENDER_ORDER
+            if gender in counts
+        ]
+    )
+    return (
+        f"band fronted by {fronts} (sourced lineup; each gender here is that "
+        "front-person's own sourced self-identification, and no gender is "
+        "claimed for any other member)"
+    )
+
+
 def artist_identity_phrase(artist: Artist) -> str:
     """The single sourced-or-unknown identity sentence, written in one place.
 
     Re-used by the explanation summary, the dashboard, the HTML renderer, and the
-    export so the phrasing never drifts. Honest about unknown; never inferred.
+    export so the phrasing never drifts. Honest about unknown; never inferred;
+    never a category the sources did not assert.
     """
     label = artist.identity
     if label.gender is not Gender.UNKNOWN:
         tier = _confidence_tier(label)
         suffix = f" ({tier})" if tier else ""
         return f"{label.gender}, self-identified{suffix}"
-    if artist.female_fronted is True:
-        return "female-fronted band (sourced lineup), distinct from any member's gender"
+    front = band_front_phrase(artist)
+    if front:
+        return front
     return "unknown — surfaced on musical similarity alone"
 
 
@@ -201,11 +309,29 @@ def _reason_line(kind: str, detail: str) -> str:
     return f"{kind}: {detail}"
 
 
-def rank_shift_statement(rank: int, base_rank: int) -> str:
-    """Explain lens movement against the pure-taste counterfactual."""
-    if base_rank == 0 or rank == base_rank:
+def rank_shift_statement(lens_rank: int, base_rank: int) -> str:
+    """Explain **lens** movement against the pure-taste counterfactual.
+
+    Both arguments are positions in the same, unfiltered ordering: *base_rank*
+    before the lens, *lens_rank* immediately after it. The difference is
+    therefore the lens and nothing else.
+
+    It used to take the *displayed* rank, which is assigned after the
+    identity-blind serendipity pass and after the listener's
+    ``hide_sourced_men`` subtraction. ``rank - base_rank`` absorbed all three
+    causes while this sentence named only the first, so raising the Serendipity
+    slider produced cards telling a listener that the identity lens had promoted
+    a sourced man and demoted a nonbinary artist — at ``--lens 0``, where every
+    ``rerank_delta`` in the run is ``0.0`` (#113).
+
+    A zero *base_rank* or *lens_rank* means the rank was never recorded, which
+    is not the same as "the lens did not move it" but renders the same way:
+    claiming a movement from an unrecorded position would be the same
+    manufactured attribution in another direction.
+    """
+    if base_rank == 0 or lens_rank == 0 or lens_rank == base_rank:
         return "the values lens did not change this pick's position"
-    return f"the values lens moved this pick from #{base_rank} to #{rank}"
+    return f"the values lens moved this pick from #{base_rank} to #{lens_rank}"
 
 
 def why_this_artist(rec: Recommendation) -> WhyThisArtist:
@@ -218,6 +344,19 @@ def why_this_artist(rec: Recommendation) -> WhyThisArtist:
     )
     headline = expl.signals[0].detail if expl.signals else "in your discovery catalog"
     provenance = tuple(ProvenanceItem.from_source(s) for s in expl.identity_sources)
+    # Kept out of `provenance` on purpose: an orientation citation is not a
+    # gender citation, and merging them would let a P91 claim be read as the
+    # basis for a gender label — the exact leak ADR 0011 keeps the two axes
+    # apart to prevent.
+    #
+    # Not deduplicated against the gender list either. One document can answer
+    # both questions: a Wikidata P21 claim of `Q1052281` is the citation for
+    # `Gender.WOMAN` *and* the citation for a trans self-identification, and it
+    # is listed under both headings because it is evidence for both claims. The
+    # heading is what tells a reader which question a citation was read for;
+    # showing the document once, under the gender heading only, would hide the
+    # second reading — which is the whole defect this closes.
+    queer_provenance = tuple(ProvenanceItem.from_source(s) for s in expl.queer_sources)
     return WhyThisArtist(
         artist_name=rec.artist.name,
         headline=headline,
@@ -227,5 +366,11 @@ def why_this_artist(rec: Recommendation) -> WhyThisArtist:
         provenance=provenance,
         inferred=False,
         conflict_note=conflict_note(rec.artist),
-        rank_shift=rank_shift_statement(rec.rank, rec.base_rank),
+        # `lens_rank` for the lens sentence, never `rank` (#113).
+        # `recommend()` stamps it on everything it emits; a hand-built
+        # `Recommendation` that carries only `rank` has had no serendipity pass
+        # and no output filter run over it, so there `rank` *is* the lens-only
+        # position and there is nothing to misattribute.
+        rank_shift=rank_shift_statement(rec.lens_rank or rec.rank, rec.base_rank),
+        queer_provenance=queer_provenance,
     )

@@ -1,4 +1,4 @@
-"""``wad doctor`` diagnostics (FIX-12 — operability pass).
+"""``lavender doctor`` diagnostics (FIX-12 — operability pass).
 
 All the actual checking logic lives here, pure and unit-testable; the CLI
 (``pipeline/cli.py``, excluded from the coverage gate) is thin argparse +
@@ -10,13 +10,22 @@ Checks:
   Informational only (demo mode needs none of them): never hard-fails, and
   never includes the value, only presence/absence.
 * **cache** — the resolved data directory + cache path, whether the cache
-  file opens cleanly, and whether its ``PRAGMA user_version`` matches
-  :data:`pipeline.cache.CACHE_SCHEMA_VERSION`. Hard checks: a cache that
-  won't open or is on the wrong schema version is exactly the kind of silent
-  failure this command exists to surface.
-* **upstream** — opt-in only (``--check-upstream``); pings the four external
-  APIs this project talks to. Never runs by default, and its own failures are
-  never hard (a bad network shouldn't make ``wad doctor`` non-zero on a
+  file opens cleanly, whether its ``PRAGMA user_version`` matches
+  :data:`pipeline.cache.CACHE_SCHEMA_VERSION`, and its on-disk size. Hard
+  checks: a cache that won't open or is on the wrong schema version is
+  exactly the kind of silent failure this command exists to surface. Size is
+  informational — it's the one signal `lavender doctor` gives an operator for
+  *when* to reach for `lavender refresh --ttl-days`, since nothing else in the
+  CLI reports cache footprint.
+* **upstream** — opt-in only (``--check-upstream``); pings the three external
+  APIs this project actually talks to. It listed four and probed Discogs, which
+  no client here has ever fetched from: ``SourceKind.DISCOGS_LINEUP`` and
+  ``parse_discogs_lineup`` exist for a lineup payload somebody supplies, and
+  ``pipeline/enrich.py`` says in its own words that "MusicBrainz has no
+  orientation field and neither does Discogs". A reachability probe against a
+  host this tool never uses tells an operator nothing and sends a request the
+  privacy notes do not account for. Never runs by default, and its own failures are
+  never hard (a bad network shouldn't make ``lavender doctor`` non-zero on a
   perfectly healthy local install).
 """
 
@@ -30,18 +39,38 @@ from pipeline.cache import CACHE_SCHEMA_VERSION, Cache, CacheSchemaError
 from pipeline.paths import default_db_path, resolve_data_dir
 
 # Environment variables the pipeline reads. None are strictly required for
-# demo mode; WAD_LASTFM_API_KEY enables live ingest, and the WAD_SPOTIFY_* /
-# WAD_TIDAL_* sets each enable one playlist-export provider. A new exporter
-# belongs here so `wad doctor` can tell the operator what is configured.
-# Report presence only — never the value.
+# demo mode; LAVENDER_LASTFM_API_KEY enables live ingest, LAVENDER_CONTACT supplies the
+# contact detail MusicBrainz's rate-limit policy asks live enrichment to send in
+# its User-Agent, and the LAVENDER_SPOTIFY_* / LAVENDER_TIDAL_* sets each enable one
+# playlist-export provider. A new exporter belongs here so `lavender doctor` can tell
+# the operator what is configured. Report presence only — never the value.
 ENV_KEYS: tuple[str, ...] = (
-    "WAD_LASTFM_API_KEY",
-    "WAD_SPOTIFY_CLIENT_ID",
-    "WAD_SPOTIFY_CLIENT_SECRET",
-    "WAD_SPOTIFY_REDIRECT_URI",
-    "WAD_TIDAL_CLIENT_ID",
-    "WAD_TIDAL_CLIENT_SECRET",
-    "WAD_TIDAL_REDIRECT_URI",
+    "LAVENDER_LASTFM_API_KEY",
+    "LAVENDER_CONTACT",
+    "LAVENDER_SPOTIFY_CLIENT_ID",
+    "LAVENDER_SPOTIFY_CLIENT_SECRET",
+    "LAVENDER_SPOTIFY_REDIRECT_URI",
+    "LAVENDER_TIDAL_CLIENT_ID",
+    "LAVENDER_TIDAL_CLIENT_SECRET",
+    "LAVENDER_TIDAL_REDIRECT_URI",
+)
+
+# The modules this project permits to open a socket. Everything else in
+# `pipeline/`, `recommender/`, `export/` and `app/` is checked by
+# `tests/test_privacy.py` for network tokens and must have none.
+#
+# It lives here, in shipped code, rather than only in that test, for two reasons.
+# A reader who wants to know what this tool is allowed to contact should not have
+# to read its test suite, and `lavender doctor --json` reports this list. The test
+# imports it, so there is still exactly one definition and the gate still fails if
+# a module starts opening sockets outside it.
+NETWORK_EGRESS_MODULES: frozenset[str] = frozenset(
+    {
+        "pipeline/lastfm.py",  # the Last.fm API client
+        "pipeline/http.py",  # the cached HTTP layer MusicBrainz/Wikidata go through
+        "pipeline/doctor.py",  # this module: the opt-in --check-upstream probe
+        "export/base.py",  # the playlist-provider exporters
+    }
 )
 
 # (human label, host) — used only by the opt-in upstream reachability check.
@@ -49,7 +78,6 @@ UPSTREAM_APIS: tuple[tuple[str, str], ...] = (
     ("Last.fm", "https://ws.audioscrobbler.com/2.0/"),
     ("MusicBrainz", "https://musicbrainz.org/ws/2/"),
     ("Wikidata", "https://www.wikidata.org/wiki/Special:EntityData"),
-    ("Discogs", "https://api.discogs.com/"),
 )
 
 
@@ -57,7 +85,7 @@ UPSTREAM_APIS: tuple[tuple[str, str], ...] = (
 class Check:
     """One diagnostic result.
 
-    ``hard`` marks whether a failure should make ``wad doctor`` exit non-zero;
+    ``hard`` marks whether a failure should make ``lavender doctor`` exit non-zero;
     informational checks (env presence, opt-in upstream reachability) are
     reported but never fail the run on their own.
     """
@@ -93,6 +121,18 @@ def _check_env_keys() -> list[Check]:
             )
         )
     return checks
+
+
+def _format_bytes(n: int) -> str:
+    """Human-readable byte count, e.g. ``4.0 KiB``. Binary (1024) units, capped at GiB."""
+    size = float(n)
+    unit = "B"
+    for next_unit in ("KiB", "MiB", "GiB"):
+        if size < 1024:
+            break
+        size /= 1024
+        unit = next_unit
+    return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
 
 
 def _check_cache() -> list[Check]:
@@ -136,13 +176,22 @@ def _check_cache() -> list[Check]:
             f"user_version={version} (expected {CACHE_SCHEMA_VERSION})",
         )
     )
+    try:
+        size_bytes = db_path.stat().st_size
+    except OSError as exc:  # pragma: no cover - defensive; the open above already proved it exists
+        checks.append(Check("cache_size", False, f"cannot stat cache file: {exc}", hard=False))
+    else:
+        checks.append(Check("cache_size", True, _format_bytes(size_bytes), hard=False))
     return checks
 
 
 def _check_upstream_reachability(timeout: float = 5.0) -> list[Check]:
     """Opt-in network reachability probe. Only ever runs when explicitly requested."""
-    # Deliberately a local import: this is the only function in pipeline/ that
-    # touches the network, and only when explicitly opted into.
+    # Deliberately a local import: this is the only *diagnostic* that touches the
+    # network, and only when explicitly opted into. It is not the only network path
+    # in pipeline/ — `lastfm.py` and `http.py` are the live API clients that ingest
+    # and refresh use. All three, plus `export/base.py`, are the sanctioned egress
+    # allowlist gated by `NETWORK_ALLOWED` in tests/test_privacy.py.
     import requests
 
     checks: list[Check] = []

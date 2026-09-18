@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ChelseaKR/lavender-rotation/blob/main/schemas/corrections.schema.json",
+  "title": "lavender corrections --json",
+  "description": "The local corrections ledger. Every row carries a citation by construction, so this is the sourced-or-nothing shape the recommendation document publishes, one layer earlier. 'action' says which of the two things this run did: a listing fills 'corrections' and 'count', a write fills 'recorded' and leaves both of those null. Null rather than 0 and [], because a zero immediately after a write would tell a script the ledger is empty. A write never echoes the asserted value back: an identity value is the one thing this project promises never leaves the machine it was typed on, and JSON is the output most likely to reach a log.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "action",
+    "database",
+    "count",
+    "corrections",
+    "recorded"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "command": {
+      "type": "string",
+      "const": "corrections"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "list",
+        "record"
+      ],
+      "description": "Which of the two things this run did."
+    },
+    "database": {
+      "type": "string",
+      "minLength": 1
+    },
+    "count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "How many rows the ledger held, or null when this run did not read it. Zero is a measured emptiness; null is not."
+    },
+    "corrections": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object",
+        "required": [
+          "artist_id",
+          "source_kind",
+          "asserted_value",
+          "citation",
+          "retrieved_at",
+          "entered_at"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "artist_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "asserted_value": {
+            "type": "string",
+            "description": "The raw thing the person asserted, so it can be audited."
+          },
+          "citation": {
+            "type": "string",
+            "minLength": 1
+          },
+          "retrieved_at": {
+            "type": "string",
+            "minLength": 1
+          },
+          "entered_at": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "recorded": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "artist_id",
+        "citation",
+        "retrieved_at",
+        "entered_at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artist_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "citation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "retrieved_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entered_at": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

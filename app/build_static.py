@@ -14,26 +14,30 @@ import argparse
 from pathlib import Path
 
 from pipeline.demo import DEMO_USER, demo_catalog, demo_profile, demo_source
-from pipeline.models import Recommendation
-from recommender.exposure import observability_panel
-from recommender.hybrid import recommend
 
+from app.observability import LENS_GRID, OBSERVABILITY_K, observability_inputs
 from app.render import SCHEMES, render_cards_html
 
 DEFAULT_OUT = Path("docs/audits/dashboard.html")
-LENS_GRID: tuple[float, ...] = (0.0, 0.25, 0.5, 0.75, 1.0)
-OBSERVABILITY_K = 3
+
+__all__ = ["DEFAULT_OUT", "LENS_GRID", "OBSERVABILITY_K", "build", "main"]
 
 
 def build(out: Path = DEFAULT_OUT, lens_strength: float = 0.5, scheme: str = "auto") -> Path:
     profile, catalog, source = demo_profile(), demo_catalog(), demo_source()
-    recs_by_lens: dict[float, list[Recommendation]] = {
-        lens: recommend(profile, catalog, source, k=10, lens_strength=lens)
-        for lens in sorted({*LENS_GRID, lens_strength})
-    }
-    panel = observability_panel(recs_by_lens, current_lens=lens_strength, k=OBSERVABILITY_K)
+    # Same seam as the dashboard, so the rendered list and the panel measuring
+    # it come from one call (#114). This surface exposes no `explore` control,
+    # so the default of 0.0 keeps the committed render byte-identical.
+    recs, panel = observability_inputs(
+        profile,
+        catalog,
+        source,
+        current_lens=lens_strength,
+        k=10,
+        panel_k=OBSERVABILITY_K,
+    )
     html = render_cards_html(
-        recs_by_lens[lens_strength],
+        recs,
         lens_strength=lens_strength,
         username=DEMO_USER,
         scheme=scheme,

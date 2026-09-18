@@ -1,6 +1,6 @@
-# Contributing to Women-Artist Discovery
+# Contributing to Lavender Rotation
 
-Thanks for your interest. Women-Artist Discovery is an independent personal open-source project
+Thanks for your interest. Lavender Rotation is an independent personal open-source project
 (AGPL-3.0-or-later, unaffiliated with any employer or client). It is a *values-aware* recommender, and the whole
 point of the repo is that its responsible-AI posture is **mechanically enforced rather than
 asserted**. Please read this before opening an issue or a pull request — one invariant, the
@@ -57,14 +57,16 @@ until it is green locally:
 | --- | --- | --- |
 | Lint | `make lint` | `ruff format --check` + `ruff check` (incl. the bandit SAST subset) |
 | Type | `make typecheck` | `mypy --strict` over `pipeline`, `recommender`, `app`, `export` |
-| Test | `make test` | `pytest` with a **≥ 85%** coverage gate on core logic |
+| Test | `make test` | `pytest` with a **≥ 85%** coverage gate on core logic, then the docs-figures gate — every figure the docs state about this repo (`scripts/docs_figures.py`) must match what the repo derives now |
 | Security | `make security` | `pip-audit` (empty waiver list) + the secret scan |
-| A11y | `make a11y` | renders the dashboard and runs the axe gate — **0 violations** |
-| Eval | `make eval` | offline eval; fails unless the hybrid **beats the popularity baseline** |
+| A11y | `make a11y` | audits the committed render plus a light- and a dark-pinned render with the axe gate (regenerating the committed one is `make render`, deliberately not part of `a11y` — #71) — **0 violations** |
+| Eval | `make eval` | offline eval; fails unless the hybrid **beats the popularity baseline**, then checks `docs/writeup/methods.md`'s numbers against the report it just wrote |
+| i18n | `make i18n` | the i18n **N/A declaration** gate — `docs/I18N.md` must carry the status, a reason, a `Declared:` date and a reviewer |
 
 CI re-runs the same `make` targets on Python 3.12–3.13; green locally means green in CI. Useful
-extras: `make format` (auto-format) and `make audit` (regenerate the committed responsible-tech
-artifacts under `docs/audits/`).
+extras: `make format` (auto-format), `make stamp` (write the derived value into any docs figure
+the `make test` gate reported as drifted — never retype one by hand), and `make audit` (regenerate
+the committed responsible-tech artifacts under `docs/audits/`).
 
 The **accessibility gate is merge-blocking**: any rendered surface must pass axe with zero
 violations. The manual screen-reader walkthrough is a review-gated sign-off recorded under
@@ -97,10 +99,15 @@ project's AGPL-3.0-or-later license, and that it contains no proprietary or clie
 
 ## Pull requests
 
-Open a PR against `main` (the protected, CI-gated branch; no admin bypass). Before requesting
-review:
+Open a PR against `main` (the protected, CI-gated branch — ruleset `main-protection`, applied and
+active, requiring a PR plus green `verify (3.12)` and `verify (3.13)`). This line said "no admin
+bypass" until 2026-08-29. **Corrected:** the applied ruleset carries the maintainer's admin
+bypass (`RepositoryRole:5:always`), and that is deliberate — a ruleset with no break-glass path
+locks its owner out of her own repository, which is exactly the lockout ADR 0001 originally
+argued for. See ADR 0001, "Correction, 2026-08-29". What the bypass is not for is skipping a
+red check instead of fixing it. Before requesting review:
 
-- [ ] `make verify` is green locally (lint · type · test ≥85% · security · a11y · eval).
+- [ ] `make verify` is green locally (lint · type · test ≥85% · security · a11y · eval · i18n).
 - [ ] Tests added or updated for the change, including the identity invariants above where a read
       or ranking path is touched.
 - [ ] Every recommendation surface still shows **why + identity basis + source**, with the raw
@@ -117,7 +124,7 @@ identity label, a ranking signal, or the export egress.
 Every identity claim the tool shows already links back to its citation. When a why-card's
 provenance is wrong or stale, the honest fix is to correct it **at the source it came from** —
 never to quietly override it locally. Where a citation resolves to a known upstream edit surface
-(`recommender/upstream.py::upstream_edit_url`), the provenance list carries a labelled **"Fix at
+(`recommender/upstream.py::upstream_edit_url`), the provenance list carries a labeled **"Fix at
 source"** link next to it:
 
 - A Wikidata `P21` ("sex or gender") citation links to the entity's own page, anchored at the P21
@@ -130,17 +137,23 @@ source"** link next to it:
 
 Clicking the link opens the upstream site's own edit UI in your browser; nothing in this project
 ever writes to Wikidata or MusicBrainz on your behalf. If you note what you're proposing and why,
-file it locally with `wad corrections add --artist <id> --source-kind <kind> --citation <url>
---proposed <value> --note <why>` (`pipeline/corrections.py`) — a small JSON file next to the local
-cache, never sent anywhere. `wad corrections` lists what's pending.
+file it locally with `lavender pending-corrections add --artist <id> --source-kind <kind>
+--citation <url> --proposed <value> --note <why>` (`pipeline/corrections.py`) — a small JSON file
+next to the local cache, never sent anywhere. `lavender pending-corrections` lists what you have
+filed and is still open upstream.
 
-The round-trip closes itself: make the real edit upstream, then run `wad refresh`. It re-enriches
-the cache, reports any identity-source change it observes (a new `retrieved_at` is the signal an
-edit landed), and reconciles — clearing — any pending correction whose `artist_id` + `source_kind`
-matches.
+That is a different ledger from `lavender corrections`, which lists (and, with `--artist --value
+--citation`, adds) a *local override* applied to your own cache. Filing a pending correction
+proposes a change to the upstream record; adding a correction changes what your copy says now.
+
+The round-trip closes itself: make the real edit upstream, then run `lavender refresh --user <you>`.
+It re-enriches the cache from upstream, reports any identity-source change it observes (a new
+`retrieved_at` is the signal an edit landed), and reconciles — clearing — any pending correction
+whose `artist_id` + `source_kind` matches. Without `--user`, `lavender refresh` rewrites the demo
+fixture cache and reaches no network, so it reconciles nothing and says so.
 
 **TODO (tracked, not yet done):** a real, documented round-trip — a local note filed against a
-genuinely stale Wikidata `P21` claim, the actual edit made on wikidata.org, and a `wad refresh` run
+genuinely stale Wikidata `P21` claim, the actual edit made on wikidata.org, and a `lavender refresh` run
 showing the pending correction reconciled — is EXP-05's excellence bar and is a human follow-up
 outside of code (it requires an account and a real edit on live Wikidata). Record it under
 `docs/audits/` once completed.
@@ -151,6 +164,15 @@ outside of code (it requires an account and a real edit on live Wikidata). Recor
   Follow [`SECURITY.md`](SECURITY.md) for private, coordinated disclosure — those defects are
   treated as first-class security bugs.
 - **Ordinary bugs and taste disagreements:** open a normal GitHub issue.
+
+## Commercial solicitation
+
+Issues here are not open to bids. They are design records — written so a decision is
+reconstructable later — not scope documents for outside quoting, and unsolicited offers to
+implement one for a fee will be declined.
+
+Contributions through the normal fork-and-PR process are welcome, and `good first issue` is the
+place to start.
 
 ## License
 

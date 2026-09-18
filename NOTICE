@@ -9,3 +9,9 @@ employer or client of the author. It contains no employer- or client-proprietary
 or confidential code, data, methods, or documentation.
 
 Licensed under the GNU Affero General Public License, version 3 or later. See the LICENSE file for the full terms.
+
+NOTE ON DATA. This license covers the source code only. It does NOT grant
+rights to any artist-identity data. Identity data in this project is sourced
+under the terms of MusicBrainz (CC0 for the core DB; attribution appreciated),
+Wikidata (CC0), and Discogs (API terms) and is NOT redistributed in bulk. See
+docs/audits/identity-data-ethics.md.

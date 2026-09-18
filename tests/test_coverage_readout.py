@@ -61,7 +61,7 @@ def test_summary_frames_unknown_respectfully(profile, catalog, source) -> None:
         assert pejorative not in lowered
 
 
-def test_all_unknown_run_is_not_pathologised() -> None:
+def test_all_unknown_run_is_not_pathologized() -> None:
     recs = [_rec(make_artist(f"u{i}"), IdentityBasis.UNKNOWN) for i in range(4)]
     cov = identity_coverage(recs)
     assert cov.unknown == 4
@@ -97,7 +97,44 @@ def test_empty_run_summary() -> None:
     assert isinstance(cov, IdentityCoverage)
     assert cov.total == 0
     assert cov.summary_line() == "No picks yet."
-    assert cov.sourced_fraction == 0.0 and cov.unknown_fraction == 0.0
+
+
+def test_an_empty_run_reports_no_share_rather_than_a_zero_one() -> None:
+    """This test previously asserted the defect.
+
+    It read ``cov.sourced_fraction == 0.0 and cov.unknown_fraction == 0.0``, which is a run
+    where none of the picks were sourced *and* none were unknown -- a distribution that cannot
+    exist. What it was actually pinning is a share computed over nothing and published as a
+    measurement, the same shape ``segment_retention`` had before #129.
+    """
+    cov = identity_coverage([])
+    assert cov.fractions_measured is False
+    assert cov.sourced_fraction is None
+    assert cov.unknown_fraction is None
+    document = cov.to_dict()
+    assert document["sourced_fraction"] is None
+    assert document["unknown_fraction"] is None
+    assert document["fractions_measured"] is False
+    # The denominator is published either way, so a reader can see why there is no share.
+    assert document["total"] == 0
+
+
+def test_a_measured_run_publishes_two_shares_that_sum_to_one() -> None:
+    """The arithmetic that makes the empty case obvious once it is stated.
+
+    Over any run with picks these two are a partition of it. The old empty-run values were
+    ``0.0`` and ``0.0``, which sum to zero -- the tell that no measurement had happened.
+    """
+    recs = [
+        _rec(make_artist("w", gender=Gender.WOMAN), IdentityBasis.SELF_IDENTIFIED),
+        _rec(make_artist("u1"), IdentityBasis.UNKNOWN),
+        _rec(make_artist("u2"), IdentityBasis.UNKNOWN),
+    ]
+    cov = identity_coverage(recs)
+    assert cov.fractions_measured is True
+    assert cov.sourced_fraction is not None and cov.unknown_fraction is not None
+    assert cov.sourced_fraction + cov.unknown_fraction == 1.0
+    assert cov.sourced_fraction == 1 / 3
 
 
 def test_to_dict_is_consistent(profile, catalog, source) -> None:
@@ -106,4 +143,7 @@ def test_to_dict_is_consistent(profile, catalog, source) -> None:
     assert d["total"] == cov.total
     assert d["sourced"] == cov.sourced
     assert d["unknown"] == cov.unknown
-    assert 0.0 <= d["sourced_fraction"] <= 1.0
+    fraction = d["sourced_fraction"]
+    assert isinstance(fraction, float)
+    assert 0.0 <= fraction <= 1.0
+    assert d["fractions_measured"] is True

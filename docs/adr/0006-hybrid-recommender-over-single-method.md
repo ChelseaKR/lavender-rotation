@@ -9,7 +9,7 @@ Accepted (backfilled record of the 2026-05-31 build decision; see ADR 0000 on ba
 ## Context
 
 A purely collaborative recommender (Last.fm similar-artist signal) cold-starts badly on sparse
-profiles and over-concentrates on popular neighbours; a purely content-based one (tag/genre
+profiles and over-concentrates on popular neighbors; a purely content-based one (tag/genre
 similarity) recycles the listener's existing taste and rarely surprises. The original decision is
 recorded in prose in `docs/ROADMAP.md` §6 ("Hybrid over single-method — cold-start + serendipity").
 

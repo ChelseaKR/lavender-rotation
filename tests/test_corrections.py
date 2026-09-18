@@ -136,7 +136,7 @@ def test_cache_schema_migration_is_idempotent_on_reopen(tmp_path) -> None:
 
 
 def test_corrections_survive_refresh(mem_cache) -> None:
-    """`wad refresh` only expires http_cache — corrections are untouched."""
+    """`lavender refresh` only expires http_cache — corrections are untouched."""
     correction = IdentityEvidence(
         kind=SourceKind.ARTIST_STATEMENT,
         value="woman",
@@ -153,3 +153,133 @@ def test_corrections_survive_refresh(mem_cache) -> None:
     survivors = mem_cache.get_corrections("mystery-act")
     assert len(survivors) == 1
     assert survivors[0].citation == "https://example.org/survives"
+
+
+# --- The CLI in front of the ledger -----------------------------------------
+#
+# `lavender corrections --artist X --value femalee --citation URL` used to
+# write a row and print "recorded correction for X: 'femalee'". `_map_value`
+# returns None for anything the controlled vocabulary does not cover, so that
+# row could never move a label — not on this run, not on any future one. The
+# command reported success for an action that had no effect and left a ledger
+# entry nothing would ever act on. A gate that always says yes is the same
+# shape as a check that cannot fail.
+
+
+def _run(argv, db):
+    from pipeline.cli import main
+
+    return main([*argv, "--db", str(db)])
+
+
+def test_an_unmappable_correction_value_is_refused_and_nothing_is_written(tmp_path, capsys) -> None:
+    db = tmp_path / "cache.db"
+    code = _run(
+        [
+            "corrections",
+            "--artist",
+            "mystery-act",
+            "--value",
+            "femalee",  # a typo for "female"
+            "--citation",
+            "https://example.invalid/statement",
+        ],
+        db,
+    )
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "not a value this vocabulary covers" in err
+    assert "Nothing was written" in err
+    # And the caller is told where the accepted vocabulary is, which
+    # test_the_accepted_vocabulary_is_discoverable_from_help then proves is a real
+    # place with the real terms in it. Naming the terms only on the failure path
+    # was the worse half of the job: they belong on `--value` itself, where they
+    # can be read *before* a run is spent on a value that could never take effect.
+    assert "--value" in err
+    assert "lavender corrections --help" in err
+    # The rejected value itself is not repeated back. It is an asserted gender,
+    # and stderr is redirected into logs and pasted into transcripts; this
+    # project's guarantee is that an identity value never leaves the machine it
+    # was typed on. Without this line the message could start echoing the value
+    # again and every other assertion above would still pass.
+    assert "femalee" not in err
+
+    with Cache(db) as cache:
+        assert list(cache.list_corrections()) == []
+
+
+def test_a_mappable_correction_value_is_still_accepted(tmp_path, capsys) -> None:
+    """The refusal must not be "refuse everything", which would also always pass."""
+    db = tmp_path / "cache.db"
+    code = _run(
+        [
+            "corrections",
+            "--artist",
+            "mystery-act",
+            "--value",
+            "nonbinary",
+            "--citation",
+            "https://example.invalid/statement",
+        ],
+        db,
+    )
+    assert code == 0
+    assert "recorded correction" in capsys.readouterr().out
+    with Cache(db) as cache:
+        assert [row[0] for row in cache.list_corrections()] == ["mystery-act"]
+
+
+def test_a_non_iso_retrieved_at_is_refused(tmp_path, capsys) -> None:
+    """A bad date makes the row permanently stale, silently. Fail loudly instead."""
+    db = tmp_path / "cache.db"
+    code = _run(
+        [
+            "corrections",
+            "--artist",
+            "mystery-act",
+            "--value",
+            "woman",
+            "--citation",
+            "https://example.invalid/statement",
+            "--retrieved-at",
+            "last tuesday",
+        ],
+        db,
+    )
+    assert code == 1
+    assert "is not an ISO date" in capsys.readouterr().err
+    with Cache(db) as cache:
+        assert list(cache.list_corrections()) == []
+
+
+def test_the_accepted_vocabulary_is_discoverable_from_help(capsys) -> None:
+    """The refusal points at `--value`'s help, so that help must really carry the terms.
+
+    Without this, the error message could point at a place that says nothing and
+    every assertion in the refusal test above would still pass. The terms are
+    checked against the resolver rather than a literal list, so a help string
+    that drifted away from the vocabulary fails here too.
+    """
+    from pipeline.cli import main
+    from pipeline.identity import accepted_gender_values
+
+    with pytest.raises(SystemExit) as exit_info:
+        main(["corrections", "--help"])
+    assert exit_info.value.code == 0
+    # argparse wraps long help across lines, so compare on collapsed whitespace.
+    out = " ".join(capsys.readouterr().out.split())
+    for value in accepted_gender_values():
+        assert value in out, f"{value!r} is accepted but is not named in --value's help"
+
+
+def test_the_accepted_vocabulary_is_derived_from_the_resolver() -> None:
+    from pipeline.identity import accepted_gender_values, normalize_asserted_value
+    from pipeline.models import SourceKind
+
+    accepted = accepted_gender_values()
+    assert accepted, "the vocabulary must not be empty"
+    for value in accepted:
+        assert (
+            normalize_asserted_value(SourceKind.ARTIST_STATEMENT, value) is not None
+            or normalize_asserted_value(SourceKind.WIKIDATA_P21, value) is not None
+        ), f"{value!r} is advertised as accepted but maps to nothing"

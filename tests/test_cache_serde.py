@@ -1,4 +1,4 @@
-"""Cache + serialisation: round-trip fidelity, lineage timestamps, guardrail on load."""
+"""Cache + serialization: round-trip fidelity, lineage timestamps, guardrail on load."""
 
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ def test_http_cache_roundtrip(mem_cache) -> None:
 def test_cache_creates_missing_parent_dir_for_str_path(tmp_path) -> None:
     """A str db_path (e.g. from the CLI's --db argument) must create data/ too.
 
-    Previously only a Path instance triggered the mkdir, so `wad refresh` (which
+    Previously only a Path instance triggered the mkdir, so `lavender refresh` (which
     passes DEFAULT_DB_PATH's str form) crashed with sqlite3.OperationalError on a
     fresh clone with no `data/` directory yet.
     """

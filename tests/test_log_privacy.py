@@ -5,10 +5,17 @@ The diagnostic channel must never become an identity channel: log lines may
 carry stage/timing/count/id data, never identity vocabulary or per-artist
 identity values. Two legs, mirroring ``tests/test_no_inference.py``:
 
-1. **Behavioural** — run the logging-heavy demo pipeline end to end with every
-   ``wad.*`` record captured, format each record with *both* shipped formatters
-   (kv and JSON), and assert no identity vocabulary appears anywhere in the
-   stream.
+1. **Behavioral** — run the logging-heavy demo pipeline end to end with every
+   ``lavender.*`` record captured, format each record with *both* shipped
+   formatters (kv and JSON), and assert no identity vocabulary appears anywhere
+   in the stream.
+   *That capture is only as wide as the namespace.* It attaches a handler to the
+   ``lavender`` root logger, so a module logging under some other name is not
+   observed by this leg at all — which is exactly what happened:
+   ``pipeline/paths.py`` logged to ``wad.paths`` from the rename until
+   2026-08-28, outside the captured tree and outside the stderr-only handler
+   ``configure_logging`` installs. A third leg below closes that by deriving
+   every logger name from the source.
 2. **Structural** — an AST scan over every logging call site in ``pipeline``,
    ``recommender``, ``app``, and ``export`` proves no call passes an
    identity-bearing name, attribute, or literal.
@@ -63,7 +70,7 @@ class _CaptureHandler(logging.Handler):
 def test_demo_pipeline_log_stream_carries_no_identity_vocabulary(
     demo_user, source, enricher
 ) -> None:
-    """Behavioural proof: a real cached ingest run logs no identity vocabulary.
+    """Behavioral proof: a real cached ingest run logs no identity vocabulary.
 
     The demo world contains artists with sourced woman/nonbinary identities, so
     if any log call site leaked identity data this run would produce it.
@@ -150,3 +157,86 @@ def test_gate_scans_a_nonempty_call_population() -> None:
             if isinstance(node, ast.Call) and _is_logging_call(node):
                 count += 1
     assert count >= 4, f"expected the core packages to contain logging calls, found {count}"
+
+
+# --- Leg 3: the capture is only as wide as the namespace ---------------------
+
+
+def _logger_names_in_source() -> dict[str, str]:
+    """Every ``logging.getLogger("literal")`` in the core packages, by file.
+
+    Derived from the AST rather than from a list, for the same reason
+    ``tests/test_no_inference.py`` walks every function: a name list is a thing
+    to fall off.
+    """
+    found: dict[str, str] = {}
+    for path in _core_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+                continue
+            if node.func.attr != "getLogger" or not node.args:
+                continue
+            arg = node.args[0]
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                found[arg.value] = f"{path.name}:{node.lineno}"
+    return found
+
+
+def test_every_logger_lives_under_the_configured_namespace() -> None:
+    """A logger outside the tree is a logger outside the stderr-only guarantee.
+
+    ``configure_logging`` attaches this project's single stderr handler to the
+    ``lavender`` logger and sets ``propagate = False`` there. Records from a
+    logger outside that tree never reach that handler: they skip the project
+    formatter and fall through to whatever the *root* logger of the embedding
+    process is configured with, which is the one place this module's docstring
+    promises records never go. ``pipeline/paths.py`` logged to ``wad.paths``
+    from the rename (ADR 0012) until this test existed, and neither leg above
+    could see it — the behavioral leg captures on the ``lavender`` tree, and
+    the structural leg reads call *arguments*, not logger names.
+    """
+    from pipeline.logconfig import _NAMESPACE
+
+    stray = {
+        name: where
+        for name, where in _logger_names_in_source().items()
+        if not (name == _NAMESPACE or name.startswith(f"{_NAMESPACE}."))
+    }
+    assert not stray, (
+        "logger name(s) outside the configured namespace, so their records bypass "
+        f"the project's only handler: {stray}"
+    )
+
+
+def test_get_logger_cannot_hand_back_a_logger_outside_the_tree() -> None:
+    """The helper whose job is to keep callers inside the namespace must do it."""
+    from pipeline.logconfig import _NAMESPACE, get_logger
+
+    assert get_logger("paths").name == f"{_NAMESPACE}.paths"
+    assert get_logger(f"{_NAMESPACE}.ingest").name == f"{_NAMESPACE}.ingest"
+    assert get_logger(_NAMESPACE).name == _NAMESPACE
+
+
+def test_a_stray_namespace_really_does_escape_the_configured_handler() -> None:
+    """The consequence, demonstrated rather than asserted about.
+
+    A record on the configured tree reaches the project's handler; the same
+    record on a differently-named logger does not. Without this, the test above
+    is a naming-convention check rather than a privacy one.
+    """
+    from pipeline.logconfig import _NAMESPACE, configure_logging
+
+    root = configure_logging(level=logging.DEBUG)
+    capture = _CaptureHandler()
+    root.addHandler(capture)
+    try:
+        logging.getLogger(f"{_NAMESPACE}.somewhere").info("stage=test event=inside")
+        logging.getLogger("wad.somewhere").info("stage=test event=outside")
+    finally:
+        root.removeHandler(capture)
+        configure_logging()
+
+    messages = [record.getMessage() for record in capture.records]
+    assert "stage=test event=inside" in messages
+    assert "stage=test event=outside" not in messages

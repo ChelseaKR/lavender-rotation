@@ -43,7 +43,7 @@ DEFAULT_DB_PATH = default_db_path()
 CACHE_SCHEMA_VERSION = 4
 
 #: Default staleness horizon for cached HTTP responses / identity claims, in days.
-#: Applied by callers that pass ``ttl_days`` (or ``wad refresh``); the default is
+#: Applied by callers that pass ``ttl_days`` (or ``lavender refresh``); the default is
 #: conservative and re-checks on a cadence matching ``identity-data-ethics.md``'s
 #: "recheck per identity-source API change".
 DEFAULT_HTTP_TTL_DAYS = 30
@@ -177,13 +177,25 @@ class Cache:
             self.conn.close()
             raise CacheSchemaError(
                 f"cache schema v{current} is newer than supported v{CACHE_SCHEMA_VERSION}; "
-                "upgrade women-artist-discovery or start from a fresh cache"
+                "upgrade lavender-rotation or start from a fresh cache"
+            )
+        if current < 0:
+            # Only the *too new* end was guarded. SQLite stores `user_version`
+            # as a signed 32-bit int and accepts negatives, and the migration
+            # loop below starts at `current + 1`, so a stamp of -3 looked up
+            # `_MIGRATIONS[-2]` and came back as a bare `KeyError: -2` from
+            # inside a constructor every command calls. A corrupt stamp is a
+            # corrupt cache; say so.
+            self.conn.close()
+            raise CacheSchemaError(
+                f"cache schema stamp v{current} is not a valid version; the file's "
+                "PRAGMA user_version is corrupt — start from a fresh cache"
             )
         with closing(self.conn.cursor()) as cur:
             for target in range(current + 1, CACHE_SCHEMA_VERSION + 1):
                 _MIGRATIONS[target](self.conn)
             if current < CACHE_SCHEMA_VERSION:
-                # PRAGMA cannot be parameterised; the value is a trusted int constant.
+                # PRAGMA cannot be parameterized; the value is a trusted int constant.
                 cur.execute(f"PRAGMA user_version = {int(CACHE_SCHEMA_VERSION)}")
         self.conn.commit()
 
@@ -230,6 +242,23 @@ class Cache:
     def list_artist_ids(self) -> list[str]:
         """Every cached artist id available to a dependency-injected refresh."""
         rows = self.conn.execute("SELECT artist_id FROM artists").fetchall()
+        return [row["artist_id"] for row in rows]
+
+    def stalest_artist_ids(self, limit: int) -> list[str]:
+        """The ``limit`` artists checked longest ago, oldest lineage first.
+
+        What makes a *bounded* refresh add up to a whole-catalog one. Upstream is
+        ~1 req/s and a real catalog runs to thousands of artists, so a refresh is
+        several runs — but slicing insertion order would hand every run the same
+        first N artists forever. Ordering by ``fetched_at`` makes each run pick up
+        where the last left off, because a successfully re-sourced artist gets
+        today's date and sorts to the back. Ties break on ``artist_id`` so the
+        order is total and a run is reproducible.
+        """
+        rows = self.conn.execute(
+            "SELECT artist_id FROM artists ORDER BY fetched_at ASC, artist_id ASC LIMIT ?",
+            (limit,),
+        ).fetchall()
         return [row["artist_id"] for row in rows]
 
     # -- scrobbles -----------------------------------------------------------
@@ -290,7 +319,7 @@ class Cache:
         """Return a cached body, or ``None`` on a miss — or if it is older than ``ttl_days``.
 
         With ``ttl_days=None`` (the default) responses never expire, preserving the
-        original rate-limit-respecting behaviour. A caller re-checking identity
+        original rate-limit-respecting behavior. A caller re-checking identity
         claims passes a TTL so a stale claim is treated as a miss and re-fetched.
         """
         row = self.conn.execute(
@@ -315,7 +344,7 @@ class Cache:
         """Delete cached responses older than ``ttl_days``. Returns the number removed.
 
         This makes a subsequent live client call miss the cache. The shipped
-        ``wad refresh`` command is fixture-only and does not make that client call.
+        ``lavender refresh`` command is fixture-only and does not make that client call.
         """
         rows = self.conn.execute("SELECT url, fetched_at FROM http_cache").fetchall()
         stale = [r["url"] for r in rows if self._is_stale(r["fetched_at"], ttl_days, now)]

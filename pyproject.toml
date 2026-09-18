@@ -5,8 +5,15 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "women-artist-discovery"
-version = "0.1.0"
+name = "lavender-rotation"
+# The single source of the version (REL-02). The PEP 440 `.dev0` suffix is load-bearing:
+# this repository has zero tags, so no artifact has ever been built or signed under this
+# number, and `0.1.0` on its own is indistinguishable — to pip, to an SBOM consumer, to a
+# dependency scanner — from a release that happened. `0.1.0.dev0` sorts below `0.1.0` and
+# says "not this release, yet" in a form all three read. Drop the suffix in the same commit
+# that gets tagged: release.yml asserts the tag equals this string exactly, so `v0.1.0`
+# cannot be cut while it says `.dev0`. Held by tests/test_version_reality.py.
+version = "0.1.0.dev0"
 description = "A values-aware music-discovery engine with a sourced-not-inferred identity model."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -14,19 +21,26 @@ license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "Chelsea" }]
 dependencies = [
     # requests>=2.33 / urllib3>=2.7 carry the fixes for the former RR-4 network-path
-    # advisories (GHSA-gc5v-m9x4-r6x2, PYSEC-2026-141/142) — installable now that the
-    # floor is >=3.10. urllib3 is pinned reproducibly via uv.lock.
+    # advisories (GHSA-gc5v-m9x4-r6x2, PYSEC-2026-141/142). Those fixes were gated
+    # to Python >=3.10 and install on this project's floor, which ADR 0004 moved to
+    # >=3.12 (this comment said "now that the floor is >=3.10" long after it wasn't).
+    # urllib3 is pinned reproducibly via uv.lock.
     "requests>=2.33",
 ]
 
 [project.optional-dependencies]
-# streamlit>=1.54 pulls fixed pillow>=12.2 / pyarrow>=23 / msgpack>=1.2.1 / tornado,
-# clearing the former RR-4 app-extra advisory cluster (3.10+-gated fixes).
+# streamlit>=1.54 pulls fixed pillow>=12.3 / pyarrow>=23 / msgpack>=1.2.1 / tornado,
+# clearing the former RR-4 app-extra advisory cluster (fixes gated to Python >=3.10,
+# all installable on the >=3.12 floor ADR 0004 set).
 # Kept as a real runtime extra (PEP 735 dependency-groups is for dev-only tooling, not
 # installable extras) — `dev` moved to [dependency-groups] below (CQ-27).
 app = ["streamlit>=1.54", "pandas>=2.0", "pillow>=12.3"]
 
 [project.scripts]
+lavender = "pipeline.cli:main"
+# Pre-rename name, kept so an existing shell history, script, or muscle memory
+# keeps working across the rename. Deprecated; remove at the first tagged
+# release (see docs/adr/0012).
 wad = "pipeline.cli:main"
 
 # ---------------------------------------------------------------------------
@@ -50,7 +64,7 @@ dev = [
 # reflow, and reduced-motion, run against the static render in a real browser.
 # Split from `dev` so the plain unit-test environment stays browser-free; the
 # specs auto-skip when no Chrome/Chromium is reachable (CI sets
-# WAD_E2E_REQUIRE=1 so a missing browser fails there instead of skipping).
+# LAVENDER_E2E_REQUIRE=1 so a missing browser fails there instead of skipping).
 e2e = ["playwright>=1.55"]
 
 [tool.hatch.build.targets.wheel]
@@ -83,7 +97,8 @@ max-complexity = 10
 "tests/*" = ["S101", "S105", "S106"]  # asserts and dummy secrets in fixtures
 "app/*" = ["T20"]                     # streamlit uses st.write, not print; harmless
 "scripts/writeup-check.py" = ["T20"]  # CLI checker reports via stdout/stderr
-"scripts/check-readme-claims.py" = ["T20"]  # CLI checker reports via stdout/stderr
+"scripts/docs_figures.py" = ["T20"]   # CLI checker reports via stdout/stderr
+"scripts/refresh_schedule.py" = ["T20"]  # prints the scheduler entry to stdout
 
 # ---------------------------------------------------------------------------
 # Type-check gate (CI stage 2) — strict.
@@ -99,26 +114,29 @@ warn_redundant_casts = true
 warn_return_any = true
 files = ["pipeline", "recommender", "app", "export"]
 
-[[tool.mypy.overrides]]
-# streamlit is the only directly-imported third-party UI lib (app/dashboard.py).
-# Its bundled stubs (and the pandas/numpy stubs they pull in) use PEP 695 `type`
-# aliases that require a >=3.12 mypy target; we type-check our own code against
-# py310, so skip following streamlit rather than raise the project's target.
-module = ["streamlit.*"]
-ignore_missing_imports = true
-follow_imports = "skip"
-
 # ---------------------------------------------------------------------------
 # Test + coverage gate (CI stage 3)
-# Coverage is measured on CORE LOGIC (pipeline + recommender), per the
-# standard's "≥85% lines / ≥80% branches on core logic". The Streamlit UI
-# and live-HTTP code paths are integration/manual-verified, not unit-gated.
+# Coverage is measured on pipeline + recommender + export + app, per the
+# standard's "≥85% lines / ≥80% branches on core logic". Only the two entry
+# points named in `[tool.coverage.run] omit` below are excluded; the live-HTTP
+# code paths are integration-verified rather than unit-gated, and are excluded
+# by `pragma: no cover` at the call site rather than wholesale.
 # ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
 addopts = [
     "--cov=pipeline",
     "--cov=recommender",
     "--cov=export",
+    # `app` was absent until 2026-08-28, which made the whole package invisible
+    # to the coverage gate — and made `[tool.coverage.run] omit` below dead
+    # configuration, since you cannot omit from a measurement that never ran.
+    # #71 narrowed that omit from "app/*" to the Streamlit entry point alone and
+    # wrote a comment explaining that the other three modules "are ordinary,
+    # testable logic and are in fact well covered"; nothing measured whether
+    # they still were. `app/a11y_check.py` in particular *is* the accessibility
+    # gate on any machine without pa11y, and its `main()` had never been
+    # executed by a test.
+    "--cov=app",
     "--cov-branch",
     "--cov-report=term-missing",
     "--cov-report=xml:docs/audits/coverage.xml",
@@ -132,7 +150,7 @@ testpaths = ["tests"]
 markers = [
     # Browser-driven a11y specs (tests/test_e2e_a11y.py). They need a real
     # Chrome/Chromium and auto-skip when none is reachable; setting
-    # WAD_E2E_REQUIRE=1 (as CI does) turns that skip into a hard failure so the
+    # LAVENDER_E2E_REQUIRE=1 (as CI does) turns that skip into a hard failure so the
     # server-side gate cannot silently weaken.
     "e2e: browser-driven accessibility spec (Playwright + Chrome/Chromium)",
 ]
@@ -141,7 +159,16 @@ filterwarnings = ["error::DeprecationWarning:pipeline.*", "error::DeprecationWar
 [tool.coverage.run]
 branch = true
 omit = [
-    "app/*",                 # Streamlit UI — verified via a11y + manual walkthrough
+    # Narrowed from "app/*" (#71). The old justification — "Streamlit UI —
+    # verified via a11y + manual walkthrough" — did not hold: the a11y spec
+    # says in its own words that the Streamlit dashboard is explicitly NOT
+    # covered, and the manual walkthrough is still pending
+    # (docs/audits/accessibility-2026-07-17.md). It also hid three modules that
+    # are ordinary, testable logic and are in fact well covered. Only the
+    # Streamlit entry point is omitted now, and only because it is a live
+    # `streamlit run` surface with no import-time test seam; the honest status
+    # of its a11y verification is "pending", recorded in the audit note.
+    "app/dashboard.py",      # Streamlit entry point — a11y sign-off still pending
     "pipeline/cli.py",       # thin argparse glue
 ]
 

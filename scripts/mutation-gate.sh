@@ -2,7 +2,7 @@
 # Mutation-testing gate (CQ-47) over the two safety-critical modules:
 #
 #   * pipeline/identity.py   — sourced-never-inferred identity resolver
-#   * recommender/rerank.py  — boost-only / never-penalise values lens
+#   * recommender/rerank.py  — boost-only / never-penalize values lens
 #
 # For each module, cosmic-ray generates mutants, runs the FULL unit suite
 # against every one (subprocess per mutant — identical semantics to a real
@@ -32,7 +32,7 @@ if ! git diff --quiet -- "${TARGETS[@]}"; then
   exit 1
 fi
 
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/wad-mutation.XXXXXX")
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/lavender-mutation.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 
 for cfg in scripts/mutation/identity.toml scripts/mutation/rerank.toml; do

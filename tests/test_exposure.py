@@ -7,6 +7,8 @@ the rerank function.
 
 from __future__ import annotations
 
+from typing import cast
+
 import pytest
 from pipeline.models import (
     Explanation,
@@ -20,6 +22,7 @@ from recommender.exposure import (
     FEMALE_FRONTED,
     MAN,
     NONBINARY,
+    OTHER,
     SEGMENTS,
     UNKNOWN,
     WOMAN,
@@ -31,6 +34,7 @@ from recommender.exposure import (
     popularity_identity_crosstab,
     popularity_tier,
     rank_shift_by_segment,
+    segment_base_count,
     unknown_retention,
 )
 from recommender.hybrid import recommend
@@ -87,9 +91,16 @@ def test_exposure_shares_sum_to_one(profile, catalog, source) -> None:
     assert sum(shares.values()) == pytest.approx(1.0)
 
 
-def test_exposure_at_k_empty_is_all_zero() -> None:
+def test_an_empty_top_k_has_no_shares_rather_than_shares_of_zero() -> None:
+    """This test previously asserted the defect, as ``test_exposure_at_k_empty_is_all_zero``.
+
+    ``{0.0}`` across every segment says each of them held none of the slots -- a measurement --
+    when what happened is that there were no slots. The arithmetic is the tell: over any real
+    top-k these shares are a partition and sum to one, and a set summing to zero is not one.
+    """
     shares = exposure_at_k([], k=5)
-    assert set(shares.values()) == {0.0}
+    assert set(shares) == set(SEGMENTS)
+    assert set(shares.values()) == {None}
 
 
 def test_exposure_metrics_reject_nonpositive_k() -> None:
@@ -154,12 +165,12 @@ def test_assert_unknown_retained_detects_a_dropped_unknown() -> None:
         assert_unknown_retained({0.0: base, 1.0: boosted}, k=2)
 
 
-def test_assert_unknown_retained_detects_a_penalised_unknown() -> None:
+def test_assert_unknown_retained_detects_a_penalized_unknown() -> None:
     unknown = make_artist("mystery", gender=Gender.UNKNOWN)
     base = [_rec(unknown, 0.5)]
-    penalised = [_rec(unknown, 0.3)]  # score lowered by the (mis-implemented) lens
+    penalized = [_rec(unknown, 0.3)]  # score lowered by the (mis-implemented) lens
     with pytest.raises(FairnessAssertionError):
-        assert_unknown_retained({0.0: base, 1.0: penalised}, k=1)
+        assert_unknown_retained({0.0: base, 1.0: penalized}, k=1)
 
 
 def test_retention_at_k_detects_rank_loss_hidden_by_full_catalog_presence() -> None:
@@ -185,14 +196,76 @@ def test_retention_detects_worse_rank_even_when_unknown_stays_inside_top_k() -> 
         assert_unknown_retained({0.0: base, 1.0: shifted}, k=3)
 
 
-def test_retention_is_one_when_no_unknown_artists_present() -> None:
+def test_retention_is_unmeasured_when_no_unknown_artists_present() -> None:
+    """An absent segment has no retention, and must not be scored as a perfect one.
+
+    This test previously asserted ``{"0.00": 1.0, "1.00": 1.0}`` -- it pinned the defect
+    as intended behavior. A retention of 1.0 is the strongest possible form of the claim
+    "no unknown-identity artist lost score or rank", and it was being emitted for a world
+    where no unknown-identity artist existed to lose anything. `None` is the honest value,
+    and `segment_base_count` is the denominator that lets a reader tell the two apart.
+    """
+
     woman = make_artist("w", gender=Gender.WOMAN)
-    retention = unknown_retention({0.0: [_rec(woman, 0.4)], 1.0: [_rec(woman, 0.4, 0.5)]}, k=1)
-    assert retention == {"0.00": 1.0, "1.00": 1.0}
+    worlds = {0.0: [_rec(woman, 0.4)], 1.0: [_rec(woman, 0.4, 0.5)]}
+    retention = unknown_retention(worlds, k=1)
+
+    assert retention == {"0.00": None, "1.00": None}
+    assert segment_base_count(worlds, k=1, segment=UNKNOWN) == 0
+
+
+def test_retention_is_a_real_number_when_the_segment_is_actually_present() -> None:
+    """The companion to the test above: a measured world still measures."""
+
+    unknown = make_artist("u", gender=Gender.UNKNOWN)
+    worlds = {0.0: [_rec(unknown, 0.4)], 1.0: [_rec(unknown, 0.4, 0.5)]}
+
+    assert unknown_retention(worlds, k=1) == {"0.00": 1.0, "1.00": 1.0}
+    assert segment_base_count(worlds, k=1, segment=UNKNOWN) == 1
+
+
+def test_the_report_says_whether_each_retention_guarantee_was_measured() -> None:
+    """The guarantee booleans mean "no violation seen"; these say whether anything was.
+
+    Without this pairing, `other_retention_all_lenses: true` over an empty segment is
+    indistinguishable from the same value over a segment that was really checked -- and
+    the OTHER guarantee exists precisely because #68 found the lens shipping a harms note
+    that nothing verified.
+    """
+
+    woman = make_artist("w", gender=Gender.WOMAN)
+    unknown = make_artist("u", gender=Gender.UNKNOWN)
+    worlds = {
+        0.0: [_rec(woman, 0.5), _rec(unknown, 0.4)],
+        1.0: [_rec(woman, 0.6), _rec(unknown, 0.4)],
+    }
+    guarantees = cast("dict[str, object]", exposure_report(worlds, k=2)["guarantees"])
+
+    # The unknown segment is present, so its guarantee is a real measurement.
+    assert guarantees["unknown_retention_measured"] is True
+    assert guarantees["unknown_base_count"] == 1
+
+    # No Gender.OTHER artist exists in this world, so its guarantee measured nothing --
+    # and the report has to say so rather than reporting a perfect score.
+    assert guarantees["other_retention_measured"] is False
+    assert guarantees["other_base_count"] == 0
+    assert guarantees["min_other_retention"] is None
+
+
+def test_rank_shift_for_an_absent_segment_is_not_reported_as_no_movement() -> None:
+    """0.0 would read as "measured, and it did not move"."""
+
+    woman = make_artist("w", gender=Gender.WOMAN)
+    base = [_rec(woman, 0.5)]
+    shift = rank_shift_by_segment(base, [_rec(woman, 0.6)])
+
+    assert shift[WOMAN] == 0.0, "a present segment still reports a real number"
+    assert shift[UNKNOWN] is None
+    assert shift[OTHER] is None
 
 
 # -- rank shift (honest re-ordering, no score penalty) -----------------------
-def test_rank_shift_moves_aligned_up_without_penalising_unknown(profile, catalog, source) -> None:
+def test_rank_shift_moves_aligned_up_without_penalizing_unknown(profile, catalog, source) -> None:
     base = recommend(profile, catalog, source, k=len(catalog), lens_strength=0.0)
     boosted = recommend(profile, catalog, source, k=len(catalog), lens_strength=1.0)
     shift = rank_shift_by_segment(base, boosted)

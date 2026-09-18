@@ -26,8 +26,24 @@ METHODS_MD = REPO_ROOT / "docs" / "writeup" / "methods.md"
 EVAL_REPORT = REPO_ROOT / "docs" / "audits" / "eval-report.json"
 
 ARROW = "→"  # "->"
+
+#: The value may sit immediately before the annotation ("0.60 `[... -> path]`")
+#: or at the end of an inline code span ("`n_positives = 4` `[... -> path]`").
+#: The second form was in the document from the start and this regex did not
+#: match it, so two annotations — ``hybrid_beats_popularity`` and
+#: ``n_positives`` — carried a source reference that read as gated and was
+#: checked by nothing. :data:`ANY_ANNOTATION` below is what stops that class of
+#: silent miss recurring.
 ANNOTATION = re.compile(
-    r"(?P<value>true|false|[-+]?\d+\.\d+|\d+)\s*"
+    r"(?P<value>true|false|[-+]?\d+\.\d+|\d+)`?\s*"
+    r"`\[docs/audits/eval-report\.json\s*" + ARROW + r"\s*(?P<path>[\w.]+)\]`"
+)
+
+#: Every annotation in the document, regardless of whether a value could be
+#: read next to it. An annotation this finds and :data:`ANNOTATION` does not is
+#: a claim wearing a citation that nothing verifies, which is worse than an
+#: unannotated number: the reader is told it is checked.
+ANY_ANNOTATION = re.compile(
     r"`\[docs/audits/eval-report\.json\s*" + ARROW + r"\s*(?P<path>[\w.]+)\]`"
 )
 
@@ -70,6 +86,28 @@ def main() -> int:
 
     if not matches:
         print("writeup-check: no eval-report.json annotations found in methods.md", file=sys.stderr)
+        return 1
+
+    # Every annotation must be one this script actually checks. Silently
+    # skipping the ones whose value it could not parse turned a citation into
+    # decoration: the number next to it was free to drift, and the reader had a
+    # source reference telling them it could not.
+    checked = {m.group("path") for m in matches}
+    declared = {m.group("path") for m in ANY_ANNOTATION.finditer(text)}
+    unchecked = sorted(declared - checked)
+    if unchecked:
+        print(
+            "writeup-check: annotation(s) whose value this script cannot read, so "
+            "nothing verifies them:",
+            file=sys.stderr,
+        )
+        for path in unchecked:
+            print(f"  - {path}", file=sys.stderr)
+        print(
+            "  Write the value immediately before the annotation, either bare "
+            "(0.60 `[...]`) or at the end of a code span (`key = 4` `[...]`).",
+            file=sys.stderr,
+        )
         return 1
 
     failures = []

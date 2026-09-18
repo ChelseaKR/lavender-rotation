@@ -1,11 +1,15 @@
 """Streamlit dashboard: enter a username, get explainable, values-aware picks.
 
-Run with ``make dev`` (``streamlit run app/dashboard.py``). Defaults to the
-offline demo world so it works with no API key; set ``WAD_LASTFM_API_KEY`` to
-use a real Last.fm username.
+Run with ``make dev`` (``streamlit run app/dashboard.py``). This surface is the
+**demo world**, always: it renders the fixture catalog so it works with no API
+key and no account. Live data has a home since FIX-01, but it is the CLI's
+(``lavender ingest --user`` then ``lavender recommend --user``), not this one's — a
+Streamlit script re-runs top to bottom on every interaction, and holding the
+cache connection a live source needs across those re-runs is a change to make
+deliberately rather than as a side effect of wiring ingest.
 
-Accessibility: the values lens is a labelled, always-visible, explained slider;
-identity is shown as text + glyph (never colour alone); the score chart is paired
+Accessibility: the values lens is a labeled, always-visible, explained slider;
+identity is shown as text + glyph (never color alone); the score chart is paired
 with a data table; sources render as real links. The committed static render
 (:mod:`app.build_static`) carries the same semantics for the automated a11y gate.
 
@@ -22,6 +26,7 @@ from __future__ import annotations
 
 import os
 import secrets
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -43,11 +48,12 @@ from pipeline.ingest import build_profile
 from pipeline.lastfm import ScrobbleSource
 from pipeline.models import Artist, ListeningProfile, Recommendation, Scrobble
 from recommender.coverage import identity_coverage
-from recommender.exposure import observability_panel
 from recommender.feedback import Feedback
-from recommender.hybrid import recommend
 from recommender.lens import VALUES_LENS
-from recommender.why import why_this_artist
+from recommender.why import QUEER_SOURCES_HEADING, WhyThisArtist, why_this_artist
+
+from app.observability import LENS_GRID, OBSERVABILITY_K, observability_inputs
+from app.render import POSITION_HELD, position_basis
 
 
 def _load_demo() -> tuple[list[Scrobble], dict[str, Artist], ScrobbleSource]:
@@ -58,6 +64,51 @@ def _year_range(scrobbles: list[Scrobble]) -> tuple[int, int]:
     years = [datetime.fromtimestamp(item.ts, tz=UTC).year for item in scrobbles]
     lo, hi = min(years), max(years)
     return (lo - 1, hi + 1) if lo == hi else (lo, hi)
+
+
+UNMEASURED_TEXT = "not measured"
+
+
+def unmeasured_or_percent(value: object) -> str:
+    """A percentage, or the words for a figure that was never measured.
+
+    ``None`` reaches here for two reasons, both of them "there was nothing to measure": a
+    rank-protected segment with no artist in pure taste's top-k (#129), and an empty top-k with
+    no slots to share out. Formatting either as ``0%`` or ``100%`` states a measurement that did
+    not happen, which is the one thing this panel exists not to do.
+    """
+
+    if value is None:
+        return UNMEASURED_TEXT
+    return f"{cast(float, value):.0%}"
+
+
+def fairness_exposure_table(rows: Sequence[Mapping[str, object]]) -> dict[str, list[object]]:
+    """The exposure-share table the fairness panel renders.
+
+    Built here rather than inline in the Streamlit call so that it can be exercised without a
+    Streamlit runtime. It was inline, nothing rendered it in the suite, and a value that became
+    nullable upstream turned the demo dashboard into a ``TypeError``.
+    """
+
+    return {
+        "Identity segment": [row["segment"] for row in rows],
+        "Base share": [unmeasured_or_percent(row["base_share"]) for row in rows],
+        "Current share": [unmeasured_or_percent(row["current_share"]) for row in rows],
+    }
+
+
+def fairness_retention_table(
+    rows: Sequence[Mapping[str, object]], lens_keys: Sequence[str]
+) -> dict[str, list[object]]:
+    """The retention table the fairness panel renders, one column per lens strength."""
+
+    table: dict[str, list[object]] = {"Identity segment": [row["segment"] for row in rows]}
+    for key in lens_keys:
+        table[f"Lens {key}"] = [
+            unmeasured_or_percent(cast("Mapping[str, object]", row["by_lens"])[key]) for row in rows
+        ]
+    return table
 
 
 def _build_temporal_profile(
@@ -90,8 +141,11 @@ _FALLBACKS: tuple[tuple[str, ExportFormat, str], ...] = (
     ("M3U playlist", ExportFormat.M3U, "audio/x-mpegurl"),
     ("JSPF (JSON)", ExportFormat.JSPF, "application/json"),
 )
-LENS_GRID: tuple[float, ...] = (0.0, 0.25, 0.5, 0.75, 1.0)
-OBSERVABILITY_K = 3
+# Re-exported from `app.observability`, which is where the panel's inputs are
+# decided (#114). Kept bound here so existing references to
+# `app.dashboard.LENS_GRID` still resolve, and so there is exactly one
+# definition rather than a second copy to drift.
+__all__ = ["LENS_GRID", "OBSERVABILITY_K"]
 
 
 def _finish_spotify_export(
@@ -143,7 +197,7 @@ def _render_spotify_panel(st: Any, recs: list[Recommendation], username: str) ->
         creds = SpotifyCredentials.from_env(os.environ)
     except ExportError as exc:
         st.info(
-            f"{exc}. Set WAD_SPOTIFY_CLIENT_ID / _SECRET / _REDIRECT_URI to enable "
+            f"{exc}. Set LAVENDER_SPOTIFY_CLIENT_ID / _SECRET / _REDIRECT_URI to enable "
             "live Spotify export. The portable formats above work without it."
         )
         return
@@ -181,13 +235,13 @@ def _render_export(recs: list[Recommendation], username: str) -> None:  # pragma
     )
 
     tracks = recommendations_to_tracks(recs)
-    name = f"Women-Artist Discovery — {username}"
+    name = f"Lavender Rotation — {username}"
     cols = st.columns(len(_FALLBACKS))
     for col, (label, fmt, mime) in zip(cols, _FALLBACKS, strict=True):
         col.download_button(
             label,
             data=render(tracks, fmt, playlist_name=name),
-            file_name=f"women-artist-discovery.{fmt}",
+            file_name=f"lavender-rotation.{fmt}",
             mime=mime,
         )
 
@@ -195,11 +249,38 @@ def _render_export(recs: list[Recommendation], username: str) -> None:  # pragma
         _render_spotify_panel(st, recs, username)
 
 
+def _render_provenance(st: Any, why: WhyThisArtist) -> None:
+    """Both source lists for one card, under headings that keep the axes apart.
+
+    Extracted from ``main`` so that adding ADR 0011's second axis (#92) did not
+    push the entry point past the complexity gate — and so the two lists are
+    written once rather than twice.
+    """
+    if why.provenance:
+        st.markdown("**Sources** (sourced, never inferred)")
+        for item in why.provenance:
+            st.markdown(
+                f"- {item.source_kind} asserted “{item.asserted_value}”: "
+                f"[{item.citation}]({item.citation}) (retrieved {item.retrieved_at})"
+            )
+    else:
+        st.caption("Identity unknown — no sources, surfaced on merit.")
+    if why.queer_provenance:
+        # Rendered only when a source actually asserted something: an empty
+        # state here would read as "not queer", which no absence establishes.
+        st.markdown(f"**{QUEER_SOURCES_HEADING}**")
+        for item in why.queer_provenance:
+            st.markdown(
+                f"- {item.source_kind} asserted “{item.asserted_value}”: "
+                f"[{item.citation}]({item.citation}) (retrieved {item.retrieved_at})"
+            )
+
+
 def main() -> None:  # pragma: no cover - exercised via the live Streamlit runtime
     import streamlit as st
 
-    st.set_page_config(page_title="Women-Artist Discovery", layout="centered")
-    st.title("Women-Artist Discovery")
+    st.set_page_config(page_title="Lavender Rotation", layout="centered")
+    st.title("Lavender Rotation")
     st.write(
         "Discovery with a values lens, done right: identity is **sourced, never "
         "inferred**, and **unknown is first-class** — never down-ranked."
@@ -214,9 +295,11 @@ def main() -> None:  # pragma: no cover - exercised via the live Streamlit runti
         step=0.05,
         help=(
             "How strongly to boost artists whose identity is sourced as a woman "
-            "(cis or trans — no distinction is drawn), nonbinary person, or "
-            "sourced female-fronted band. The lens only ever boosts — it never "
-            "lowers anyone's score, and never penalises unknown."
+            "(cis or trans — no distinction is drawn) or a nonbinary person, and "
+            "bands whose sourced lineup is fronted by one of them. Each "
+            "front-person's gender is shown as their source stated it. The lens "
+            "only ever boosts — it never lowers anyone's score, and never "
+            "penalizes unknown."
         ),
     )
     st.caption(f"Active lens: **{VALUES_LENS.name}**")
@@ -258,8 +341,12 @@ def main() -> None:  # pragma: no cover - exercised via the live Streamlit runti
         era_start = int(datetime(year_from, 1, 1, tzinfo=UTC).timestamp())
         era_end = int(datetime(year_to, 12, 31, 23, 59, 59, tzinfo=UTC).timestamp())
 
-    if os.environ.get("WAD_LASTFM_API_KEY") and username != DEMO_USER:
-        st.info("Live mode would fetch this user; this demo build uses cached data.")
+    if username != DEMO_USER:
+        st.info(
+            f"This dashboard always shows the demo world. To see picks for {username}, "
+            f"run `lavender ingest --user {username}` once, then `lavender recommend --user "
+            f"{username}` (or `lavender report --user {username}` for a shareable page)."
+        )
     profile = _build_temporal_profile(
         username,
         scrobbles,
@@ -270,12 +357,15 @@ def main() -> None:  # pragma: no cover - exercised via the live Streamlit runti
     )
     with Cache(DEFAULT_DB_PATH) as cache:
         feedbacks = cache.load_feedback(username)
-    recs = recommend(
+    # One call decides both the list on screen and the sweep the fairness panel
+    # measures, so the two can never drift apart again (#114).
+    recs, panel = observability_inputs(
         profile,
         catalog,
         source,
+        current_lens=lens,
         k=10,
-        lens_strength=lens,
+        panel_k=OBSERVABILITY_K,
         explore=explore,
         feedbacks=feedbacks,
     )
@@ -296,31 +386,35 @@ def main() -> None:  # pragma: no cover - exercised via the live Streamlit runti
             "Taste": [round(r.base_score, 3) for r in recs],
             "Values boost": [round(r.rerank_delta, 3) for r in recs],
             "Total": [round(r.score, 3) for r in recs],
+            "Position": [position_basis(r) for r in recs],
             "Identity basis": [str(r.explanation.identity_basis) for r in recs],
         }
     )
-
-    recs_by_lens = {
-        value: recommend(profile, catalog, source, k=10, lens_strength=value, feedbacks=feedbacks)
-        for value in sorted({*LENS_GRID, lens})
-    }
-    panel = observability_panel(recs_by_lens, current_lens=lens, k=OBSERVABILITY_K)
-    exposure_rows = cast("list[dict[str, object]]", panel["exposure_rows"])
-    retention_row = cast("dict[str, object]", panel["retention_row"])
-    by_lens = cast("dict[str, float]", retention_row["by_lens"])
-    st.subheader(f"Fairness observability (top {OBSERVABILITY_K})")
-    st.table(
-        {
-            "Identity segment": [row["segment"] for row in exposure_rows],
-            "Base share": [f"{cast(float, row['base_share']):.0%}" for row in exposure_rows],
-            "Current share": [f"{cast(float, row['current_share']):.0%}" for row in exposure_rows],
-        }
+    st.caption(
+        "Rank is not a pure function of Total. Rows marked "
+        f"“{POSITION_HELD}” keep the position they had before the lens was "
+        "applied — unknown-identity artists and artists sourced as "
+        "Gender.OTHER — so a higher-scoring pick can sit below them. The lens "
+        "only ever adds to a score; it never subtracts from one."
     )
-    st.table(
-        {
-            "Identity segment": [retention_row["segment"]],
-            **{f"Lens {key}": [f"{value:.0%}"] for key, value in by_lens.items()},
-        }
+
+    exposure_rows = cast("list[dict[str, object]]", panel["exposure_rows"])
+    retention_rows = cast("list[dict[str, object]]", panel["retention_rows"])
+    lens_keys = list(cast("dict[str, float | None]", retention_rows[0]["by_lens"]))
+    st.subheader(f"Fairness observability (top {OBSERVABILITY_K})")
+    st.table(fairness_exposure_table(exposure_rows))
+    st.table(fairness_retention_table(retention_rows, lens_keys))
+    st.caption(
+        "Both tables are computed at your current Serendipity setting, over the "
+        "same ranking shown below — so the shares describe the picks on this "
+        "screen rather than a different list."
+    )
+    st.caption(
+        "Retention covers score, top-k presence, and list position, and it is "
+        "checked on emitted output at every merge. It applies to the two "
+        "rank-protected segments. Sourced men keep their exact score but can "
+        "move down the list — that is the whole of this lens's re-allocation, "
+        "and it is stated in the harms note above rather than denied."
     )
 
     st.subheader("Recommendations")
@@ -337,15 +431,7 @@ def main() -> None:  # pragma: no cover - exercised via the live Streamlit runti
             st.markdown("**Why this artist**")
             for reason in why.reasons:
                 st.markdown(f"- {reason}")
-            if why.provenance:
-                st.markdown("**Sources** (sourced, never inferred)")
-                for p in why.provenance:
-                    st.markdown(
-                        f"- {p.source_kind} asserted “{p.asserted_value}”: "
-                        f"[{p.citation}]({p.citation}) (retrieved {p.retrieved_at})"
-                    )
-            else:
-                st.caption("Identity unknown — no sources, surfaced on merit.")
+            _render_provenance(st, why)
             up_col, down_col = st.columns(2)
             vote: int | None = None
             if up_col.button(f"Thumbs up {rec.artist.name}", key=f"up-{rec.artist.artist_id}"):

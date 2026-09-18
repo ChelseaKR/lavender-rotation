@@ -38,7 +38,7 @@ Every idea in this folder was checked against the repo's non-negotiables
 (README "Hard guardrails"; `pipeline/models.py` invariants):
 
 1. **Sourced, never inferred.** No idea introduces any inference path for
-   identity. "Unknown" stays first-class and is never penalised.
+   identity. "Unknown" stays first-class and is never penalized.
 2. **Values lens made explicit.** Anything that changes ranking must remain
    visible, explained, and boost-only (or provably identity-blind).
 3. **Privacy/egress discipline.** New egress is opt-in, user-initiated,

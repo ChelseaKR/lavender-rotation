@@ -1,4 +1,4 @@
-# Women Artist Discovery Docs
+# Lavender Rotation Docs
 
 This index is the handoff point for the documentation sweep. It keeps the project map, audit record, and main operating docs in one place.
 

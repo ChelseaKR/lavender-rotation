@@ -54,7 +54,7 @@ wants something new it lives under *Wants next*.
   reviewer, a privacy/security reviewer); and the person who **operates** it (the
   owner/maintainer).
 - **Protocol.** For each persona: a goal, a walkthrough of the surfaces they'd
-  actually touch (the Streamlit dashboard, the `wad` CLI, the "Why this artist" view,
+  actually touch (the Streamlit dashboard, the `lavender` CLI, the "Why this artist" view,
   the export path, the audit docs), what worked, where they stalled, and an open
   "what would make this a 10/10" prompt.
 - **Synthesis.** Frictions → **R**emediations; wishes → **E**xpansions, triaged with
@@ -131,7 +131,7 @@ Full citation list and the high-stakes cross-checks are in
 
 #### A1 — Chelsea, owner using it as a listener
 - **Goal.** Lean into a taste that already skews toward women and female-fronted bands — *on purpose*, without a tool that either ignores identity or guesses it.
-- **Values today.** The hybrid `wad recommend --lens 0.5` set; the always-visible, explained lens slider; the per-pick "Why this artist" card (signals + identity basis + provenance); local-first, no account. *(the core value prop — [shipped])*
+- **Values today.** The hybrid `lavender recommend --lens 0.5` set; the always-visible, explained lens slider; the per-pick "Why this artist" card (signals + identity basis + provenance); local-first, no account. *(the core value prop — [shipped])*
 - **Gets stuck.** On a 10-pick run she can't see *how much* of it is sourced-women vs "unknown surfaced on similarity" — the proportion is implicit, so the values lens feels like it's working without proof.
 - **Wants next.** A one-line coverage readout per run ("6 of 10 picks have a sourced identity; 4 surfaced on taste alone"); a saved "discovery report" she can revisit.
 - **Adopts if.** Each session shows the values lens *and* taste are both honored. **Walks if.** It starts to feel like it's hiding men or padding with already-famous women.
@@ -159,7 +159,7 @@ Full citation list and the high-stakes cross-checks are in
 
 #### A5 — Theo, Spotify-export user
 - **Goal.** Push a generated set into Spotify, his daily driver, in one click.
-- **Values today.** `wad export` + dashboard download; **credential-free** formats (plain text / CSV / M3U / JSPF) that need no account and stay fully local; live Spotify via env-only OAuth that sends **only artist names**, never listening history or identity data. *(export package — [shipped])*
+- **Values today.** `lavender export` + dashboard download; **credential-free** formats (plain text / CSV / M3U / JSPF) that need no account and stay fully local; live Spotify via env-only OAuth that sends **only artist names**, never listening history or identity data. *(export package — [shipped])*
 - **Gets stuck.** Live export needs his own Spotify app + a browser consent (the `RequestsTransport` path is the one uncovered, live-network surface); the exported playlist loses the *why* and the identity basis — it's just names.
 - **Wants next.** A clearer first-run OAuth walkthrough; an optional sidecar (CSV/JSPF) that carries the *sourced* identity basis + provenance so the values context survives the export — without ever emitting an inferred field.
 - **Adopts if.** Export is one consent away and keeps the provenance. **Walks if.** Setup is opaque or the export quietly drops the "unknown"/sourced distinction. *(playlist/export was roadmap "Should" — [shipped]; identity sidecar — [new])*
@@ -185,7 +185,7 @@ Full citation list and the high-stakes cross-checks are in
 - **Values today.** The re-rank is **boost-only and bounded** — an unknown-identity artist's score is invariant to lens strength and is *never dropped*; the base score is taste-only (popularity is **not** a hybrid input), so an obscure good match can outrank a famous one. *(unknown-first-class + popularity-debiasing — [shipped])*
 - **Gets stuck.** Because her identity is "unknown," she gets no values *boost*, so in a high-lens run she can still be out-ordered by sourced-women — surfaced, but lower. The system is fair-by-construction yet she'd love a path to *become* sourced.
 - **Wants next.** A self-serve way to add a cited self-statement (which would let her be correctly boosted if she's a woman/nonbinary); reassurance, in the UI, that "unknown" didn't cost her the slot.
-- **Adopts if.** Thin metadata never silently buries her. **Walks if.** "Unknown" behaves like a soft penalty in practice. *(self-statement intake — [new]; unknown-never-penalised — [shipped])*
+- **Adopts if.** Thin metadata never silently buries her. **Walks if.** "Unknown" behaves like a soft penalty in practice. *(self-statement intake — [new]; unknown-never-penalized — [shipped])*
 
 #### B4 — Jonas, MusicBrainz/Wikidata steward
 - **Goal.** See the open data he curates consumed faithfully — attributed, rate-limited, and not turned into something harmful.
@@ -214,7 +214,7 @@ Full citation list and the high-stakes cross-checks are in
 
 #### D1 — Dr. Okonkwo, representation/ethics reviewer
 - **Goal.** Confirm the project is genuinely non-essentialist and that "unknown" is handled with respect, not as a failure state.
-- **Values today.** The identity-data-ethics doc (permitted sources, no-inference policy, trans-inclusion QID map, correctability); the fairness doc's representational-harm findings; unknown-never-penalised proven in tests; "female-fronted" kept distinct from any member's gender (tri-state, sourced). *(audit docs + tests — [shipped])*
+- **Values today.** The identity-data-ethics doc (permitted sources, no-inference policy, trans-inclusion QID map, correctability); the fairness doc's representational-harm findings; unknown-never-penalized proven in tests; "female-fronted" kept distinct from any member's gender (tri-state, sourced). *(audit docs + tests — [shipped])*
 - **Gets stuck.** Trans, intersex, and third-gender support is *asserted in prose and the QID map* but he wants each path **visibly exercised end-to-end** like non-binary already is; he also wants the "unknown is normal" stance to be visible to *users*, not just true in code.
 - **Wants next.** End-to-end tests/fixtures for trans and intersex artists mirroring the non-binary one; a user-facing framing that states unknown is expected and non-pejorative; a periodic representation re-review tied to source-schema changes.
 - **Adopts if.** Every identity path is demonstrated, not just permitted. **Walks if.** Inclusion is documented but only non-binary is actually tested. *(deepen identity tests — [partial]; user-facing unknown framing — [new])*

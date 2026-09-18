@@ -22,11 +22,21 @@ different structure:
   train profile (content near-misses) without the similarity edges the true
   discoveries have — designed to fool a naive tag-only ranker.
 
+Each world's candidate pool is deliberately larger than the eval's ``k`` (#82).
+It used to be exactly four candidates against ``k=5``, which made the top-k the
+entire pool: ``recall_at_k`` came out 1.0 in four of five worlds for *every*
+model, including a random or reversed ranking, and the aggregate then averaged
+that structurally-pinned number in with the one world that could discriminate.
+``recommender.eval`` now reports which worlds could not discriminate and
+excludes them from the mean; this is the other half — a fixture where the metric
+is a tautology is not a test of the ranker.
+``tests/test_eval_worlds.py`` asserts the pools stay bigger than ``k``.
+
 Every builder returns ``(username, scrobbles, catalog, source)`` — the same
 shape ``pipeline.demo`` already yields to ``recommender.eval.evaluate`` — with
 a nonempty temporal test split and at least one genuine ground-truth positive.
 None of these four are tuned to make the hybrid win; only :func:`indie_tuned_world`
-carries that caveat, and it is labelled as such in ``ALL_WORLDS``.
+carries that caveat, and it is labeled as such in ``ALL_WORLDS``.
 """
 
 from __future__ import annotations
@@ -146,6 +156,14 @@ def sparse_tags_world() -> World:
         _ArtistSpec("sp-glow", "Glow Static", ("lofi",), 30_000),  # discovery, one tag
         _ArtistSpec("sp-noise", "Noise Machine", (), 900_000),  # decoy: popular, no signal
         _ArtistSpec("sp-static", "Static Empire", (), 500_000),  # decoy: popular, no signal
+        # #82: four more decoys so the rankable pool (8) exceeds the eval's k.
+        # Deliberately mixed in popularity so widening the pool does not itself
+        # tilt the comparison: two rank above the discoveries on the popularity
+        # baseline and two below, and none carries a tag or similarity edge.
+        _ArtistSpec("sp-quarry", "Quarry Lights", (), 700_000),  # decoy: popular
+        _ArtistSpec("sp-ember", "Ember Static", ("lofi",), 450_000),  # decoy: tag, no edge
+        _ArtistSpec("sp-cinder", "Cinder Vale", (), 20_000),  # decoy: obscure
+        _ArtistSpec("sp-marl", "Marl Field", (), 5_000),  # decoy: obscure
     )
     similar = {
         "sp-nova": [("sp-echo", 0.90), ("sp-glow", 0.45)],
@@ -184,6 +202,12 @@ def popularity_skewed_world() -> World:
         _ArtistSpec("ps-luna", "Luna Arcade", ("ambient",), 70_000),  # discovery
         _ArtistSpec("ps-titan", "Titan Arena", ("classic rock",), 30_000_000),  # decoy, irrelevant
         _ArtistSpec("ps-giant", "Giant Static", (), 25_000_000),  # decoy, irrelevant
+        # #82: pool widened past k. Mixed popularity again, and one decoy that
+        # *is* tag-adjacent, so the extra candidates are not uniformly easy.
+        _ArtistSpec("ps-colossus", "Colossus Fair", ("classic rock",), 18_000_000),
+        _ArtistSpec("ps-murmur", "Murmur Lane", ("dream",), 60_000),  # tag-adjacent, no edge
+        _ArtistSpec("ps-slate", "Slate Harbour", (), 40_000),  # obscure, no signal
+        _ArtistSpec("ps-pier", "Pier Nine", (), 12_000),  # obscure, no signal
     )
     similar = {
         "ps-vale": [("ps-comet", 0.85)],
@@ -220,6 +244,13 @@ def no_collaborative_world() -> World:
         _ArtistSpec("nc-willow", "Willow Verse", ("singer-songwriter",), 90_000),  # discovery
         _ArtistSpec("nc-anthem", "Anthem Fields", ("stadium rock",), 4_000_000),  # decoy
         _ArtistSpec("nc-brass", "Brass Parade", (), 1_000_000),  # decoy
+        # #82: pool widened past k. With no similarity graph anywhere in this
+        # world, a tag-adjacent decoy is the hardest kind of candidate the
+        # content signal can face, so one is included rather than only easy ones.
+        _ArtistSpec("nc-thistle", "Thistle Court", ("folk",), 2_500_000),  # tag-adjacent decoy
+        _ArtistSpec("nc-quay", "Quay Street", ("stadium rock",), 800_000),
+        _ArtistSpec("nc-lantern", "Lantern Bay", (), 150_000),
+        _ArtistSpec("nc-reed", "Reed Hollow", (), 30_000),
     )
     spec = _WorldSpec(
         username="no-collab-listener",
@@ -253,6 +284,13 @@ def adversarial_near_miss_world() -> World:
         # Near-miss decoys: one shared tag each, huge popularity, no similarity edge.
         _ArtistSpec("am-decoy-one", "Decoy Static", ("shoegaze",), 2_000_000),
         _ArtistSpec("am-decoy-two", "Decoy Arena", ("dream pop",), 1_500_000),
+        # #82: pool widened past k, staying in this world's premise — every
+        # added decoy is another near miss, which makes the world harder rather
+        # than easier for the hybrid.
+        _ArtistSpec("am-decoy-three", "Decoy Chapel", ("shoegaze",), 1_100_000),
+        _ArtistSpec("am-decoy-four", "Decoy Harbour", ("dream pop",), 900_000),
+        _ArtistSpec("am-decoy-five", "Decoy Meadow", ("ambient",), 400_000),
+        _ArtistSpec("am-decoy-six", "Decoy Signal", ("shoegaze", "ambient"), 250_000),
     )
     similar = {
         "am-nova": [("am-echo", 0.90)],

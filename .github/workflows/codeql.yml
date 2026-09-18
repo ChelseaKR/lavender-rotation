@@ -23,6 +23,7 @@ concurrency:
 jobs:
   analyze:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       actions: read
@@ -43,7 +44,7 @@ jobs:
           # `+` = *in addition to* the default security suite, never instead of it.
           # AlertSuppression.ql is what turns a reviewed in-source
           # `# codeql[<rule-id>]` comment into a `suppressions` entry on that result
-          # in the SARIF, which the gate below is the only thing that honours. Only
+          # in the SARIF, which the gate below is the only thing that honors. Only
           # the python pack ships one, so the actions leg gets no extra query.
           # (`packs`, not `queries`: the `queries` input resolves entries as external
           # *repository* specifiers, so a pack-relative path is rejected there.)

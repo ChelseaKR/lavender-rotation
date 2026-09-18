@@ -10,6 +10,10 @@ set -euo pipefail
 # docs/ideation/* are working notes, not committed governance/audit docs.
 # docs/I18N.md has its own dedicated, stricter enforcement gate
 # (scripts/i18n-gate.sh checks its "Declared: YYYY-MM-DD · Reviewer: ..." line).
+# That claim was false until 2026-08-28: i18n-gate.sh checked the status
+# declaration and the Reason line only, so this exclusion handed the one doc it
+# names a pass that nothing else issued. i18n-gate.sh now really does enforce
+# the Declared date and the Reviewer name, and this exclusion is honest.
 files=$(find docs -maxdepth 2 -name '*.md' \
   -not -path 'docs/adr/*' \
   -not -path 'docs/ideation/*' \

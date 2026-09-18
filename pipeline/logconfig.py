@@ -1,6 +1,6 @@
 """Structured, local-only logging (FIX-12 — operability pass).
 
-Every WAD log record is written to **stderr only**, as either a flat
+Every log record this project emits is written to **stderr only**, as either a flat
 ``key=value`` line (the default) or, opt-in via ``--log-format json``, one
 JSON object per line carrying exactly the same fields. This is a deliberate
 privacy invariant, not an incidental choice: the same no-egress posture
@@ -14,9 +14,14 @@ The no-inference invariant extends into the log stream (OBS-11): no log call
 site may emit identity vocabulary or per-artist identity data, in either
 format — enforced by ``tests/test_log_privacy.py``.
 
-Module loggers live under the ``wad`` namespace (``wad.ingest``, ``wad.cli``,
-…) so a single handler on the ``wad`` root logger captures everything and
-callers can filter/silence a subsystem with the normal ``logging`` API.
+Module loggers live under the ``lavender`` namespace (``lavender.ingest``,
+``lavender.lastfm``, …) so a single handler on the ``lavender`` root logger
+captures everything and callers can filter/silence a subsystem with the normal
+``logging`` API. That namespace is load-bearing, not cosmetic: the stderr-only
+guarantee above is implemented by configuring exactly that tree, so a logger
+outside it is a logger outside the guarantee. ``tests/test_log_privacy.py``
+asserts every logger name in the core packages sits under :data:`_NAMESPACE`
+(one did not, ``wad.paths``, left behind by the rename in ADR 0012).
 """
 
 from __future__ import annotations
@@ -26,7 +31,7 @@ import logging
 import sys
 import time
 
-_NAMESPACE = "wad"
+_NAMESPACE = "lavender"
 _CONFIGURED_LOGGERS: set[int] = set()
 _OUR_HANDLERS: dict[int, logging.Handler] = {}
 
@@ -77,7 +82,7 @@ class JsonFormatter(logging.Formatter):
 
 
 def configure_logging(level: int = logging.INFO, log_format: str = "kv") -> logging.Logger:
-    """Configure the ``wad`` logger tree: one stderr handler, local-only.
+    """Configure the ``lavender`` logger tree: one stderr handler, local-only.
 
     Idempotent per logger object — calling this more than once (``main()``
     plus a test, say) never duplicates handlers on the same logger. Repeat
@@ -100,5 +105,12 @@ def configure_logging(level: int = logging.INFO, log_format: str = "kv") -> logg
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Return a module logger under the ``wad`` namespace, e.g. ``wad.ingest``."""
-    return logging.getLogger(name)
+    """Return a module logger under the project namespace, e.g. ``lavender.ingest``.
+
+    A bare name is prefixed rather than returned as-is. Returning it unchanged
+    would hand back a logger outside the configured tree — the ``wad.paths``
+    defect — from the very helper whose job is to keep callers inside it.
+    """
+    if name == _NAMESPACE or name.startswith(f"{_NAMESPACE}."):
+        return logging.getLogger(name)
+    return logging.getLogger(f"{_NAMESPACE}.{name}")

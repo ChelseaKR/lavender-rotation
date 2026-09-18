@@ -3,7 +3,17 @@
 from __future__ import annotations
 
 import pytest
-from pipeline.models import Artist, Gender, IdentityBasis, IdentityLabel, Source, SourceKind
+from pipeline.models import (
+    Artist,
+    Explanation,
+    Gender,
+    IdentityBasis,
+    IdentityLabel,
+    Recommendation,
+    Signal,
+    Source,
+    SourceKind,
+)
 from recommender.hybrid import recommend
 from recommender.why import (
     ProvenanceItem,
@@ -62,12 +72,26 @@ def test_unknown_is_first_class_and_honest(profile, catalog, source) -> None:
     assert "surfaced on merit" in why.to_markdown().lower()
 
 
-def test_female_fronted_is_band_composition_not_member_gender(profile, catalog, source) -> None:
+def test_band_lineup_is_composition_basis_and_names_the_sourced_genders(
+    profile, catalog, source
+) -> None:
+    """A woman-fronted band names *women*, and says what it is silent about.
+
+    The old wording ("female-fronted band ... distinct from any member's
+    gender") was doubly wrong: it asserted a category the source had not
+    asserted for every front-person, and the trailing clause denied the very
+    derivation the label came from. #69.
+    """
     rec = _rec_for(profile, catalog, source, "boygenius")
     why = why_this_artist(rec)
     assert why.identity_basis is IdentityBasis.BAND_COMPOSITION
-    assert "female-fronted" in why.identity_statement.lower()
-    assert "distinct from any member" in why.identity_statement.lower()
+    statement = why.identity_statement.lower()
+    assert "sourced women" in statement  # boygenius: two sourced women fronting
+    assert "sourced lineup" in statement
+    assert "no gender is claimed for any other member" in statement
+    # The clause that told the reader the label was not about a person, while
+    # being derived entirely from people's sourced genders, is gone.
+    assert "distinct from any member" not in statement
     assert why.provenance  # sourced lineup citation present
 
 
@@ -99,18 +123,181 @@ def test_rank_shift_does_not_misattribute_boost_as_movement(profile, catalog, so
     )
 
 
-def test_rank_shift_unchanged_at_zero_lens(profile, catalog, source) -> None:
-    for rec in recommend(profile, catalog, source, k=99, lens_strength=0.0):
-        assert rec.rank == rec.base_rank
+# `explore` and `hide_sourced_men` are user-reachable knobs — `--explore` on
+# `recommend` and `export`, the "Serendipity" slider on the dashboard, and
+# `--hide-sourced-men` as a shared world arg. Both moved the *displayed* rank
+# after `base_rank` was recorded, and the rank-shift sentence read
+# `rank - base_rank` and named the lens for all of it. Leaving these two at
+# their defaults is what let the guards below pass while the sentence was false
+# (#113), so every one of them is parametrized over both.
+_EXPLORE_GRID = (0.0, 0.25, 0.5, 0.75, 1.0)
+
+
+@pytest.mark.parametrize("explore", _EXPLORE_GRID)
+@pytest.mark.parametrize("hide_sourced_men", [False, True])
+def test_rank_shift_unchanged_at_zero_lens(
+    profile, catalog, source, explore, hide_sourced_men
+) -> None:
+    """At `lens_strength=0` every `rerank_delta` is 0.0 — nothing may claim otherwise."""
+    for rec in recommend(
+        profile,
+        catalog,
+        source,
+        k=99,
+        lens_strength=0.0,
+        explore=explore,
+        hide_sourced_men=hide_sourced_men,
+    ):
+        assert rec.rerank_delta == 0.0
+        assert rec.lens_rank == rec.base_rank
+        assert why_this_artist(rec).rank_shift == (
+            "the values lens did not change this pick's position"
+        ), "the lens provably did nothing on this run"
+
+
+@pytest.mark.parametrize("explore", _EXPLORE_GRID)
+@pytest.mark.parametrize("hide_sourced_men", [False, True])
+def test_unknown_identity_never_shows_lens_caused_improvement(
+    profile, catalog, source, explore, hide_sourced_men
+) -> None:
+    """`docs/ROADMAP.md` §"unknown is first-class": no boost it did not receive."""
+    for rec in recommend(
+        profile,
+        catalog,
+        source,
+        k=99,
+        lens_strength=1.0,
+        explore=explore,
+        hide_sourced_men=hide_sourced_men,
+    ):
+        if why_this_artist(rec).identity_basis is IdentityBasis.UNKNOWN:
+            assert rec.rerank_delta == 0.0
+            assert rec.lens_rank >= rec.base_rank
+            assert "moved this pick" not in why_this_artist(rec).rank_shift
+
+
+@pytest.mark.parametrize("explore", _EXPLORE_GRID)
+def test_serendipity_movement_is_not_attributed_to_the_lens(
+    profile, catalog, source, explore
+) -> None:
+    """The measured case from #113: `--lens 0 --explore 1` named the wrong cause.
+
+    `diversify` is identity-blind and runs *after* the counterfactual is
+    recorded, which is exactly why its permutation landed in `rank - base_rank`.
+    At `explore=1` on this world it really does move picks — the first assert
+    proves the knob is doing something, so this cannot pass by doing nothing —
+    and not one of those movements is the lens's.
+    """
+    recs = recommend(profile, catalog, source, k=99, lens_strength=0.0, explore=explore)
+    if explore == 1.0:
+        assert any(rec.rank != rec.base_rank for rec in recs), (
+            "explore must actually permute this world, or this test asserts nothing"
+        )
+    for rec in recs:
         assert why_this_artist(rec).rank_shift == (
             "the values lens did not change this pick's position"
         )
 
 
-def test_unknown_identity_never_shows_lens_caused_improvement(profile, catalog, source) -> None:
-    for rec in recommend(profile, catalog, source, k=99, lens_strength=1.0):
-        if why_this_artist(rec).identity_basis is IdentityBasis.UNKNOWN:
-            assert rec.rank >= rec.base_rank
+def test_the_output_filter_is_not_the_lens(profile, catalog, source) -> None:
+    """Removing a pick above you renumbers you; it does not move you.
+
+    `recommender.filters`' module docstring makes the separation load-bearing —
+    the filter is not the lens, and "conflating the two would quietly break the
+    lens's central promise."
+    """
+    recs = recommend(profile, catalog, source, k=99, lens_strength=0.0, hide_sourced_men=True)
+    assert any(rec.rank != rec.base_rank for rec in recs), (
+        "the filter must actually renumber this world, or this test asserts nothing"
+    )
+    for rec in recs:
+        assert why_this_artist(rec).rank_shift == (
+            "the values lens did not change this pick's position"
+        )
+
+
+@pytest.mark.parametrize("explore", _EXPLORE_GRID)
+@pytest.mark.parametrize("hide_sourced_men", [False, True])
+def test_recommend_always_stamps_a_lens_rank(
+    profile, catalog, source, explore, hide_sourced_men
+) -> None:
+    """`why_this_artist` falls back to `rank` only for a hand-built recommendation.
+
+    Everything `recommend` emits carries a real `lens_rank`, so the fallback can
+    never quietly cover the pipeline path — which is the shape ("absence
+    rendered as a value") this repo keeps finding.
+    """
+    for rec in recommend(
+        profile,
+        catalog,
+        source,
+        k=99,
+        lens_strength=0.5,
+        explore=explore,
+        hide_sourced_men=hide_sourced_men,
+    ):
+        assert rec.lens_rank > 0
+        assert rec.base_rank > 0
+
+
+def test_a_lens_caused_move_is_still_reported() -> None:
+    """The over-correction this must not become: a lens that moved a pick says so.
+
+    The demo world's aligned artists already out-score the unaligned ones, so
+    the boost re-orders nothing there. This world is built the other way round:
+    a sourced woman sits below a sourced man on pure taste, and at full lens
+    strength she passes him.
+    """
+    from recommender.rerank import rerank
+
+    def _rec(artist_id, name, gender, basis, base_score, base_rank):
+        artist = Artist(
+            artist_id=artist_id,
+            name=name,
+            identity=IdentityLabel(
+                gender=gender,
+                basis=basis,
+                sources=(
+                    (
+                        Source(
+                            kind=SourceKind.ARTIST_STATEMENT,
+                            citation=f"https://example.org/{artist_id}",
+                            retrieved_at="2026-05-31",
+                        ),
+                    )
+                    if basis is IdentityBasis.SELF_IDENTIFIED
+                    else ()
+                ),
+            ),
+        )
+        return Recommendation(
+            artist=artist,
+            base_score=base_score,
+            rerank_delta=0.0,
+            explanation=Explanation(
+                signals=(Signal(kind="content", detail="shared tags: fixture", weight=1.0),),
+                identity_basis=basis,
+                identity_sources=artist.identity.sources,
+                summary="shared tags: fixture",
+            ),
+            base_rank=base_rank,
+        )
+
+    man = _rec("fixture-man", "Fixture Man", Gender.MAN, IdentityBasis.SELF_IDENTIFIED, 0.9, 1)
+    woman = _rec(
+        "fixture-woman", "Fixture Woman", Gender.WOMAN, IdentityBasis.SELF_IDENTIFIED, 0.8, 2
+    )
+
+    ranked = rerank([man, woman], 1.0)
+    by_id = {rec.artist.artist_id: rec.with_lens_rank(rec.rank) for rec in ranked}
+
+    assert by_id["fixture-woman"].lens_rank == 1
+    assert why_this_artist(by_id["fixture-woman"]).rank_shift == (
+        "the values lens moved this pick from #2 to #1"
+    )
+    assert why_this_artist(by_id["fixture-man"]).rank_shift == (
+        "the values lens moved this pick from #1 to #2"
+    )
 
 
 def test_artist_identity_phrase_matches_statement(profile, catalog, source) -> None:
@@ -119,8 +306,6 @@ def test_artist_identity_phrase_matches_statement(profile, catalog, source) -> N
 
 
 def test_artist_identity_phrase_uses_qualitative_tier_not_percentage() -> None:
-    from pipeline.models import Artist, Gender, IdentityBasis, IdentityLabel, Source, SourceKind
-
     label = IdentityLabel(
         gender=Gender.WOMAN,
         basis=IdentityBasis.SELF_IDENTIFIED,

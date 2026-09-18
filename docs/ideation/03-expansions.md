@@ -83,14 +83,23 @@ way.
 can answer "what exactly does this lens boost, and why?" without reading code.
 
 ### EXP-04 — Serendipity control with provably identity-blind diversification
+**Status (2026-09-06):** Implemented, with the excellence bar's *second* clause
+recorded as an aspiration rather than a met bar. Identity-blindness is proved —
+`tests/test_diversify.py` holds the pass to permutation-not-rescore and asserts
+by AST that it never reads `identity`/`composition`. Exposure neutrality is
+**not** met: measured at k=3 on the demo world, moving the slider from 0.0 to
+1.0 changes which identity segment holds a top-3 slot. Blindness at the input is
+not neutrality at the output, and nothing enforced the second clause. See #114;
+`tests/test_observability.py::test_the_diversifier_does_move_top_k_exposure_on_this_world`
+pins the measurement so the claim cannot be quietly restored.
 **Pitch:** An "explore ↔ exploit" control that diversifies results (MMR-style
 over tag space) while a test proves diversification never reads identity.
 **Impact:** Single-user discovery tools die of staleness; the collaborative
-graph (`recommender/collaborative.py`) converges on near-neighbours. This adds
+graph (`recommender/collaborative.py`) converges on near-neighbors. This adds
 freshness without touching the fairness contract.
 **Shape:** A post-rerank diversification pass over movable candidates, keyed only
 on `Artist.tags` and similarity; the orchestrator reconstructs the result around
-protected unknown slots before top-k selection. An AST/behavioural guard in the spirit of
+protected unknown slots before top-k selection. An AST/behavioral guard in the spirit of
 `tests/test_no_inference.py` asserting the diversifier never accesses
 `identity`/`composition`; surfaced as a second explained slider.
 **Effort:** M. **Risks/deps:** Re-ordering interacts with rank-shift wording
@@ -175,7 +184,7 @@ rerank with the invariant tests, `WhyThisArtist` — raises both repos and makes
 the portfolio's central idea citable as a single artifact.
 **Effort:** L. **Risks/deps:** Cross-repo coordination; versioning discipline
 (Release standard); risk of premature abstraction — do it *after* EXP-03
-stabilises the lens model here, and after comparing queer-the-stacks' actual
+stabilizes the lens model here, and after comparing queer-the-stacks' actual
 shapes (not inspected in this pass — uncertainty acknowledged).
 **Excellence bar:** Both repos consume the package; the no-inference and
 unknown-first-class test patterns ship *in the library* so every future

@@ -1,6 +1,6 @@
 """Privacy audit §C: no telemetry, and network egress confined to one place.
 
-These are source-level guarantees (DPIA: data-minimisation + purpose-limitation):
+These are source-level guarantees (DPIA: data-minimization + purpose-limitation):
 the listening data is local-first, so the core must not import analytics SDKs and
 must not open network connections anywhere except the explicit Last.fm/enrichment
 and Spotify-export client paths.
@@ -22,6 +22,7 @@ import app
 import export
 import pipeline
 import recommender
+from pipeline.doctor import NETWORK_EGRESS_MODULES
 
 TELEMETRY_TOKENS = (
     "mixpanel",
@@ -41,7 +42,16 @@ TELEMETRY_TOKENS = (
 # landed (#54): the one live HTTP transport moved into the shared seam, so the export
 # half of this allowlist got SHORTER as providers were added instead of growing one
 # entry per provider. A new adapter that needs its own socket has to change this line.
-NETWORK_ALLOWED = {"pipeline/lastfm.py", "pipeline/doctor.py", "export/base.py"}
+#
+# `pipeline/http.py` joined it when live enrichment landed (FIX-01) — the fourth and,
+# by the same seam discipline, last entry the identity path needs: MusicBrainz and
+# Wikidata are both fetched through that one transport, and `pipeline/enrich.py`
+# takes its fetcher as an argument rather than importing a client of its own.
+# Imported, not restated. The allowlist is shipped code now, because
+# `lavender doctor --json` publishes it and a reader should not have to open a
+# test file to learn what this tool may contact. A second copy here would be a
+# second place for it to drift.
+NETWORK_ALLOWED = set(NETWORK_EGRESS_MODULES)
 NETWORK_TOKENS = (
     "import requests",
     "import httpx",

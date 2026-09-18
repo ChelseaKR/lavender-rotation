@@ -1,4 +1,4 @@
-# Model Card — Women-Artist Discovery Recommender
+# Model Card — Lavender Rotation Recommender
 
 > Instantiates AIEV-22. Consolidates content already committed across `docs/ROADMAP.md` §6-7,
 > `docs/audits/identity-data-ethics.md`, and `docs/audits/fairness-identity.md` into one card.
@@ -66,16 +66,20 @@ scale.
 
 ## Limitations
 
-- **No live enrichment client** ships yet (`pipeline/enrich.py` has parsers and a fixture
-  enricher, but no class that fetches live from MusicBrainz/Wikidata/Discogs) — see the ideation
-  notes in `docs/ideation/` for planned follow-on work. The CLI and dashboard both currently run
-  against the demo fixture world only.
+- **Live enrichment ships, and the dashboard does not use it.** `pipeline/enrich.py`'s
+  `MusicBrainzEnricher` fetches from MusicBrainz and Wikidata through the one allowlisted HTTP
+  seam, wired at `pipeline/cli.py::_live_enricher`; `lavender ingest --user` and `lavender refresh
+  --user` both use it, and `--user` on `recommend`/`report`/`export` reads the resulting cache
+  back. Nothing reaches Discogs — parsers exist for a supplied lineup payload, no client fetches
+  one. The **Streamlit dashboard** is the part that is still fixture-only: `app/dashboard.py`
+  always loads the demo world. (This card said no live client existed at all until 2026-08-28,
+  which was true when written and false from FIX-01 onward.)
 - **Identity coverage is inherently sparse.** Wikidata P21 is sparse and sometimes wrong;
   MusicBrainz gender is editorial/self-reported. Many artists will correctly resolve to `unknown`
   — that is the intended, safe default, not a bug, but it does mean the values lens has less to
   work with for less-documented artists.
 - **Allocational risk:** the lens is bounded and taste-preserving, but a boost-only design can
-  still over-favour already-popular sourced women within the boosted set (see
+  still over-favor already-popular sourced women within the boosted set (see
   `docs/audits/fairness-identity.md` §3 for the mitigation and its limits).
 
 ## Environmental footprint
