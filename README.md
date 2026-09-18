@@ -301,8 +301,8 @@ Lavender Rotation is licensed under the [GNU Affero General Public License, vers
 later](LICENSE) (AGPL-3.0-or-later) from 2026-09-18 onward. Before that it was MIT-licensed,
 and that grant stands: every commit on `main` up to and including `fbe20a8` remains available
 under the MIT License. The project has never cut a tagged release, so there is no MIT-licensed
-release artifact beyond those commits. Neither license covers artist-identity data; see
-[`NOTICE`](NOTICE).
+release artifact beyond those commits. [`NOTICE`](NOTICE) records the same license history, and
+neither license covers artist-identity data (also in `NOTICE`).
 
 ## Support
 

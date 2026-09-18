@@ -1,18 +1,3 @@
-License history for Lavender Rotation
-=====================================
-
-From 2026-09-18 onward this project is licensed under the GNU Affero General
-Public License, version 3 or (at your option) any later version
-(AGPL-3.0-or-later). The license text follows, unmodified, below the line.
-
-Before that date the project was licensed under the MIT License, and that grant
-is not withdrawn: every commit on main up to and including fbe20a8 remains
-available under the MIT License, whose text is in this file at that commit. No
-tagged release has been cut, so there is no MIT-licensed release artifact beyond
-those commits.
-
---------------------------------------------------------------------------------
-
                     GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
 

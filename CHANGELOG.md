@@ -18,9 +18,10 @@ tag, not backfilled to an earlier commit date.
   so derivatives and network deployments stay open. The MIT grant is not withdrawn:
   every commit on `main` up to and including `fbe20a8` remains available under MIT.
   No tagged release exists, so there is no MIT-licensed release artifact beyond those
-  commits. `LICENSE` now carries the canonical AGPL-3.0 text under a short history
-  note; `NOTICE`, `pyproject.toml`, `CITATION.cff`, `README.md`, `CONTRIBUTING.md` and
-  `SECURITY.md` name the new license.
+  commits. `LICENSE` is the unmodified AGPL-3.0 text, so GitHub and other license
+  tooling detect it; the history note lives in `NOTICE` and the README's License
+  section. `pyproject.toml`, `CITATION.cff`, `CONTRIBUTING.md` and `SECURITY.md` name
+  the new license.
 
 ### Added
 

@@ -10,6 +10,15 @@ or confidential code, data, methods, or documentation.
 
 Licensed under the GNU Affero General Public License, version 3 or later. See the LICENSE file for the full terms.
 
+LICENSE HISTORY. From 2026-09-18 onward this project is licensed under the GNU
+Affero General Public License, version 3 or (at your option) any later version
+(AGPL-3.0-or-later). Before that date it was licensed under the MIT License, and
+that grant is not withdrawn: every commit on main up to and including fbe20a8
+remains available under the MIT License, whose text is in the LICENSE file at
+that commit. No tagged release has been cut, so there is no MIT-licensed release
+artifact beyond those commits. The LICENSE file itself carries only the
+unmodified AGPL text, so that license tooling reads it as AGPL-3.0.
+
 NOTE ON DATA. This license covers the source code only. It does NOT grant
 rights to any artist-identity data. Identity data in this project is sourced
 under the terms of MusicBrainz (CC0 for the core DB; attribution appreciated),
