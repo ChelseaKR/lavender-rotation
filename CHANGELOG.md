@@ -14,6 +14,25 @@ tag, not backfilled to an earlier commit date.
 
 ### Added
 
+- `--json` on `report`, `feedback`, `refresh`, `eval` and `runs`, completing the
+  set every user-facing command offers (#121). Each emits one versioned document
+  against a committed schema under `schemas/`, and each carries a distinction the
+  text rendering had been keeping in prose:
+  - `refresh` in demo mode reports every upstream count as `null` rather than `0`.
+    A demo run publishing `attempted: 0` beside `answered: false` would be
+    indistinguishable from a live run that reached nothing, which is the single
+    distinction `RefreshOutcome` exists to keep.
+  - `eval` reports `regressed_vs_baseline: null` when no baseline file was
+    present — `false` would be a claim about a comparison nobody ran — and lists
+    every retention guarantee that passed only because its segment was empty.
+  - `runs list` keeps a manifest it could not read in `unreadable` rather than in
+    `runs`, with its own name and error.
+  - `report --json` still writes the HTML page, and says where it went and how
+    many bytes it wrote.
+- `schemas/{report,feedback,refresh,eval,runs}.schema.json`, generated from the
+  document definitions by `scripts/gen_schemas.py` and compared byte for byte in
+  the suite.
+
 - **The a11y gate reports what it examined, per rule family (#139).** `make a11y`'s
   offline checker printed `a11y: 0 violations` and nothing else — the same
   sentence over a page with twelve interactive controls and over a page with
