@@ -1,0 +1,326 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ChelseaKR/lavender-rotation/blob/main/schemas/report.schema.json",
+  "title": "lavender report --json",
+  "description": "The data behind the HTML discovery report, plus where the page was written. The picks and the coverage block are the same shapes 'recommend' publishes, from the same builder, so a script cannot be handed two different descriptions of one ranking. The HTML itself is not embedded: it is a rendering of these picks, and carrying both would let the two disagree.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "query",
+    "written_to",
+    "bytes_written",
+    "identity_coverage",
+    "recommendations",
+    "exposure_panel"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "command": {
+      "type": "string",
+      "const": "report"
+    },
+    "query": {
+      "type": "object",
+      "required": [
+        "listener",
+        "k",
+        "lens_name",
+        "lens_strength",
+        "explore",
+        "hide_sourced_men",
+        "content_filter"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "listener": {
+          "type": "string"
+        },
+        "k": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "lens_name": {
+          "type": "string"
+        },
+        "lens_strength": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "explore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "hide_sourced_men": {
+          "type": "boolean"
+        },
+        "content_filter": {
+          "type": "string"
+        }
+      }
+    },
+    "written_to": {
+      "type": "string",
+      "minLength": 1
+    },
+    "bytes_written": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "identity_coverage": {
+      "type": "object",
+      "required": [
+        "total",
+        "sourced",
+        "self_identified",
+        "band_composition",
+        "unknown",
+        "women",
+        "nonbinary",
+        "men",
+        "other",
+        "sourced_share",
+        "unknown_share",
+        "summary"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sourced": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "self_identified": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "band_composition": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unknown": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "women": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nonbinary": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "men": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "other": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sourced_share": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "null over an empty run. A zero would read as a measured share, and there is none to measure."
+        },
+        "unknown_share": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "summary": {
+          "type": "string"
+        }
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "rank",
+          "artist_id",
+          "artist_name",
+          "score",
+          "why",
+          "identity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "artist_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "artist_name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "score": {
+            "type": "number"
+          },
+          "why": {
+            "type": "object",
+            "required": [
+              "headline",
+              "reasons",
+              "rank_shift"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "headline": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "rank_shift": {
+                "type": "string"
+              }
+            }
+          },
+          "identity": {
+            "type": "object",
+            "required": [
+              "basis",
+              "sourced_gender",
+              "statement",
+              "inferred",
+              "conflict_note",
+              "provenance",
+              "queer_provenance"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "basis": {
+                "type": "string",
+                "enum": [
+                  "self-identified",
+                  "band-composition",
+                  "unknown"
+                ],
+                "description": "How the identity was established. Never 'inferred'."
+              },
+              "sourced_gender": {
+                "type": "string",
+                "enum": [
+                  "woman",
+                  "man",
+                  "nonbinary",
+                  "other",
+                  "unknown"
+                ],
+                "description": "'unknown' is a value, not a gap: an artist with no sourced identity is first class here and is never down-ranked for it."
+              },
+              "statement": {
+                "type": "string",
+                "minLength": 1
+              },
+              "inferred": {
+                "type": "boolean",
+                "const": false,
+                "description": "Pinned. Identity in this system is sourced or unknown; there is no third state."
+              },
+              "conflict_note": {
+                "type": "string"
+              },
+              "provenance": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "source_kind",
+                    "asserted_value",
+                    "citation",
+                    "retrieved_at",
+                    "is_local_correction"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "source_kind": {
+                      "type": "string"
+                    },
+                    "asserted_value": {
+                      "type": "string",
+                      "description": "The raw thing the source said, so a reader can audit it."
+                    },
+                    "citation": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "retrieved_at": {
+                      "type": "string"
+                    },
+                    "is_local_correction": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              "queer_provenance": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "source_kind",
+                    "asserted_value",
+                    "citation",
+                    "retrieved_at",
+                    "is_local_correction"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "source_kind": {
+                      "type": "string"
+                    },
+                    "asserted_value": {
+                      "type": "string",
+                      "description": "The raw thing the source said, so a reader can audit it."
+                    },
+                    "citation": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "retrieved_at": {
+                      "type": "string"
+                    },
+                    "is_local_correction": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "exposure_panel": {
+      "type": "object",
+      "description": "The fairness panel the page prints, verbatim from app.observability. Its retention and rank-shift maps are keyed by lens strength and by segment, which come from the run rather than from this schema, so 'object' is the honest bound here. tests/test_jsonout.py carries the constraint this cannot: every share and every retention value is a number or null, never a zero standing in for an empty top-k."
+    }
+  }
+}

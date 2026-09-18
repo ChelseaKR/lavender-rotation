@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ChelseaKR/lavender-rotation/blob/main/schemas/feedback.schema.json",
+  "title": "lavender feedback --json",
+  "description": "One thumbs vote, recorded. 'vote' is the word rather than the signed integer the cache stores, so a consumer is not pinned to an internal representation.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "database",
+    "listener",
+    "artist_id",
+    "vote",
+    "recorded_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "command": {
+      "type": "string",
+      "const": "feedback"
+    },
+    "database": {
+      "type": "string",
+      "minLength": 1
+    },
+    "listener": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artist_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "vote": {
+      "type": "string",
+      "enum": [
+        "up",
+        "down"
+      ],
+      "description": "Which way the listener voted."
+    },
+    "recorded_at": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}
