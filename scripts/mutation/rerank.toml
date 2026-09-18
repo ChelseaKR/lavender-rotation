@@ -1,5 +1,5 @@
 # Mutation-testing config (CQ-47) — recommender/rerank.py, the values-aware
-# re-ranker. The never-penalise/boost-only invariant ("unknown never
+# re-ranker. The never-penalize/boost-only invariant ("unknown never
 # down-ranks, the lens only ever boosts") is enforced here; a surviving mutant
 # is a hole in the safety suite.
 #

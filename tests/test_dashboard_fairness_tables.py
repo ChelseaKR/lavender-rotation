@@ -54,7 +54,7 @@ def _rows(panel: dict[str, object], key: str) -> list[dict[str, object]]:
 def test_the_demo_world_renders_both_fairness_tables() -> None:
     """The regression, in the world the dashboard actually shows.
 
-    The demo catalogue holds no artist sourced as ``Gender.OTHER``, so `other_retention` is
+    The demo catalog holds no artist sourced as ``Gender.OTHER``, so `other_retention` is
     ``None`` for every lens. This raised ``TypeError`` before the tables were formatted through
     a helper that knows what ``None`` means.
     """

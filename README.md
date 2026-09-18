@@ -2,7 +2,7 @@
 
 **A demo-first music-discovery engine that surfaces new women, nonbinary, and female-fronted artists through an explicit values lens — including a queer lens for sourced queer women and nonbinary artists.** It combines collaborative and content signals with a sourced-identity re-ranker. Identity is never inferred, and "unknown" is a normal, first-class answer.
 
-**Trans women are women here — explicitly.** The three terms in the tagline are not redundant; they cover three different shapes: *women* (solo artists whose sourced self-identification is woman — cis or trans, with no distinction drawn anywhere in the data model), *nonbinary* artists (represented as nonbinary, never folded into another category), and *female-fronted* (band-composition metadata: an act whose sourced lineup/role data shows a woman — cis or trans — fronting it, which is a fact about that lineup, never a claim about the band's other members). A trans woman artist whose self-identification is sourced is surfaced as a woman, full stop. A band fronted by a sourced nonbinary artist is described as fronted by a nonbinary artist — the lens surfaces it, and no one is relabelled to get there.
+**Trans women are women here — explicitly.** The three terms in the tagline are not redundant; they cover three different shapes: *women* (solo artists whose sourced self-identification is woman — cis or trans, with no distinction drawn anywhere in the data model), *nonbinary* artists (represented as nonbinary, never folded into another category), and *female-fronted* (band-composition metadata: an act whose sourced lineup/role data shows a woman — cis or trans — fronting it, which is a fact about that lineup, never a claim about the band's other members). A trans woman artist whose self-identification is sourced is surfaced as a woman, full stop. A band fronted by a sourced nonbinary artist is described as fronted by a nonbinary artist — the lens surfaces it, and no one is relabeled to get there.
 
 **Status:** `Beta` · **Track:** Personal (data/ML + small web app) · **License:** MIT · **Data:** personal/local
 
@@ -212,7 +212,7 @@ A run where nothing came back exits non-zero, says the upstream was unreachable,
 reconciles no corrections. A genuine upstream retraction is therefore not applied
 automatically — it is listed for you to act on with `lavender corrections --artist <id>
 --value <value> --citation <url>`, which is the direction this project errs in everywhere
-else too. (The neighbouring `lavender pending-corrections add` ledger is the other
+else too. (The neighboring `lavender pending-corrections add` ledger is the other
 direction: a change you are proposing *upstream*, waiting for a refresh to observe.)
 
 Bounded on purpose: upstream is ~1 req/s and a real catalog runs to thousands of

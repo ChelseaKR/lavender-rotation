@@ -340,7 +340,7 @@ def to_report(results: dict[str, EvalResult]) -> dict[str, object]:
 DEMO_WORLD_TUNING_CAVEAT = (
     "One world in this report ('demo-tuned-indie', from pipeline.demo) is "
     "hand-tuned so the hybrid recovers its held-out discoveries — see that "
-    "module's docstring. It is included, and labelled, deliberately: hiding it "
+    "module's docstring. It is included, and labeled, deliberately: hiding it "
     "would be worse than disclosing it. The other worlds (sparse-tags, "
     "popularity-skewed, no-collaborative-signal, adversarial-near-misses; see "
     "pipeline/fixtures.py) are independent synthetic fixtures NOT tuned to make "

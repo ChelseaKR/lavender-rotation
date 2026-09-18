@@ -98,7 +98,7 @@ def test_committed_dashboard_cites_only_locatable_records() -> None:
 # the Makefile's comment claims that makes the gate "scheme-complete on any
 # machine — a Dark-Mode Mac and light-mode CI check the same two palettes".
 # That claim rests entirely on `main()` forwarding `--scheme` to `build()`.
-# `tests/test_contrast.py` proves the *renderer* honours a scheme; nothing
+# `tests/test_contrast.py` proves the *renderer* honors a scheme; nothing
 # proved the CLI passes one along. A `main()` that dropped the argument would
 # write two byte-identical "pinned" renders, pa11y would audit the same palette
 # three times, and every gate would stay green.

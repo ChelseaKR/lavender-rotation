@@ -45,9 +45,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CADENCE_DAYS = 7
 
 #: Weekly, on a Tuesday, at 04:17 local time. Off the hour and off the top of the
-#: week on purpose: the neighbouring `.github/workflows/*.yml` crons are staggered
+#: week on purpose: the neighboring `.github/workflows/*.yml` crons are staggered
 #: for the same reason, and MusicBrainz is a volunteer-run service whose rate
-#: limit this project honours rather than tests.
+#: limit this project honors rather than tests.
 CRON_WEEKDAY = 2
 RUN_HOUR = 4
 RUN_MINUTE = 17

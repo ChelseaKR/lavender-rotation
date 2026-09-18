@@ -3,7 +3,7 @@
 Reuses ``app.render.render_cards_html`` — the same renderer the a11y gate
 audits via ``app/build_static.py`` — so the report carries the identical
 accessibility guarantees (semantic landmarks, data-table score equivalent,
-identity conveyed as text, never colour alone).
+identity conveyed as text, never color alone).
 """
 
 from __future__ import annotations

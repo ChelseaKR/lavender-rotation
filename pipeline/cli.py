@@ -1,7 +1,7 @@
 """Command-line entry point: ``lavender ingest|eval|recommend|export|refresh``.
 
 Argparse glue over the library; omitted from coverage accounting, but the gate
-behaviour of ``lavender eval`` (exit codes, regression/fairness blocks) and
+behavior of ``lavender eval`` (exit codes, regression/fairness blocks) and
 ``lavender refresh`` is exercised directly by ``tests/test_eval.py`` and
 ``tests/test_cache_lifecycle.py``.
 
@@ -60,7 +60,7 @@ from pipeline.http import CachedHttpFetcher, build_user_agent
 from pipeline.identity import (
     IdentityEvidence,
     accepted_gender_values,
-    normalise_asserted_value,
+    normalize_asserted_value,
 )
 from pipeline.ingest import (
     DEFAULT_CANDIDATE_LIMIT,
@@ -119,7 +119,7 @@ DEFAULT_ENRICH_TOP = 50
 #: whole-catalog refresh is a sequence of resumable runs, not one long one.
 DEFAULT_REFRESH_LIMIT = 100
 
-#: How many protected artists `lavender refresh --user` names before summarising.
+#: How many protected artists `lavender refresh --user` names before summarizing.
 #: The count is always reported in full; only the listing is capped.
 _PROTECTED_PREVIEW = 20
 
@@ -305,7 +305,7 @@ def _add_content_filter_args(parser: argparse.ArgumentParser) -> None:
 
 
 def _content_filter(args: argparse.Namespace) -> ContentFilter:
-    """Build the filter from parsed args, or exit non-zero saying what cannot be honoured."""
+    """Build the filter from parsed args, or exit non-zero saying what cannot be honored."""
     return ContentFilter.build(
         include_tags=args.include_tags,
         exclude_tags=args.exclude_tags,
@@ -666,7 +666,7 @@ def _cmd_corrections(args: argparse.Namespace) -> int:
             # reported as "recorded correction for X: 'femalee'" — a command
             # that printed success for an action that could never take effect,
             # and left a row in the ledger that no refresh could ever act on.
-            if normalise_asserted_value(SourceKind.ARTIST_STATEMENT, args.value) is None:
+            if normalize_asserted_value(SourceKind.ARTIST_STATEMENT, args.value) is None:
                 # The rejected value is deliberately not echoed. It is an asserted
                 # gender, and this project's guarantee is that an identity value
                 # never leaves the machine it was typed on. stderr is redirected
@@ -677,7 +677,7 @@ def _cmd_corrections(args: argparse.Namespace) -> int:
                 # accepted vocabulary is enough to act on.
                 #
                 # The vocabulary itself is not interpolated here either, and that
-                # is a design point rather than only an analyser's preference: it
+                # is a design point rather than only an analyzer's preference: it
                 # is carried in `--value`'s own `help=` (see `_build_parser`),
                 # still derived from `accepted_gender_values()` rather than
                 # transcribed, so a caller can read the accepted terms *before*
@@ -1537,7 +1537,7 @@ def build_parser() -> argparse.ArgumentParser:
     # Derived from the resolver, never transcribed: a help string that repeats the
     # vocabulary by hand goes stale the first time the vocabulary changes, and this
     # is the one place a caller can read the accepted terms before spending a run
-    # on a value `normalise_asserted_value` would refuse.
+    # on a value `normalize_asserted_value` would refuse.
     p_corr.add_argument(
         "--value",
         default=None,

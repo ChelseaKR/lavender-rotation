@@ -71,7 +71,7 @@ not just at review time:
   `SourceKind` member for a name, voice, image, or genre — the guardrail isn't
   just "don't call the inference function," it's "there is no inference function
   to call." `tests/test_no_inference.py` proves this with a vocabulary check and
-  an AST scan, not just a behavioural test. The scan walks every `def` and
+  an AST scan, not just a behavioral test. The scan walks every `def` and
   `async def` in every `pipeline/*.py` module — an allowlist of function names
   does not maintain itself, and #72 found the previous one covering four of
   seven functions in one file and passing on a helper that mapped genre tags to

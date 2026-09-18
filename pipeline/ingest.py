@@ -112,7 +112,7 @@ def enrich_artist(
     composition = resolve_composition(fronts, comp_evidence)
     # Optional second protocol (see `enrich.CareerSpanSource`): an enricher that cannot state a
     # start year yields none, which is the same answer as upstream having none. Either way the
-    # era filter keeps the artist, so no enricher is penalised for not implementing it.
+    # era filter keeps the artist, so no enricher is penalized for not implementing it.
     career_start_year = (
         enricher.career_start_year(artist_id) if isinstance(enricher, CareerSpanSource) else None
     )
@@ -443,7 +443,7 @@ def _diff_sources(
     # gender *and*, from a different document, for an orientation. Matching
     # those two against each other would manufacture a change out of two claims
     # that never disagreed. The kind-only fallback preserves the previous
-    # behaviour for the ordinary case where a source's citation URL is stable.
+    # behavior for the ordinary case where a source's citation URL is stable.
     old_by_citation = {(source.kind, source.citation): source for source in old_sources}
     old_by_kind = {source.kind: source for source in old_sources}
     changes: list[IdentityLabelChange] = []

@@ -152,7 +152,7 @@ def test_evaluate_worlds_aggregate_can_lose(demo_user) -> None:
         "c2": Artist(artist_id="c2", name="C2", tags=(), listeners=0),
     }
     # No tags anywhere and no similarity edges: the hybrid has zero signal and
-    # falls back to alphabetical tie-break, which does not favour "d1".
+    # falls back to alphabetical tie-break, which does not favor "d1".
     source = FixtureLastfm(scrobbles={demo_user: scrobbles}, tags={}, similar={})
 
     def losing_world():
@@ -221,7 +221,7 @@ def test_eval_real_returns_only_a_summary_never_raw_plays(
 def test_recall_is_marked_non_discriminating_when_k_covers_the_whole_pool() -> None:
     """With k >= pool size the top-k is the pool, so recall is the same for any order.
 
-    The check is deliberately behavioural rather than a bare flag assertion: it
+    The check is deliberately behavioral rather than a bare flag assertion: it
     scores a perfect ranking and its exact reverse and shows they tie.
     """
     from recommender.eval import _score

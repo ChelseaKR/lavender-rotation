@@ -227,7 +227,7 @@ def export_document(
     """One ``export`` run: the portable file, wrapped, plus metadata.
 
     ``content`` is verbatim whatever the chosen format rendered. Wrapping rather
-    than re-serialising is the point: the envelope cannot carry a field the
+    than re-serializing is the point: the envelope cannot carry a field the
     format does not already carry, so the export contract is unchanged by the
     existence of this document.
     """

@@ -10,7 +10,7 @@ artists — so any leak would show.
 **Extended for ADR 0011's second axis.** This module is named, by name, in
 `recommender.lens.QUEER_LENS.harms_note` ("identity never leaves the machine —
 no export carries it, tests/test_export_schema.py") and in ADR 0011's
-Consequences as one of the defences that became *load-bearing* once the repo
+Consequences as one of the defenses that became *load-bearing* once the repo
 started holding orientation and trans data. It was written before that axis
 existed and checked for none of it: no `queer`, no `orientation`, no `p91`, no
 `lesbian`, no `trans`. Worse, the demo world carries no sourced queer artist at

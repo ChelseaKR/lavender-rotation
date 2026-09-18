@@ -9,7 +9,7 @@
 
 Roadmap M8's "Playwright keyboard/reflow/reduced-motion specs" item landed:
 three judgment-call criteria that the static checker and axe could only
-approximate are now asserted as **observed behaviour in real Chrome**
+approximate are now asserted as **observed behavior in real Chrome**
 (`tests/test_e2e_a11y.py`, run inside `make test` / `make verify`, dedicated
 entry `make a11y-e2e`; CI sets `LAVENDER_E2E_REQUIRE=1` so a missing browser is a
 hard failure there, not a silent skip — the A11Y-03 lesson).
@@ -17,7 +17,7 @@ hard failure there, not a silent skip — the A11Y-03 lesson).
 | Spec | WCAG 2.2 | What is observed |
 |------|----------|------------------|
 | Keyboard | 2.1.1, 2.1.2, 2.4.1, 2.4.3, 2.4.7 | First Tab stop is the skip link, visible on-screen with the 3 px contract outline; Enter jumps to `<main>`; sequential Tab reaches **every** interactive element in DOM order with no trap and visible focus at each stop; the table scroll regions are reachable and Arrow-key operable |
-| Reflow | 1.4.10 | At a 320 CSS px viewport the page never scrolls horizontally; every `<table>` sits inside a keyboard-focusable, labelled scroll region (the excepted 2-D content scrolls, the page does not) |
+| Reflow | 1.4.10 | At a 320 CSS px viewport the page never scrolls horizontally; every `<table>` sits inside a keyboard-focusable, labeled scroll region (the excepted 2-D content scrolls, the page does not) |
 | Reduced motion | 2.3.3 (+ 2.2.2) | The shipped stylesheet carries a `prefers-reduced-motion: reduce` override zeroing animation/transition, and `document.getAnimations()` is empty under both preference states |
 
 ## Defect found and fixed by the new specs (honesty note)
@@ -31,7 +31,7 @@ does not flag. Fixed in the same change (`app/render.py`): each data table is
 wrapped in `<div class="table-scroll" role="region" tabindex="0"
 aria-label=…>` with `overflow-x: auto` and the 3 px focus outline, so only the
 WCAG-excepted two-dimensional content scrolls, Arrow keys operate it after
-Tab-focusing (verified behaviourally), and long citation URLs wrap
+Tab-focusing (verified behaviorally), and long citation URLs wrap
 (`overflow-wrap: anywhere`). Page-level `scrollWidth` now equals
 `clientWidth` at 320 px.
 
@@ -41,7 +41,7 @@ Tab-focusing (verified behaviourally), and long citation URLs wrap
   dark-pinned) — unchanged.
 - `make a11y-e2e`: **6/6 browser specs pass** in headless Chrome
   (keyboard ×3, reflow ×1, reduced-motion ×2).
-- `tests/test_contrast.py` token ratios unchanged (no new colours; the scroll
+- `tests/test_contrast.py` token ratios unchanged (no new colors; the scroll
   region reuses the existing `--focus` outline token, ≥ 3:1 both schemes).
 
 ## Still NOT covered by any automated gate (unchanged, deliberate)

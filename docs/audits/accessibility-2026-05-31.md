@@ -22,7 +22,7 @@ contract in the unit suite, so regressions fail fast).
 |-------------|--------------|
 | Keyboard-complete | semantic HTML, visible focus (`:focus` outline), skip link to `#main` |
 | Charts have data-table equivalents | every score "chart" ships a `<table>` with `<caption>` + `th[scope]` |
-| Identity never colour-only | identity is rendered as **text** ("Identity: …") + a glyph, not a colour |
+| Identity never color-only | identity is rendered as **text** ("Identity: …") + a glyph, not a color |
 | 200% zoom / 320px reflow | `max-width` content column + viewport meta; no fixed widths |
 | Reduced motion | `@media (prefers-reduced-motion: reduce)` disables transitions |
 | Screen-reader friendly cards | `<article aria-labelledby>`, real headings, lists, links |
@@ -45,5 +45,5 @@ required before a release and recorded here:
 | Commitment | Gate | Where |
 |------------|------|-------|
 | 0 automated a11y violations | auto | `make a11y`, `tests/test_a11y.py` |
-| Keyboard path + chart-table + non-colour identity | auto | `app/a11y_check.py`, `tests/test_a11y.py` |
+| Keyboard path + chart-table + non-color identity | auto | `app/a11y_check.py`, `tests/test_a11y.py` |
 | Screen-reader walkthrough | review | checklist above, per release |

@@ -140,9 +140,9 @@ def test_assert_other_retained_would_catch_a_regression() -> None:
 
 def test_assert_no_score_reduced_would_catch_a_regression() -> None:
     base = [_rec(make_artist("x", gender=Gender.MAN), 0.90)]
-    penalised = [_rec(make_artist("x", gender=Gender.MAN), 0.40)]
+    penalized = [_rec(make_artist("x", gender=Gender.MAN), 0.40)]
     with pytest.raises(FairnessAssertionError, match="lost score"):
-        assert_no_score_reduced({0.0: base, 1.0: penalised})
+        assert_no_score_reduced({0.0: base, 1.0: penalized})
 
 
 def test_exposure_report_publishes_the_other_guarantee() -> None:

@@ -31,8 +31,8 @@ source kind for a name, voice, image, or genre. Code: `pipeline/identity.py`.
 - **No inference, ever.** Gender is read only from the sources above. Enforced by
   `IdentityLabel.__post_init__` (a non-unknown gender without an individual-source
   citation raises) and proven by `tests/test_no_inference.py` (vocabulary check +
-  AST scan of the resolver + behavioural checks). → metric *Inferred labels = 0*.
-- **Unknown is first-class.** Default everywhere; never penalised. See
+  AST scan of the resolver + behavioral checks). → metric *Inferred labels = 0*.
+- **Unknown is first-class.** Default everywhere; never penalized. See
   `fairness-identity.md` and `tests/test_unknown_first_class.py`.
 - **Provenance is mandatory.** Every known label carries its citations + fetch
   date. `tests/test_provenance.py`. → metric *Labels with a cited source = 100%*.
@@ -61,7 +61,7 @@ source kind for a name, voice, image, or genre. Code: `pipeline/identity.py`.
   rather than deleting it (#70, 2026-08-14; before that, an ordinary demo refresh
   deleted the row and reported success).
 - **Confidence is a tier, never a percentage.** `IdentityLabel.confidence` is an
-  internal float used only to order/prioritise sources
+  internal float used only to order/prioritize sources
   (`pipeline/identity.py::_SOURCE_BASE_CONFIDENCE`: 0.95 artist statement, 0.80
   Wikidata P21, 0.70 MusicBrainz gender); it is never rendered as a number. Any
   surface that shows identity confidence uses the qualitative tier vocabulary
@@ -117,12 +117,12 @@ This is a deliberate, documented decision, not an oversight:
   (`recommender/rerank.py::RANK_PROTECTED_GENDERS`,
   `recommender/exposure.py::assert_other_retained`).
   `tests/test_lens.py::test_lens_other_excluded`,
-  `test_lens_other_is_not_penalised_like_unknown`, and
+  `test_lens_other_is_not_penalized_like_unknown`, and
   `tests/test_rank_protection.py` lock this in.
   **Correction, 2026-08-14 (#68):** this bullet claimed the position half before
   the code did it. The re-rank pinned only `UNKNOWN` slots, so a sourced `OTHER`
   artist could be pushed below a *lower-scoring* unknown one. The ranking was
-  changed to match the claim, and `test_lens_other_is_not_penalised_like_unknown`
+  changed to match the claim, and `test_lens_other_is_not_penalized_like_unknown`
   — which had asserted only that both boosts were `0.0`, and so stayed green
   throughout — now asserts the rank protection its name describes.
 
@@ -144,7 +144,7 @@ cache is personal/local. See `LICENSE` (data note) and `privacy-notes.md`.
 |------------|------|-------|
 | No inferred labels | auto | `tests/test_no_inference.py` |
 | 100% sourced labels | auto | `tests/test_provenance.py` |
-| Unknown never penalised | auto | `tests/test_unknown_first_class.py` |
+| Unknown never penalized | auto | `tests/test_unknown_first_class.py` |
 | Female-fronted distinct | auto | `tests/test_identity_model.py` |
 | Lens boost bounded, non-negative, OTHER excluded | auto | `tests/test_lens.py` |
 | Identity-ethics framing | review | this document, sign-off on change |

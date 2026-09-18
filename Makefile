@@ -267,7 +267,7 @@ clean: ## Remove build/tool caches (NOT your listening data — see `make forget
 	@# user-data directory (pipeline/paths.py) and this line stopped matching it.
 	@# It is kept so an old checkout is still tidied, and it is no longer
 	@# advertised as the deletion path — `make clean` deleting a person's real
-	@# listening history would also be the wrong behaviour for a target whose
+	@# listening history would also be the wrong behavior for a target whose
 	@# job is build artifacts.
 	rm -f data/*.db
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +

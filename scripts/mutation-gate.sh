@@ -2,7 +2,7 @@
 # Mutation-testing gate (CQ-47) over the two safety-critical modules:
 #
 #   * pipeline/identity.py   — sourced-never-inferred identity resolver
-#   * recommender/rerank.py  — boost-only / never-penalise values lens
+#   * recommender/rerank.py  — boost-only / never-penalize values lens
 #
 # For each module, cosmic-ray generates mutants, runs the FULL unit suite
 # against every one (subprocess per mutant — identical semantics to a real

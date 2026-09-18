@@ -77,7 +77,7 @@ def test_trans_and_intersex_labels_survive_end_to_end(
     assert (result.rerank_delta > 0) is boosted
 
 
-def test_unrecognised_qid_stays_unknown() -> None:
+def test_unrecognized_qid_stays_unknown() -> None:
     label = resolve_identity(
         [IdentityEvidence(SourceKind.WIKIDATA_P21, "Q999999999", "wd://x", "2026-05-31")]
     )
@@ -227,7 +227,7 @@ def test_local_correction_flag_requires_artist_statement_kind() -> None:
 # lines ran, not that anything asserted their results. The killable survivors
 # clustered in four places: source-priority order under conflict, the
 # deterministic confidence arithmetic, the evidence-filter loop, and the
-# defensive guards. The tests below pin those behaviours exactly. (The
+# defensive guards. The tests below pin those behaviors exactly. (The
 # remainder are equivalent mutants: enum `is` vs `==`, unreachable dict
 # defaults, sort-key transforms that preserve order, no-op rounding widths.)
 
@@ -239,7 +239,7 @@ def _ev(kind: SourceKind, value: str, citation: str = "c") -> IdentityEvidence:
 
 
 def test_wikidata_outranks_musicbrainz_on_conflict() -> None:
-    """Priority is behaviour, not decoration: WD beats MB when they disagree."""
+    """Priority is behavior, not decoration: WD beats MB when they disagree."""
     label = resolve_identity(
         [
             _ev(SourceKind.MUSICBRAINZ_GENDER, "male", "mb://x"),
@@ -356,7 +356,7 @@ def test_identity_evidence_is_immutable() -> None:
 
 
 def test_guard_accepts_artist_statement_which_sits_in_both_source_sets() -> None:
-    """ARTIST_STATEMENT belongs to BOTH permitted sets; the guard must honour
+    """ARTIST_STATEMENT belongs to BOTH permitted sets; the guard must honor
     the union (not a difference) of them."""
     assert_permitted_only(
         [

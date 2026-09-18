@@ -1,9 +1,9 @@
 """Hybrid recommender: combine collaborative + content, then apply the values lens.
 
 The base score is a convex blend ``alpha * collaborative + (1 - alpha) * content``,
-each signal min-max normalised across candidates so neither dominates by scale.
+each signal min-max normalized across candidates so neither dominates by scale.
 Optional, artist-scoped thumbs feedback applies a bounded nudge to that base
-score; it never reads or generalises across identity.
+score; it never reads or generalizes across identity.
 The values lens is then applied **boost-only** (see :mod:`recommender.rerank`),
 followed by an optional identity-blind serendipity/diversification pass over the
 movable candidates (see :mod:`recommender.diversify`). The full list is
@@ -52,7 +52,7 @@ from recommender.lens import VALUES_LENS, LensSpec
 from recommender.rerank import is_rank_protected, rerank, values_boost_for_artist
 
 
-def _normalise(value: float, peak: float) -> float:
+def _normalize(value: float, peak: float) -> float:
     return value / peak if peak > 0.0 else 0.0
 
 
@@ -90,7 +90,7 @@ def recommend(
     ``lens_strength`` ∈ [0, 1] controls the values lens; 0 = pure taste ranking.
     ``explore`` ∈ [0, 1] controls the serendipity/diversification pass (see
     :mod:`recommender.diversify`); 0 = pure relevance ranking (default,
-    unchanged behaviour — this is what the offline eval compares against the
+    unchanged behavior — this is what the offline eval compares against the
     popularity baseline), 1 = maximum tag-space diversity.
     ``feedbacks`` contains the listener's current per-artist votes. The bounded
     adjustment is part of the taste-side base score, before the values lens.
@@ -140,7 +140,7 @@ def recommend(
         artist = catalog[aid]
         c_res = collab.get(aid, CollabResult())
         t_res = content.get(aid, ContentResult())
-        base = alpha * _normalise(c_res.score, collab_peak) + (1 - alpha) * _normalise(
+        base = alpha * _normalize(c_res.score, collab_peak) + (1 - alpha) * _normalize(
             t_res.score, content_peak
         )
         base += feedback_adjustment(

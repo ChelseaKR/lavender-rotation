@@ -1,6 +1,6 @@
 """Privacy audit §C: no telemetry, and network egress confined to one place.
 
-These are source-level guarantees (DPIA: data-minimisation + purpose-limitation):
+These are source-level guarantees (DPIA: data-minimization + purpose-limitation):
 the listening data is local-first, so the core must not import analytics SDKs and
 must not open network connections anywhere except the explicit Last.fm/enrichment
 and Spotify-export client paths.

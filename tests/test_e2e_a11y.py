@@ -2,7 +2,7 @@
 
 The static checker (``app/a11y_check.py``) and the pa11y/axe renders cover the
 mechanical WCAG 2.2 AA subset. These specs graduate three judgment-call
-criteria to *observed behaviour* in a real browser engine:
+criteria to *observed behavior* in a real browser engine:
 
 * **Keyboard** (2.1.1 / 2.1.2 / 2.4.3 / 2.4.7): sequential Tab reaches every
   interactive element in DOM order with no trap, focus is always visible, the

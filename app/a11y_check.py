@@ -386,7 +386,7 @@ def audit(html: str) -> Report:
 def check_html(html: str) -> list[str]:
     """Return a list of accessibility violations (empty == passing).
 
-    Unchanged in behaviour and signature: it reports findings about the markup
+    Unchanged in behavior and signature: it reports findings about the markup
     it was handed, which is what a fragment-level caller wants. It deliberately
     does NOT apply the per-family floors — a floor is a claim about the audited
     *page*, and applying it to a fragment would make every unit test that checks

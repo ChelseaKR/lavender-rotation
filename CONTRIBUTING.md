@@ -124,7 +124,7 @@ identity label, a ranking signal, or the export egress.
 Every identity claim the tool shows already links back to its citation. When a why-card's
 provenance is wrong or stale, the honest fix is to correct it **at the source it came from** —
 never to quietly override it locally. Where a citation resolves to a known upstream edit surface
-(`recommender/upstream.py::upstream_edit_url`), the provenance list carries a labelled **"Fix at
+(`recommender/upstream.py::upstream_edit_url`), the provenance list carries a labeled **"Fix at
 source"** link next to it:
 
 - A Wikidata `P21` ("sex or gender") citation links to the entity's own page, anchored at the P21

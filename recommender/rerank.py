@@ -21,7 +21,7 @@ top-k boundary (:func:`recommender.exposure.assert_unknown_retained`,
 A boosted artist that rises has to pass *someone*, so position cannot be held
 for everyone at once while the lens still does anything. The artists it is not
 held for are **sourced men**: their score is untouched, their position can move
-down. That is this lens's value judgement, and ``VALUES_LENS.harms_note`` states
+down. That is this lens's value judgment, and ``VALUES_LENS.harms_note`` states
 it in those words rather than promising a protection that is arithmetically
 unavailable.
 
@@ -128,7 +128,7 @@ def rerank(
     boosted: list[Recommendation] = []
     for rec in base_order:
         delta = values_boost(rec, lens_strength, lens)
-        assert delta >= 0.0  # invariant: the lens never penalises
+        assert delta >= 0.0  # invariant: the lens never penalizes
         boosted.append(replace(rec, rerank_delta=delta))
 
     movable = sorted(

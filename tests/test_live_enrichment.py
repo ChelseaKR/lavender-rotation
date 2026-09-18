@@ -516,7 +516,7 @@ def test_entity_data_url_is_machine_readable_but_the_citation_is_not() -> None:
 @pytest.mark.parametrize(
     ("value", "expected"), [(SOLO_MBID, True), (SOLO_MBID.upper(), True), ("Boygenius", False)]
 )
-def test_an_artist_key_is_recognisable_as_an_mbid_or_a_name(value: str, expected: bool) -> None:
+def test_an_artist_key_is_recognizable_as_an_mbid_or_a_name(value: str, expected: bool) -> None:
     assert looks_like_mbid(value) is expected
 
 
@@ -602,7 +602,7 @@ def test_discovery_proposes_only_artists_the_listener_has_not_played() -> None:
     assert found[0].name == "Gamma"
 
 
-def test_an_artist_keyed_two_ways_is_still_recognised_as_known() -> None:
+def test_an_artist_keyed_two_ways_is_still_recognized_as_known() -> None:
     """The regression: a 462-play artist arrived MBID-keyed and looked brand new.
 
     Scrobbles gave a bare name, the similar-artists payload gave an MBID for the

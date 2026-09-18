@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Optional
 
 from pipeline.cache import DEFAULT_DB_PATH
-from pipeline.identity import normalise_asserted_orientation, normalise_asserted_value
+from pipeline.identity import normalize_asserted_orientation, normalize_asserted_value
 from pipeline.ingest import IdentityLabelChange
 from pipeline.models import SourceKind
 
@@ -211,12 +211,12 @@ def _same_claim(source_kind: str, proposed: str, observed: str) -> bool:
     except ValueError:
         kind = None
     if kind is not None:
-        proposed_gender = normalise_asserted_value(kind, proposed)
-        observed_gender = normalise_asserted_value(kind, observed)
+        proposed_gender = normalize_asserted_value(kind, proposed)
+        observed_gender = normalize_asserted_value(kind, observed)
         if proposed_gender is not None and observed_gender is not None:
             return proposed_gender is observed_gender
-        proposed_orientation = normalise_asserted_orientation(kind, proposed)
-        observed_orientation = normalise_asserted_orientation(kind, observed)
+        proposed_orientation = normalize_asserted_orientation(kind, proposed)
+        observed_orientation = normalize_asserted_orientation(kind, observed)
         if proposed_orientation is not None and observed_orientation is not None:
             return proposed_orientation is observed_orientation
     return proposed.strip().casefold() == observed.strip().casefold()

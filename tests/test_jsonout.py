@@ -670,7 +670,7 @@ def test_diff_output_validates_against_its_committed_schema(
 def test_a_refused_diff_is_a_document_on_stdout_not_a_sentence_on_stderr(
     capsys: pytest.CaptureFixture[str], two_runs: Path
 ) -> None:
-    """The behaviour every other ``--json`` surface promises in its own help text.
+    """The behavior every other ``--json`` surface promises in its own help text.
 
     Before this, ``diff --json`` printed the refusal to stderr and left stdout
     empty, so ``lavender diff --json | jq`` received nothing at all -- which a

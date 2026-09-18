@@ -81,7 +81,7 @@ def test_observability_panel_is_table_first_and_accessible(profile, catalog, sou
     assert html.count("<table>") >= 3
 
 
-def test_identity_is_text_not_colour_only(profile, catalog, source) -> None:
+def test_identity_is_text_not_color_only(profile, catalog, source) -> None:
     html = _html(profile, catalog, source)
     assert "Identity:" in html
     assert "unknown — surfaced on musical similarity alone" in html
@@ -99,8 +99,8 @@ def test_sources_render_as_links(profile, catalog, source) -> None:
 
 
 def test_fix_at_source_link_appears_for_individual_identity_sources(catalog) -> None:
-    """A sourced individual identity (wikidata/musicbrainz) gets a labelled
-    "Fix at source" link — descriptive text, never colour/icon alone."""
+    """A sourced individual identity (wikidata/musicbrainz) gets a labeled
+    "Fix at source" link — descriptive text, never color/icon alone."""
     recs = [
         _wrap_as_recommendation(catalog["mitski"], rank=1),  # wikidata-p21 + musicbrainz-gender
         _wrap_as_recommendation(catalog["snail-mail"], rank=2),  # musicbrainz-gender

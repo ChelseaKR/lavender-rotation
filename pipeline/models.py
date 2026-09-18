@@ -9,7 +9,7 @@ The README guardrails are enforced *here*, in the type system, not merely in tes
    trans women, explicitly: sourced self-identification is the only test, and the
    vocabulary deliberately contains no cis/trans distinction to draw.
 2. ``unknown`` is **first-class.** It is a real :class:`Gender` member and the
-   default for every artist. Downstream code must never penalise it; the re-rank
+   default for every artist. Downstream code must never penalize it; the re-rank
    layer is boost-only (see :mod:`recommender.rerank`).
 3. **"Female-fronted" is band-composition metadata**, kept distinct from any
    individual's gender. It is a *tri-state, sourced* property on
@@ -70,7 +70,7 @@ class Gender(enum.Enum):
 #: (:data:`recommender.lens.VALUES_LENS`) — it lives here, not in
 #: ``recommender``, to avoid a circular import (``recommender`` already depends
 #: on ``pipeline``). Note this is a *re-rank* concern, not an identity concern:
-#: ``UNKNOWN`` is deliberately absent here yet is never penalised — see
+#: ``UNKNOWN`` is deliberately absent here yet is never penalized — see
 #: :mod:`recommender.rerank`. ``Gender.OTHER``'s exclusion is likewise
 #: deliberate, not an oversight: it is a heterogeneous sourced bucket (intersex,
 #: third-gender, terms outside the common vocabulary) that does not map cleanly

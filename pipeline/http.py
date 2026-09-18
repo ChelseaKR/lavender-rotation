@@ -20,7 +20,7 @@ Three obligations this fetcher discharges on every call:
 * **Pace ourselves.** One request per second by default, via the same
   :class:`~pipeline.lastfm.RateLimiter` the Last.fm client uses.
 * **Ask once.** Every response is written to the local HTTP cache, so a re-run
-  costs nothing upstream. This is a courtesy requirement, not an optimisation.
+  costs nothing upstream. This is a courtesy requirement, not an optimization.
 """
 
 from __future__ import annotations

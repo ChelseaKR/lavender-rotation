@@ -2,7 +2,7 @@
 
 Two implementations of :class:`ScrobbleSource`:
 
-* :class:`LastfmClient` — the live HTTP client. It honours Last.fm's rate limit
+* :class:`LastfmClient` — the live HTTP client. It honors Last.fm's rate limit
   via :class:`RateLimiter` and caches every response in the local :class:`Cache`
   so repeat runs do not re-hit the API (legal/ops requirement). The actual
   network calls are excluded from unit coverage; the parsing they feed is tested.
