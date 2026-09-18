@@ -152,7 +152,7 @@ def parse_musicbrainz_gender(
         return None
     value = gender.strip().lower()
     if value not in _MB_GENDER_ALLOWED:
-        return None  # unrecognised → unknown, never guessed
+        return None  # unrecognized → unknown, never guessed
     return IdentityEvidence(
         kind=SourceKind.MUSICBRAINZ_GENDER,
         value=value,
@@ -169,8 +169,8 @@ def _first_claim_qid(
     Shared by P21 and P91 (ADR 0011): the document shape is identical and the
     two axes differ only in which property is read and what kind of claim the
     result is. Only the *first* statement is taken — a person with several
-    recorded values is not something to summarise, and the resolver's job is to
-    normalise one asserted value, not to reconcile a list.
+    recorded values is not something to summarize, and the resolver's job is to
+    normalize one asserted value, not to reconcile a list.
     """
     if not isinstance(payload, dict):
         raise ValueError("wikidata payload must be an object")

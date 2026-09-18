@@ -192,7 +192,7 @@ def test_discogs_no_fronts_yields_no_composition_evidence() -> None:
 # no handler anywhere. So one shape change upstream — or one such response
 # already sitting in a local cache — took down `lavender recommend --user` with
 # a traceback rather than degrading to the "empty answer is safe by
-# construction" behaviour `CachedLastfm`'s docstring promises.
+# construction" behavior `CachedLastfm`'s docstring promises.
 
 
 @pytest.mark.parametrize(
@@ -231,7 +231,7 @@ def test_a_single_item_collection_still_parses_as_one_item() -> None:
 # --- The 200-with-an-error-body envelope ------------------------------------
 
 
-def test_an_error_envelope_is_recognised_and_redacted() -> None:
+def test_an_error_envelope_is_recognized_and_redacted() -> None:
     """Last.fm signals rate-limit exhaustion with HTTP 200 and this body."""
     from pipeline.lastfm import api_error
 

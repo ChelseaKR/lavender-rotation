@@ -129,7 +129,7 @@ def test_rank_shift_does_not_misattribute_boost_as_movement(profile, catalog, so
 # after `base_rank` was recorded, and the rank-shift sentence read
 # `rank - base_rank` and named the lens for all of it. Leaving these two at
 # their defaults is what let the guards below pass while the sentence was false
-# (#113), so every one of them is parametrised over both.
+# (#113), so every one of them is parametrized over both.
 _EXPLORE_GRID = (0.0, 0.25, 0.5, 0.75, 1.0)
 
 

@@ -60,8 +60,8 @@ TOKEN_URL = "https://auth.tidal.com/v1/oauth2/token"  # noqa: S105 - public endp
 API_ROOT = "https://openapi.tidal.com/v2"
 #: Minimal scopes: read who the user is, and write their own playlists.
 DEFAULT_SCOPES: tuple[str, ...] = ("user.read", "playlists.write")
-#: TIDAL's catalogue is licensed per market, so every catalogue call is scoped
-#: to a country. Not a user location signal: it selects a catalogue, and the
+#: TIDAL's catalog is licensed per market, so every catalog call is scoped
+#: to a country. Not a user location signal: it selects a catalog, and the
 #: caller may pass whatever market it wants searched.
 DEFAULT_COUNTRY = "US"
 #: Conservative batch size for playlist item additions.
@@ -274,7 +274,7 @@ class TidalClient:
     def find_track_id(self, query: str) -> Optional[str]:
         """Search for a track and return the top match's id, or ``None``.
 
-        A miss is a legitimate outcome — the catalogue genuinely may not carry a
+        A miss is a legitimate outcome — the catalog genuinely may not carry a
         given artist in a given market — so this returns ``None`` and the caller
         reports the artist as unmatched. It is not an error.
         """

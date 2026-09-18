@@ -63,7 +63,7 @@ def test_wikidata_p91_gets_an_edit_link_anchored_at_the_orientation_statement() 
     """The kind most likely to be wrong was the one kind with no way to fix it.
 
     ADR 0011 admits P91 for coverage while saying it is "more often a
-    biographer's characterisation than someone's own words". `upstream_edit_url`
+    biographer's characterization than someone's own words". `upstream_edit_url`
     handled `wikidata-p21` and the two MusicBrainz kinds and fell through to
     `None` for P91, so EXP-05's fix-at-source affordance was offered for every
     claim except that one.

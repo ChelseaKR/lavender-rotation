@@ -243,7 +243,7 @@ def test_three_sourced_front_genders_are_all_named_in_a_stable_order() -> None:
     assert "fronted by a sourced woman, a sourced nonbinary artist, and a sourced man" in one_order
 
 
-def test_repeated_front_gender_is_pluralised_not_repeated() -> None:
+def test_repeated_front_gender_is_pluralized_not_repeated() -> None:
     phrase = artist_identity_phrase(_band("two-nb", Gender.NONBINARY, Gender.NONBINARY))
     assert "sourced nonbinary artists" in phrase
     assert "a sourced nonbinary artist," not in phrase

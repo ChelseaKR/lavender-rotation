@@ -68,7 +68,7 @@ identity is *sourced, never inferred*:
 
 | Stage                    | Target                                                            |
 |--------------------------|------------------------------------------------------------------|
-| Acknowledgement & triage | **≤ 72 hours** from receipt (volunteer project — please be patient) |
+| Acknowledgment & triage | **≤ 72 hours** from receipt (volunteer project — please be patient) |
 | Severity assessment      | shared with the triage reply                                      |
 | Fix or mitigation plan   | communicated after triage, prioritized by severity                |
 | Coordinated disclosure   | by mutual agreement; default embargo up to 90 days                |

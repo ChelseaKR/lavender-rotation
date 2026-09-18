@@ -12,7 +12,7 @@ not exist, three ways:
    attribute (``genre``, ``tags``, ``voice``, ``image`` …) on any path that can
    reach an identity label.
 
-Plus a behavioural proof: an artist with a feminine-coded name and a
+Plus a behavioral proof: an artist with a feminine-coded name and a
 "female vocalists" tag, but no identity evidence, resolves to UNKNOWN.
 
 Mapped to the merge-blocking metric: *Inferred identity labels = 0*.
@@ -126,7 +126,7 @@ LABEL_READING_PACKAGES = ("recommender", "app", "export")
 #: The one legitimate reason a scanned function reads a forbidden name: an
 #: ``Artist``'s ``tags`` are *content/catalog* data that feeds the content-based
 #: recommender, and they pass through ingest, the demo fixture, the Last.fm
-#: parser, and (de)serialisation. Each entry is qualified ``module.function`` and
+#: parser, and (de)serialization. Each entry is qualified ``module.function`` and
 #: must name a function that exists. Being listed here is not a waiver — every
 #: one of these is additionally held to :func:`tainted_identity_constructions`,
 #: which is stricter than the blanket scan the rest of the module gets.
@@ -144,8 +144,8 @@ TAG_HANDLING_EXEMPTIONS: dict[str, str] = {
     ),
     "pipeline.lastfm.FixtureLastfm.__init__": "stores the fixture's per-artist content tags",
     "pipeline.lastfm.parse_top_tags": "parses Last.fm's top-tags payload (content signal only)",
-    "pipeline.serde.artist_to_dict": "serialises Artist.tags to the cache row",
-    "pipeline.serde.artist_from_dict": "deserialises Artist.tags from the cache row",
+    "pipeline.serde.artist_to_dict": "serializes Artist.tags to the cache row",
+    "pipeline.serde.artist_from_dict": "deserializes Artist.tags from the cache row",
 }
 
 
@@ -171,7 +171,7 @@ def test_resolver_signature_takes_nothing_forbidden() -> None:
     assert params == {"evidence"}, params
     # And the evidence record itself exposes no forbidden field. `is_local_correction`
     # (FIX-10) is a provenance flag, not a discriminator — it never participates in
-    # gender mapping, only in how a citation is *labelled* once resolved.
+    # gender mapping, only in how a citation is *labeled* once resolved.
     ev_fields = set(IdentityEvidence.__dataclass_fields__)
     assert ev_fields == {
         "kind",

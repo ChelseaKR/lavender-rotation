@@ -62,10 +62,10 @@ class LensSpec:
 
     * ``aligned_genders`` — the *sourced* genders this lens treats as aligned.
     * ``max_boost`` — the largest non-negative boost the lens can add, at full
-      strength, as a fraction of the (roughly ``[0, 1]``-normalised) score scale.
+      strength, as a fraction of the (roughly ``[0, 1]``-normalized) score scale.
     * ``rationale`` — manifest text answering "what does this lens boost, and
       why" for humans (surfaced in the UI; see :mod:`app.dashboard`).
-    * ``harms_note`` — the lens's own honest account of the value judgement it
+    * ``harms_note`` — the lens's own honest account of the value judgment it
       makes and the harm it could cause if misapplied.
     """
 
@@ -119,7 +119,7 @@ class LensSpec:
         people" from quietly becoming "everyone queer": a sourced queer claim
         only aligns an artist whose sourced gender is in the gate. An artist of
         unknown gender is not gated *into* the lens — we cannot establish they
-        are a woman — and, as everywhere else, is never penalised for it: they
+        are a woman — and, as everywhere else, is never penalized for it: they
         keep their pure-taste score and their rank-protected position.
         """
         if not self.queer_gate_genders:
@@ -151,11 +151,11 @@ VALUES_LENS = LensSpec(
         "Boosts artists whose gender is *sourced* (never inferred) as a woman or "
         "nonbinary person, and bands whose sourced lineup is fronted by someone "
         "whose own sourced gender is one of those. A band fronted only by a "
-        "sourced nonbinary artist is boosted as such; it is never relabelled "
+        "sourced nonbinary artist is boosted as such; it is never relabeled "
         "'female-fronted' to get there. "
         "Purpose: counteract the well-documented under-exposure of women and "
         "nonbinary musicians in popularity-driven recommendation, without ever "
-        "penalising anyone — including artists whose identity is unknown or "
+        "penalizing anyone — including artists whose identity is unknown or "
         "unsourced, who always keep their exact base score. Boost is bounded to "
         "0.5 (of a ~[0, 1] score scale) at full strength so taste signal always "
         "still matters; a lens strength slider in [0, 1] lets a listener dial the "
@@ -185,7 +185,7 @@ VALUES_LENS = LensSpec(
         "to pass someone, and everyone else is held, so this lens's whole "
         "re-allocation is exposure moving from sourced men to sourced women and "
         "nonbinary artists. Their scores are untouched; their list positions "
-        "can move down. That is the value judgement, and this note states it "
+        "can move down. That is the value judgment, and this note states it "
         "rather than denying it: until #68 this paragraph promised that nobody "
         "unaligned was ever down-ranked or treated worse than an "
         "unknown-identity artist, and the ranking did not do that. "
@@ -213,7 +213,7 @@ VALUES_LENS = LensSpec(
 #:
 #: Sourced men are out of scope by design, not by oversight — a gay man is not
 #: what "queer women and nonbinary people" names. Nothing about that is a
-#: judgement on him, and like every other unaligned artist he keeps his exact
+#: judgment on him, and like every other unaligned artist he keeps his exact
 #: score.
 QUEER_LENS = LensSpec(
     name="Sourced queer women & nonbinary artists",
@@ -228,7 +228,7 @@ QUEER_LENS = LensSpec(
         "self-identification. Every claim is cited and shown with the raw value "
         "its source asserted, and the card says whether the artist stated it or a "
         "registry recorded it — Wikidata's P91 is admitted for coverage but is "
-        "more often a biographer's characterisation than someone's own words. "
+        "more often a biographer's characterization than someone's own words. "
         "Asexuality and demisexuality are recorded and not boosted: whether the "
         "ace spectrum sits under a queer lens is contested among ace people, and "
         "answering that silently would speak for them (revisable, ADR 0011)."
@@ -248,7 +248,7 @@ QUEER_LENS = LensSpec(
         "tests/test_export_schema.py), it is local-only, and every claim is "
         "correctable at its source. COVERAGE SKEW: sourced queerness skews "
         "toward the already-famous, Anglophone, living and out, which is the "
-        "opposite of who a discovery tool should favour — so this lens boosts "
+        "opposite of who a discovery tool should favor — so this lens boosts "
         "rather than filters, and a listener seeing few picks is looking at a "
         "gap in the world's records, not at the world."
     ),

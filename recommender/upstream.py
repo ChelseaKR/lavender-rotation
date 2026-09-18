@@ -10,7 +10,7 @@ open in their own browser.
 Guardrails, mirrored from the identity invariant (README / CONTRIBUTING):
 
 * **String parsing only, no network.** This module never fetches anything —
-  it only recognises the shape of a citation URL this project already
+  it only recognizes the shape of a citation URL this project already
   produces and rewrites it to the corresponding edit surface.
 * **Never an auto-edit or API-write link.** Only the ordinary, human-facing
   edit UI is linked — Wikidata's own page (anchored at the relevant
@@ -59,12 +59,12 @@ def upstream_edit_url(source_kind: str, citation: str) -> str | None:
 
     * ``wikidata-p21`` — the entity's own page, anchored at the P21 ("sex or
       gender") statement: ``https://www.wikidata.org/wiki/{Qid}#P21``. This is
-      the safe choice: Wikidata does not honour a query-string that opens an
+      the safe choice: Wikidata does not honor a query-string that opens an
       edit form pre-filled for a specific claim, so this anchors the reader at
       the right statement on the entity page instead of fabricating one.
     * ``wikidata-p91`` — the same entity page, anchored at the P91 ("sexual
       orientation") statement (#92). ADR 0011 admits P91 for coverage while
-      noting it is more often a biographer's characterisation than the artist's
+      noting it is more often a biographer's characterization than the artist's
       own words, which makes it the citation here most likely to *need*
       correcting — and it was the one kind with no edit link at all, so the
       fix-at-source affordance existed for every claim except the one most

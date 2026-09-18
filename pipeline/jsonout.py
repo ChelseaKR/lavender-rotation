@@ -170,7 +170,7 @@ def _picks(recommendations: Sequence[Any]) -> list[dict[str, Any]]:
 
     Shared by ``recommend`` and ``report`` so the two cannot describe the same
     ranking differently. ``report`` renders an HTML page from exactly these
-    recommendations, and a second, drifting serialisation of them is how the
+    recommendations, and a second, drifting serialization of them is how the
     dashboard came to show one ranking while measuring another (see
     ``app/observability.py``).
     """
@@ -439,7 +439,7 @@ def eval_document(
     code said whether the run *passed*, and the reasons it did not lived in
     ``FAIL:`` sentences on stderr. Both are here, named.
 
-    Two fields carry the honesty this command already practises in prose:
+    Two fields carry the honesty this command already practices in prose:
 
     * ``regressed_vs_baseline`` is ``null`` when no baseline file was present.
       ``false`` would report that nothing regressed, which is a claim about a
@@ -511,7 +511,7 @@ def export_document(
     """One ``export`` run: the portable file, wrapped, plus metadata.
 
     ``content`` is verbatim whatever the chosen format rendered. Wrapping rather
-    than re-serialising is the point: the envelope cannot carry a field the
+    than re-serializing is the point: the envelope cannot carry a field the
     format does not already carry, so the export contract is unchanged by the
     existence of this document.
     """

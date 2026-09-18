@@ -95,7 +95,7 @@ Discogs.
   (`recommender/eval.py::ground_truth` has the same `id or name` fallback).
   Correctness debt that grows with FIX-01/FIX-02.
 - **Shape of work:** An `ArtistKey` resolution layer in `pipeline/`: MBID
-  first; explicit `name:<normalised>` fallback namespace; an alias table in
+  first; explicit `name:<normalized>` fallback namespace; an alias table in
   the cache (`pipeline/cache.py` schema addition) recording merges with
   provenance; a backfill pass that upgrades name-keys to MBIDs when
   enrichment discovers them. Never merge on fuzzy heuristics without a
@@ -291,7 +291,7 @@ examples.
 - **Why it matters:** The guardrails are the product. Current tests are strong
   but example-based; Hypothesis can search the input space for the exact edge
   the team didn't think of (e.g. serde round-trips of exotic-but-legal labels,
-  rerank monotonicity, resolver behaviour on arbitrary evidence multisets).
+  rerank monotonicity, resolver behavior on arbitrary evidence multisets).
 - **Shape of work:** Add `hypothesis` to the dev extra
   (`pyproject.toml`); strategies for `Source`/`IdentityEvidence`/`Artist`;
   properties: (1) `resolve_identity` never returns non-unknown without ≥1
@@ -337,7 +337,7 @@ either use or drop the declared numpy dependency.
   **nowhere** (grep-verified) — dead supply-chain surface that pip-audit and
   reviewers still pay for.
 - **Shape of work:** Benchmark first (a `make bench` with a generated 5k-artist
-  world); if needed, vectorise the tag-cosine with numpy (justifying the dep)
+  world); if needed, vectorize the tag-cosine with numpy (justifying the dep)
   or drop numpy from `[project.dependencies]`. Candidate-set pruning
   (top-N per seed) in `collaborative_scores`. Record the decision as an ADR
   bullet in ROADMAP's build log per the Documentation Standard.

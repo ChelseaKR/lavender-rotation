@@ -12,9 +12,9 @@ Accessibility decisions baked in here:
   scrolls horizontally at 320 px (reflow, verified by the Playwright specs in
   ``tests/test_e2e_a11y.py``),
 * a skip link to ``<main>`` and proper landmarks/heading order,
-* identity is conveyed as **text**, never colour alone,
+* identity is conveyed as **text**, never color alone,
 * the score "chart" ships with a real ``<table>`` data equivalent,
-* upstream correction links are labelled text links, never icon/colour cues.
+* upstream correction links are labeled text links, never icon/color cues.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ def _fix_at_source_link(item: ProvenanceItem) -> str:
 
 
 def _conflict_html(why: WhyThisArtist, aid: str) -> str:
-    """Render source disagreement as text and structure, never colour alone."""
+    """Render source disagreement as text and structure, never color alone."""
     if not why.conflict_note:
         return ""
     return (
@@ -288,7 +288,7 @@ def _exposure_panel_html(panel: dict[str, object] | None) -> str:
 
 
 #: Explicit per-scheme design tokens (BUG-1 fix). The old stylesheet declared
-#: ``color-scheme: light dark`` with **no** explicit colours, so under an OS dark
+#: ``color-scheme: light dark`` with **no** explicit colors, so under an OS dark
 #: theme every pair fell back to UA defaults and produced real axe contrast
 #: failures. Both palettes below are unit-tested against WCAG 2.2 relative
 #: luminance in ``tests/test_contrast.py`` (merge-blocking); the ratios in the
@@ -340,8 +340,8 @@ body {{ font-family: system-ui, sans-serif; max-width: 70ch; margin: 0 auto; pad
 a {{ color: var(--link); }}
 .card {{ border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin: 1rem 0; }}
 .identity {{ font-weight: 600; }}
-.identity::before {{ content: "\\25CF  "; }}  /* glyph paired with text, not colour-only;
-                                                inherits --text, never colour-only meaning */
+.identity::before {{ content: "\\25CF  "; }}  /* glyph paired with text, not color-only;
+                                                inherits --text, never color-only meaning */
 .conflict {{ border: 2px dashed var(--border); border-radius: 6px;
              padding: 0.5rem 0.75rem; margin: 0.5rem 0; }}
 .conflict-heading {{ font-weight: 700; margin: 0 0 0.25rem; }}

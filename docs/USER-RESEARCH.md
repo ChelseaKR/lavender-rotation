@@ -185,7 +185,7 @@ Full citation list and the high-stakes cross-checks are in
 - **Values today.** The re-rank is **boost-only and bounded** — an unknown-identity artist's score is invariant to lens strength and is *never dropped*; the base score is taste-only (popularity is **not** a hybrid input), so an obscure good match can outrank a famous one. *(unknown-first-class + popularity-debiasing — [shipped])*
 - **Gets stuck.** Because her identity is "unknown," she gets no values *boost*, so in a high-lens run she can still be out-ordered by sourced-women — surfaced, but lower. The system is fair-by-construction yet she'd love a path to *become* sourced.
 - **Wants next.** A self-serve way to add a cited self-statement (which would let her be correctly boosted if she's a woman/nonbinary); reassurance, in the UI, that "unknown" didn't cost her the slot.
-- **Adopts if.** Thin metadata never silently buries her. **Walks if.** "Unknown" behaves like a soft penalty in practice. *(self-statement intake — [new]; unknown-never-penalised — [shipped])*
+- **Adopts if.** Thin metadata never silently buries her. **Walks if.** "Unknown" behaves like a soft penalty in practice. *(self-statement intake — [new]; unknown-never-penalized — [shipped])*
 
 #### B4 — Jonas, MusicBrainz/Wikidata steward
 - **Goal.** See the open data he curates consumed faithfully — attributed, rate-limited, and not turned into something harmful.
@@ -214,7 +214,7 @@ Full citation list and the high-stakes cross-checks are in
 
 #### D1 — Dr. Okonkwo, representation/ethics reviewer
 - **Goal.** Confirm the project is genuinely non-essentialist and that "unknown" is handled with respect, not as a failure state.
-- **Values today.** The identity-data-ethics doc (permitted sources, no-inference policy, trans-inclusion QID map, correctability); the fairness doc's representational-harm findings; unknown-never-penalised proven in tests; "female-fronted" kept distinct from any member's gender (tri-state, sourced). *(audit docs + tests — [shipped])*
+- **Values today.** The identity-data-ethics doc (permitted sources, no-inference policy, trans-inclusion QID map, correctability); the fairness doc's representational-harm findings; unknown-never-penalized proven in tests; "female-fronted" kept distinct from any member's gender (tri-state, sourced). *(audit docs + tests — [shipped])*
 - **Gets stuck.** Trans, intersex, and third-gender support is *asserted in prose and the QID map* but he wants each path **visibly exercised end-to-end** like non-binary already is; he also wants the "unknown is normal" stance to be visible to *users*, not just true in code.
 - **Wants next.** End-to-end tests/fixtures for trans and intersex artists mirroring the non-binary one; a user-facing framing that states unknown is expected and non-pejorative; a periodic representation re-review tied to source-schema changes.
 - **Adopts if.** Every identity path is demonstrated, not just permitted. **Walks if.** Inclusion is documented but only non-binary is actually tested. *(deepen identity tests — [partial]; user-facing unknown framing — [new])*

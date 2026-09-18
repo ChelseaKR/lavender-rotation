@@ -42,7 +42,7 @@ def test_lens_other_excluded() -> None:
     assert Gender.OTHER not in VALUES_LENS.aligned_genders
 
 
-def test_lens_other_is_not_penalised_like_unknown() -> None:
+def test_lens_other_is_not_penalized_like_unknown() -> None:
     """OTHER, like UNKNOWN, is a re-rank non-event — in score *and* in position.
 
     This test used to assert only ``boost(other) == boost(unknown) == 0.0``,

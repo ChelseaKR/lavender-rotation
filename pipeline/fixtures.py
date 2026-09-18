@@ -36,7 +36,7 @@ Every builder returns ``(username, scrobbles, catalog, source)`` — the same
 shape ``pipeline.demo`` already yields to ``recommender.eval.evaluate`` — with
 a nonempty temporal test split and at least one genuine ground-truth positive.
 None of these four are tuned to make the hybrid win; only :func:`indie_tuned_world`
-carries that caveat, and it is labelled as such in ``ALL_WORLDS``.
+carries that caveat, and it is labeled as such in ``ALL_WORLDS``.
 """
 
 from __future__ import annotations

@@ -63,7 +63,7 @@ def test_no_evidence_means_unknown_on_both_halves() -> None:
     assert queer.is_known is False
 
 
-def test_an_unrecognised_statement_contributes_nothing() -> None:
+def test_an_unrecognized_statement_contributes_nothing() -> None:
     queer = resolve_queer_identity([ev(SourceKind.ARTIST_STATEMENT, "it's complicated")])
     assert queer.orientation is Orientation.UNKNOWN
 
@@ -201,7 +201,7 @@ def test_a_nonbinary_artist_aligns_on_gender_alone() -> None:
     assert QUEER_LENS.aligned(artist) is True
 
 
-def test_a_queer_man_is_out_of_scope_not_penalised() -> None:
+def test_a_queer_man_is_out_of_scope_not_penalized() -> None:
     """The lens is 'queer women and nonbinary people'; scope is stated, not hidden."""
     evidence = [
         ev(SourceKind.WIKIDATA_P21, "Q6581097"),  # male
@@ -283,7 +283,7 @@ def test_the_chosen_lens_actually_reaches_the_ranking() -> None:
 
 
 def test_the_default_lens_still_ranks_exactly_as_before() -> None:
-    """The threading must not have changed the shipped lens's behaviour."""
+    """The threading must not have changed the shipped lens's behavior."""
     from pipeline.lastfm import FixtureLastfm
     from pipeline.models import ListeningProfile
     from recommender.hybrid import recommend

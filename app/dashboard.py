@@ -8,8 +8,8 @@ Streamlit script re-runs top to bottom on every interaction, and holding the
 cache connection a live source needs across those re-runs is a change to make
 deliberately rather than as a side effect of wiring ingest.
 
-Accessibility: the values lens is a labelled, always-visible, explained slider;
-identity is shown as text + glyph (never colour alone); the score chart is paired
+Accessibility: the values lens is a labeled, always-visible, explained slider;
+identity is shown as text + glyph (never color alone); the score chart is paired
 with a data table; sources render as real links. The committed static render
 (:mod:`app.build_static`) carries the same semantics for the automated a11y gate.
 
@@ -299,7 +299,7 @@ def main() -> None:  # pragma: no cover - exercised via the live Streamlit runti
             "bands whose sourced lineup is fronted by one of them. Each "
             "front-person's gender is shown as their source stated it. The lens "
             "only ever boosts — it never lowers anyone's score, and never "
-            "penalises unknown."
+            "penalizes unknown."
         ),
     )
     st.caption(f"Active lens: **{VALUES_LENS.name}**")

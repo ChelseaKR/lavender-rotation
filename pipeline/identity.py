@@ -42,7 +42,7 @@ from pipeline.models import (
 # Maps the *raw values a permitted source asserts* onto our self-ID vocabulary.
 # Trans women are women; trans men are men. Values we cannot responsibly map
 # (e.g. MusicBrainz "Not applicable", an unknown QID) are absent here and thus
-# contribute no gender — leaving the label UNKNOWN. This is a *normalisation*
+# contribute no gender — leaving the label UNKNOWN. This is a *normalization*
 # table for sourced claims, never an inference rule.
 _FREEFORM_VOCAB: dict[str, Gender] = {
     "woman": Gender.WOMAN,
@@ -90,7 +90,7 @@ _ORIENTATION_QID_VOCAB: dict[str, Orientation] = {
     "Q1035954": Orientation.HETEROSEXUAL,  # heterosexuality
 }
 # What an artist's own words map to. Anything absent contributes nothing —
-# there is no fallback that turns an unrecognised phrase into an orientation.
+# there is no fallback that turns an unrecognized phrase into an orientation.
 _ORIENTATION_FREEFORM_VOCAB: dict[str, Orientation] = {
     "lesbian": Orientation.LESBIAN,
     "gay": Orientation.GAY,
@@ -133,7 +133,7 @@ _SOURCE_PRIORITY: dict[SourceKind, int] = {
     SourceKind.WIKIDATA_P21: 2,
     # P91 sits where P21 does — below the artist's own words, and for the same
     # reason. It is admitted for coverage (ADR 0011) while being, more often
-    # than P21 is, a biographer's characterisation rather than a self-statement,
+    # than P21 is, a biographer's characterization rather than a self-statement,
     # which is why the why-card renders the two differently.
     SourceKind.WIKIDATA_P91: 2,
     SourceKind.MUSICBRAINZ_GENDER: 1,
@@ -257,7 +257,7 @@ class IdentityEvidence:
 
 
 def _map_value(kind: SourceKind, value: str) -> Optional[Gender]:
-    """Normalise one sourced claim to the controlled vocabulary, or ``None``."""
+    """Normalize one sourced claim to the controlled vocabulary, or ``None``."""
     raw = value.strip()
     if kind is SourceKind.WIKIDATA_P21:
         return _WIKIDATA_QID_VOCAB.get(raw)
@@ -275,7 +275,7 @@ def accepted_gender_values() -> tuple[str, ...]:
     return tuple(sorted(_FREEFORM_VOCAB) + sorted(_WIKIDATA_QID_VOCAB))
 
 
-def normalise_asserted_value(kind: SourceKind, value: str) -> Optional[Gender]:
+def normalize_asserted_value(kind: SourceKind, value: str) -> Optional[Gender]:
     """Public name for :func:`_map_value` — what gender a raw asserted value means.
 
     Callers outside the resolver need this to compare two *asserted* values
@@ -288,8 +288,8 @@ def normalise_asserted_value(kind: SourceKind, value: str) -> Optional[Gender]:
     return _map_value(kind, value)
 
 
-def normalise_asserted_orientation(kind: SourceKind, value: str) -> Optional[Orientation]:
-    """The orientation sibling of :func:`normalise_asserted_value`.
+def normalize_asserted_orientation(kind: SourceKind, value: str) -> Optional[Orientation]:
+    """The orientation sibling of :func:`normalize_asserted_value`.
 
     Same job on the second axis (ADR 0011): decide whether two *asserted* values
     state the same thing without re-implementing the vocabulary. ``"lesbian"``
@@ -299,7 +299,7 @@ def normalise_asserted_orientation(kind: SourceKind, value: str) -> Optional[Ori
     — never a guess, and never a widening of one orientation into another.
 
     Defined here rather than beside :func:`_map_orientation` below because the
-    public normalisers belong together; the private mapper it delegates to is
+    public normalizers belong together; the private mapper it delegates to is
     declared later in the module and resolved at call time.
     """
     return _map_orientation(kind, value)
@@ -374,7 +374,7 @@ def _compute_confidence(
 
 
 def _map_orientation(kind: SourceKind, value: str) -> Optional[Orientation]:
-    """Normalise one sourced orientation claim, or ``None``. Never a guess."""
+    """Normalize one sourced orientation claim, or ``None``. Never a guess."""
     raw = value.strip()
     if kind is SourceKind.WIKIDATA_P91:
         return _ORIENTATION_QID_VOCAB.get(raw)

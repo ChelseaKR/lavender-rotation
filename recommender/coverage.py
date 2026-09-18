@@ -9,7 +9,7 @@ so a guarantee that is *mechanically true in code* (unknown is never down-ranked
 never dropped) is also **legible** in the product.
 
 Two framing rules are baked in so the readout can never curdle into a scorecard
-that pathologises the common case:
+that pathologizes the common case:
 
 * **Unknown is first-class.** It is described as "surfaced on musical similarity
   alone" — a normal, expected outcome — never a gap, a miss, or a failure. Source

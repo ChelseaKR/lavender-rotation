@@ -1,4 +1,4 @@
-"""(De)serialisation of domain models to/from plain JSON-able dicts.
+"""(De)serialization of domain models to/from plain JSON-able dicts.
 
 Used by the cache and by fixtures. Enums round-trip via their ``.value``; the
 model invariants re-run on the way back in, so a corrupted cache row that would

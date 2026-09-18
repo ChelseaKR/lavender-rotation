@@ -165,12 +165,12 @@ def test_assert_unknown_retained_detects_a_dropped_unknown() -> None:
         assert_unknown_retained({0.0: base, 1.0: boosted}, k=2)
 
 
-def test_assert_unknown_retained_detects_a_penalised_unknown() -> None:
+def test_assert_unknown_retained_detects_a_penalized_unknown() -> None:
     unknown = make_artist("mystery", gender=Gender.UNKNOWN)
     base = [_rec(unknown, 0.5)]
-    penalised = [_rec(unknown, 0.3)]  # score lowered by the (mis-implemented) lens
+    penalized = [_rec(unknown, 0.3)]  # score lowered by the (mis-implemented) lens
     with pytest.raises(FairnessAssertionError):
-        assert_unknown_retained({0.0: base, 1.0: penalised}, k=1)
+        assert_unknown_retained({0.0: base, 1.0: penalized}, k=1)
 
 
 def test_retention_at_k_detects_rank_loss_hidden_by_full_catalog_presence() -> None:
@@ -200,7 +200,7 @@ def test_retention_is_unmeasured_when_no_unknown_artists_present() -> None:
     """An absent segment has no retention, and must not be scored as a perfect one.
 
     This test previously asserted ``{"0.00": 1.0, "1.00": 1.0}`` -- it pinned the defect
-    as intended behaviour. A retention of 1.0 is the strongest possible form of the claim
+    as intended behavior. A retention of 1.0 is the strongest possible form of the claim
     "no unknown-identity artist lost score or rank", and it was being emitted for a world
     where no unknown-identity artist existed to lose anything. `None` is the honest value,
     and `segment_base_count` is the denominator that lets a reader tell the two apart.
@@ -265,7 +265,7 @@ def test_rank_shift_for_an_absent_segment_is_not_reported_as_no_movement() -> No
 
 
 # -- rank shift (honest re-ordering, no score penalty) -----------------------
-def test_rank_shift_moves_aligned_up_without_penalising_unknown(profile, catalog, source) -> None:
+def test_rank_shift_moves_aligned_up_without_penalizing_unknown(profile, catalog, source) -> None:
     base = recommend(profile, catalog, source, k=len(catalog), lens_strength=0.0)
     boosted = recommend(profile, catalog, source, k=len(catalog), lens_strength=1.0)
     shift = rank_shift_by_segment(base, boosted)

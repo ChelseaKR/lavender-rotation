@@ -52,7 +52,7 @@ the historical backlog below is not mistaken for open committed work.
 ## 1. Framing — how this complements the implementation roadmap
 
 `docs/ROADMAP.md` answers *"what to build and how to prove it's correct."* It already
-encodes the hard guarantees (no-inference test, unknown-never-penalised, provenance,
+encodes the hard guarantees (no-inference test, unknown-never-penalized, provenance,
 beats-popularity eval, axe=0) and the MoSCoW scope. What it does **not** carry is the
 *external evidence* that justifies the product's premise and the *user-/artist-facing*
 gaps between "true in code" and "visible in the product." This roadmap fills exactly

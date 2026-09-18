@@ -675,7 +675,7 @@ def test_diff_output_validates_against_its_committed_schema(
 def test_a_refused_diff_is_a_document_on_stdout_not_a_sentence_on_stderr(
     capsys: pytest.CaptureFixture[str], two_runs: Path
 ) -> None:
-    """The behaviour every other ``--json`` surface promises in its own help text.
+    """The behavior every other ``--json`` surface promises in its own help text.
 
     Before this, ``diff --json`` printed the refusal to stderr and left stdout
     empty, so ``lavender diff --json | jq`` received nothing at all -- which a
@@ -765,7 +765,7 @@ def test_report_output_validates_and_still_writes_the_page(
 def test_report_and_recommend_describe_the_same_ranking(
     capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
-    """One serialisation of a pick list, not two that can drift.
+    """One serialization of a pick list, not two that can drift.
 
     The dashboard once showed one ranking while measuring another; both verbs
     build their picks through the same function so that cannot recur here.

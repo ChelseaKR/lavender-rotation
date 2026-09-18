@@ -16,7 +16,7 @@ kept because each records ground the other did not cover.
 >
 > - **P0**, the per-axis `RefreshOutcome` fix (`_preserve_unanswered_axes`).
 >   Unique to this clone, and this branch's own subject.
-> - **The reconcile half of #93**, `normalise_asserted_orientation` and
+> - **The reconcile half of #93**, `normalize_asserted_orientation` and
 >   `_same_claim`'s orientation leg, which the sibling branch does not cover.
 >
 > What was dropped, because PR #95 from the sibling clone
@@ -148,7 +148,7 @@ every surface reads citations from — cannot contain an orientation or trans
 citation. A queer-lens boost is therefore justified to the reader by a *gender*
 citation. `recommender/upstream.py::upstream_edit_url` also has no
 `wikidata-p91` case, so the fix-at-source loop is closed for P21 and open for
-P91. ADR 0011 says the queer axis's defence is "sourced-only with a citation"
+P91. ADR 0011 says the queer axis's defense is "sourced-only with a citation"
 being load-bearing; a citation nobody can see is not load-bearing.
 
 ### P3 (out of this branch's scope) — Issue #82 remainder: four of five eval worlds cannot vary recall
@@ -166,7 +166,7 @@ Audited specifically for the shape "present, green, structurally incapable of
 reporting what it exists to report". Findings and repairs are logged below.
 
 ### P5 (out of this branch's scope) — Documentation drift
-Claims checked line by line against behaviour. The only measured drift was the
+Claims checked line by line against behavior. The only measured drift was the
 README's "756 tests at 96% coverage" line, which the repo's own
 `scripts/check-readme-claims.py` catches; it is now 787.
 
@@ -215,7 +215,7 @@ tests. Findings, in the order they matter:
    gitleaks with the direction backwards: gitleaks is not in `ubuntu-latest`, so
    CI has always taken the weak path.
 7. **`make a11y` degrades silently.** With `pa11y` absent it falls back to
-   `app/a11y_check.py`, about ten structural rules and no colour-contrast rule —
+   `app/a11y_check.py`, about ten structural rules and no color-contrast rule —
    which is the entire reason the light/dark scheme-pinned renders exist. On
    that path the three renders produce byte-identical results. Nothing asserted
    which runner ran.
@@ -236,7 +236,7 @@ tests. Findings, in the order they matter:
 - [x] Plan recorded.
 - [x] **P1 (#93)** — `pipeline/ingest.py::_identity_sources` now covers all three
       sourced axes, deduplicated; `_is_sourced` docstring corrected;
-      `pipeline/identity.py` gained `normalise_asserted_orientation` and
+      `pipeline/identity.py` gained `normalize_asserted_orientation` and
       `pipeline/corrections.py::_same_claim` consults it. 6 new tests. Proved by
       reverting both fixes: 4 tests fail, then pass again.
 - [x] **P2 (#92)** — `Explanation.queer_sources`, `WhyThisArtist.queer_statement`
@@ -262,8 +262,8 @@ tests. Findings, in the order they matter:
 - [x] **P4.5** — `i18n-gate.sh` now checks the `Declared:` / `Reviewer:` line.
 - [x] **P4.6** — `secret-scan.sh` scans every tracked file (`grep -I` for
       binaries), refuses an empty file list, announces which scanner ran, and
-      honours `LAVENDER_REQUIRE_GITLEAKS=1`.
-- [x] **P4.7** — `make a11y` announces its runner and honours
+      honors `LAVENDER_REQUIRE_GITLEAKS=1`.
+- [x] **P4.7** — `make a11y` announces its runner and honors
       `LAVENDER_A11Y_REQUIRE_AXE=1`, set in `ci.yml`.
 - [x] **P4.8** — `writeup-check.py` regex fixed (10 checked claims to 12), given
       an annotation-site pairing check, and wired into `make eval` so it runs

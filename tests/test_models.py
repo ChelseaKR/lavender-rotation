@@ -97,6 +97,6 @@ def test_composition_rejects_non_composition_source() -> None:
         BandComposition(sources=(Source(SourceKind.WIKIDATA_P21, "c", "2026-05-31"),))
 
 
-def test_values_aligned_unknown_is_false_but_not_penalised_here() -> None:
+def test_values_aligned_unknown_is_false_but_not_penalized_here() -> None:
     # values_aligned is False for unknown; the *non-penalty* is the re-rank's job.
     assert Artist("u", "U").values_aligned is False

@@ -195,7 +195,7 @@ class Cache:
             for target in range(current + 1, CACHE_SCHEMA_VERSION + 1):
                 _MIGRATIONS[target](self.conn)
             if current < CACHE_SCHEMA_VERSION:
-                # PRAGMA cannot be parameterised; the value is a trusted int constant.
+                # PRAGMA cannot be parameterized; the value is a trusted int constant.
                 cur.execute(f"PRAGMA user_version = {int(CACHE_SCHEMA_VERSION)}")
         self.conn.commit()
 
@@ -319,7 +319,7 @@ class Cache:
         """Return a cached body, or ``None`` on a miss — or if it is older than ``ttl_days``.
 
         With ``ttl_days=None`` (the default) responses never expire, preserving the
-        original rate-limit-respecting behaviour. A caller re-checking identity
+        original rate-limit-respecting behavior. A caller re-checking identity
         claims passes a TTL so a stale claim is treated as a miss and re-fetched.
         """
         row = self.conn.execute(

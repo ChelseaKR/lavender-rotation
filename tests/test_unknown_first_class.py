@@ -48,7 +48,7 @@ def test_lens_never_produces_a_negative_delta() -> None:
             assert values_boost_for_artist(artist, strength) >= 0.0
 
 
-def test_man_and_unknown_are_not_penalised_relative_to_each_other() -> None:
+def test_man_and_unknown_are_not_penalized_relative_to_each_other() -> None:
     from pipeline.models import Explanation, IdentityBasis, Recommendation, Signal
 
     def rec(aid, gender, base):

@@ -85,7 +85,7 @@ tag, not backfilled to an earlier commit date.
   is emitted in the same shape, so a script cannot read one as an empty
   result"); `diff` was the one command that did not keep it, and its flag was
   hand-rolled rather than going through `_add_json_flag`, which is how the
-  promise and the behaviour drifted apart unnoticed.
+  promise and the behavior drifted apart unnoticed.
   - The success document is the same keys at the same depth — `shifts`,
     `unchanged`, `entered`, `left` are exactly where they were — plus
     `schema_version`, `command` and `ok`. Nothing that already parsed this
@@ -212,7 +212,7 @@ tag, not backfilled to an earlier commit date.
   implement it yields unknown, which is the answer the era filter keeps. **It is the act's
   begin year, not the year of its first release** — the field and its docstring say so,
   because a first-release year needs a release-group payload nothing here retrieves, and
-  labelling a formation year as a release year would be a number wearing a name it did not
+  labeling a formation year as a release year would be a number wearing a name it did not
   earn. Every unreadable upstream value, and every malformed value already in a cache,
   decodes to `None`; a coerced garbage year would silently drop real artists from a filtered
   run. No cache migration: a payload written before the field existed decodes to unknown,
@@ -230,7 +230,7 @@ tag, not backfilled to an earlier commit date.
   say so; `app/dashboard.py` was not. Its retention table still did `f"{...:.0%}"` over those
   values, so the Streamlit app raised
   `TypeError: unsupported format string passed to NoneType.__format__` — on the demo world, which
-  is the only world it shows, because that catalogue holds no artist sourced as `Gender.OTHER`
+  is the only world it shows, because that catalog holds no artist sourced as `Gender.OTHER`
   and so `other_retention` is `None` for every lens.
 
   **Two gates were in a position to catch it and neither could.** `mypy --strict` read a
@@ -248,7 +248,7 @@ tag, not backfilled to an earlier commit date.
   segment, and the fairness panel says "not measured" in both the static render and the
   dashboard. Same rule and same reason as #129; the third figure in that family.
 
-  The test that pinned the old behaviour, `test_exposure_at_k_empty_is_all_zero`, is rewritten.
+  The test that pinned the old behavior, `test_exposure_at_k_empty_is_all_zero`, is rewritten.
 - **An empty run reported "0% sourced" instead of no share at all.**
   `IdentityCoverage.sourced_fraction` and `unknown_fraction` divided by `total` and fell back to
   `0.0` when `total` was zero, and `to_dict()` published both. Over a run with no picks that
@@ -262,7 +262,7 @@ tag, not backfilled to an earlier commit date.
   taste's top-k (#129) — a different site of one defect, not a new one. `summary_line()` was
   already honest ("No picks yet.") and is unchanged, so no rendered page moves.
 
-  **The test that pinned the old behaviour is rewritten.** It asserted
+  **The test that pinned the old behavior is rewritten.** It asserted
   `sourced_fraction == 0.0 and unknown_fraction == 0.0`, which describes a run where no pick was
   sourced *and* no pick was unknown — a distribution that cannot exist. Two tests replace it: one
   for the empty run's nulls, one asserting the two shares sum to one whenever they are measured.
@@ -287,7 +287,7 @@ tag, not backfilled to an earlier commit date.
   about a real person's sourced identity, not one a gate can make.
 
   `tests/test_exposure.py::test_retention_is_one_when_no_unknown_artists_present`
-  asserted the old behaviour as intended — it pinned the defect — and has been
+  asserted the old behavior as intended — it pinned the defect — and has been
   rewritten alongside four tests covering the measured case, the report's
   measured/unmeasured pairing, and the rank-shift null. The dashboard renders an
   unmeasured cell as words rather than a percentage. Every change was checked by
@@ -364,7 +364,7 @@ tag, not backfilled to an earlier commit date.
   sentence reached the CLI, the dashboard, the committed render, and every exported playlist
   annotation. `Recommendation` now carries `lens_rank`, stamped between `rerank` and the
   serendipity pass, and `rank_shift_statement` reads `base_rank -> lens_rank` — the lens and
-  nothing else. `tests/test_why.py`'s two guards are parametrised over `explore` and
+  nothing else. `tests/test_why.py`'s two guards are parametrized over `explore` and
   `hide_sourced_men` rather than testing only the defaults, which is why they could not see this.
   `recommender/hybrid.py`'s module docstring and the filter comment, both of which asserted the
   invariant being violated, are corrected.
@@ -392,7 +392,7 @@ tag, not backfilled to an earlier commit date.
   edit the ruleset doing the blocking without the access it had just removed — and
   GitHub answers such an apply with a `201`. The file now carries the owner's standing
   admin bypass `{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}`,
-  `tests/test_branch_ruleset.py` fails on the empty list and on the four neighbouring
+  `tests/test_branch_ruleset.py` fails on the empty list and on the four neighboring
   ways to lose it (including the subtler `bypass_mode: "pull_request"`), and ADR 0001
   carries a dated correction rather than a silent edit. Four documents that called the
   ruleset "proposed — not yet applied live" are corrected against the live API read;
@@ -443,11 +443,11 @@ tag, not backfilled to an earlier commit date.
   as fronting — and front-people are what `BandComposition.female_fronted` is derived from, so a
   woman singing harmonies would have made a band "female-fronted". Exactly the over-claiming the
   guardrails exist to prevent, shipped by the change that added live lineup enrichment. A test
-  asserted the wrong behaviour (`("Backing Vocals", True)`); it now pins the right one, alongside
+  asserted the wrong behavior (`("Backing Vocals", True)`); it now pins the right one, alongside
   "additional"/"guest"/"session" vocal credits.
 
 ### Added
-- **`scripts/upstream_worklist.py`** — turns a local cache into a prioritised list of MusicBrainz
+- **`scripts/upstream_worklist.py`** — turns a local cache into a prioritized list of MusicBrainz
   edits, offline and credential-free. "Fix it at the source" was the stated posture
   (`CONTRIBUTING.md`) with no way to see *what* was missing or which gap was worth an evening.
 
@@ -522,7 +522,7 @@ tag, not backfilled to an earlier commit date.
   is kept). The obvious implementation, keeping only what the lens boosts, was rejected: it deletes
   every unknown artist, since `values_aligned` is `False` for an absent claim exactly as for a
   man's. On the history this was written against that would have been 4 of 10 picks and 57 of 88
-  catalogued artists — not men, but artists nobody has sourced, disproportionately the
+  cataloged artists — not men, but artists nobody has sourced, disproportionately the
   less-documented ones. Off by default, so the eval and every existing caller are unaffected, and
   applied after ranking so each surviving pick's "the lens moved this from #19 to #7" still refers
   to the real pure-taste ordering rather than a counterfactual over a pre-filtered world.
@@ -609,7 +609,7 @@ tag, not backfilled to an earlier commit date.
 - `wad --log-format json`: opt-in JSON log lines on stderr, carrying the same fields as the
   `key=value` default; logging remains stderr-only with no network sink either way. Makes the
   README Observability claim true — the flag was documented before it existed.
-- Merge-blocking no-identity-in-logs gate (`tests/test_log_privacy.py`, OBS-11): behavioural and
+- Merge-blocking no-identity-in-logs gate (`tests/test_log_privacy.py`, OBS-11): behavioral and
   AST-scan proofs that no log call site emits identity vocabulary, extending the no-inference
   invariant into the log stream.
 - Playlist export: push recommendations to a Spotify playlist (OAuth Authorization Code flow,
@@ -675,7 +675,7 @@ tag, not backfilled to an earlier commit date.
   `proposed_value`, while `ingest._diff_sources` emits a change when *either* the asserted value or
   the retrieval date moves — so a pure date refresh silently removed a person's note and printed
   "reconciled 1 pending upstream correction(s)". Reconciliation now requires the observed value to
-  be the proposed one, compared through the controlled vocabulary (`identity.normalise_asserted_value`,
+  be the proposed one, compared through the controlled vocabulary (`identity.normalize_asserted_value`,
   so `"female"` reconciles a `"woman"` proposal); date-only changes reconcile nothing; a change to
   any other value marks the row **superseded** and keeps it on file with what upstream now asserts;
   and reconciliation only runs when an upstream source was actually queried, so the demo-only
@@ -711,7 +711,7 @@ tag, not backfilled to an earlier commit date.
   someone — so the note now states plainly that a sourced man's *position* can move down and that
   this is the whole of the lens's re-allocation. The score tables in both the dashboard and the
   committed static render gained a **Position** column so a reader can see why rank is not a pure
-  function of total score. `tests/test_lens.py::test_lens_other_is_not_penalised_like_unknown`,
+  function of total score. `tests/test_lens.py::test_lens_other_is_not_penalized_like_unknown`,
   which had asserted only that two boosts were both `0.0` and stayed green throughout the defect,
   now asserts the rank protection its name describes.
 - A band whose only sourced front-person is a nonbinary artist is no longer described as a
@@ -744,7 +744,7 @@ tag, not backfilled to an earlier commit date.
   posture.
 - 320 px reflow defect caught by the new browser specs: the score-summary and fairness tables
   forced page-level horizontal scrolling at narrow widths (WCAG 2.2 §1.4.10). Data tables now sit
-  in keyboard-focusable, labelled scroll regions (`role="region"`, `tabindex="0"`,
+  in keyboard-focusable, labeled scroll regions (`role="region"`, `tabindex="0"`,
   `overflow-x: auto`) so only the excepted two-dimensional content scrolls — Arrow keys operate
   it, and the page itself reflows; long citation URLs additionally wrap (`overflow-wrap`).
 

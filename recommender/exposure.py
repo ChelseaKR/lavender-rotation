@@ -27,7 +27,7 @@ Metric choices (short justification, per FIX-05's requirement):
   re-allocation lands on sourced men. Nothing here softens that: it is what the
   ``man`` row of ``mean_rank_shift`` reports.
 * **Popularity-tier x identity** — cross-tabs the candidate pool by listener count
-  (:attr:`~pipeline.models.Artist.listeners`), surfacing the "lens over-favours
+  (:attr:`~pipeline.models.Artist.listeners`), surfacing the "lens over-favors
   already-popular women" allocational risk named in ``fairness-identity.md`` §3.
 """
 
@@ -283,14 +283,14 @@ def assert_segment_retained(
 def assert_unknown_retained(
     recs_by_lens: dict[float, list[Recommendation]], *, k: int, base_lens: float = 0.0
 ) -> None:
-    """Merge-blocking guarantee, checked on emitted output: unknown is never penalised."""
+    """Merge-blocking guarantee, checked on emitted output: unknown is never penalized."""
     assert_segment_retained(recs_by_lens, k=k, segment=UNKNOWN, base_lens=base_lens)
 
 
 def assert_other_retained(
     recs_by_lens: dict[float, list[Recommendation]], *, k: int, base_lens: float = 0.0
 ) -> None:
-    """The counterpart #68 found missing: sourced ``OTHER`` is never penalised either.
+    """The counterpart #68 found missing: sourced ``OTHER`` is never penalized either.
 
     Nothing checked this before, which is how the lens shipped a harms note
     promising that a sourced ``Gender.OTHER`` artist is "never down-ranked,

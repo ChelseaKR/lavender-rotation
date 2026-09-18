@@ -143,7 +143,7 @@ def test_authorize_url_carries_pkce_challenge_and_state() -> None:
 
 
 def test_authorize_url_refuses_an_empty_state() -> None:
-    """State is the CSRF defence; generating one and then not sending it is the
+    """State is the CSRF defense; generating one and then not sending it is the
     failure mode this guard exists to make impossible."""
     creds = td.TidalCredentials.from_env(_ENV)
     with pytest.raises(ValueError):
@@ -219,7 +219,7 @@ def test_search_selects_by_resource_type_not_by_position() -> None:
 
 
 def test_search_miss_returns_none_rather_than_raising() -> None:
-    """A catalogue genuinely may not carry an artist in a market. That is an
+    """A catalog genuinely may not carry an artist in a market. That is an
     unmatched artist to report, not an error to abort the whole export."""
     client, _ = _authorized_client(missing=("Nobody",))
     assert client.find_track_id("Nobody Whatever") is None

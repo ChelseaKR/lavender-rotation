@@ -104,7 +104,7 @@ def test_cached_response_past_ttl_is_a_miss(mem_cache) -> None:
     assert mem_cache.get_cached_response("u://1", ttl_days=30, now="2026-07-09") is None
 
 
-def test_no_ttl_preserves_never_expire_behaviour(mem_cache) -> None:
+def test_no_ttl_preserves_never_expire_behavior(mem_cache) -> None:
     mem_cache.put_cached_response("u://1", "body", "1999-01-01")
     assert mem_cache.get_cached_response("u://1") == "body"
 

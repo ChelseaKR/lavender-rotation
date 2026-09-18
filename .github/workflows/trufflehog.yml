@@ -39,7 +39,7 @@ jobs:
         # Resolved forward onto the NEWER of the two, 3.96.0, which is the
         # scanner that was already running: the ref moves up to v3.96.0 and the
         # `version:` input is untouched, so no scanner change rides along and
-        # the tier widening below is the only behaviour change.
+        # the tier widening below is the only behavior change.
         uses: trufflesecurity/trufflehog@6f3c981e7b77f235fd2702dd74af25fc4b72bf11 # v3.96.0
         with:
           # Explicit, even though the action defaults it to "./": the v3.96.0

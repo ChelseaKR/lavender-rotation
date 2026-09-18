@@ -18,7 +18,7 @@ guardrails had settled in the opposite direction.
 **The vocabulary deliberately could not express "trans".** `Gender` maps a sourced *trans woman*
 to `WOMAN` and stops there. That was the point: "sourced self-identification is the only test, and
 no cis/trans distinction exists anywhere in the vocabulary." A model that cannot represent who is
-trans cannot be turned into a list of who is trans — the strongest possible defence against the
+trans cannot be turned into a list of who is trans — the strongest possible defense against the
 worst thing this repo could produce.
 
 **Sexual orientation was absent entirely.** No `SourceKind` could carry it. MusicBrainz has no
@@ -69,20 +69,20 @@ did not scope them, revisable by a one-line change with its own rationale rather
 
 **The repo now holds a queerness dataset.** That is the honest description, and it is a
 step-change in sensitivity: sexual orientation is GDPR Art. 9 special-category data, and being
-catalogued as queer or as trans is dangerous for real people in much of the world. The existing
-defences carry over and are now load-bearing rather than precautionary — sourced-only with a
+cataloged as queer or as trans is dangerous for real people in much of the world. The existing
+defenses carry over and are now load-bearing rather than precautionary — sourced-only with a
 citation, unknown first-class, no export of identity data (`tests/test_export_schema.py`),
 local-only cache, corrections ledger. `privacy-notes.md` can no longer claim no special-category
 data is stored; it now states what is stored and why.
 
-**The structural defence is weaker than it was.** Before, "we cannot produce that list" was true
+**The structural defense is weaker than it was.** Before, "we cannot produce that list" was true
 of the type system. Now it is true of the *process* — no export path, local cache, no
-redistribution — which is a real defence but a weaker kind. The type system no longer refuses.
+redistribution — which is a real defense but a weaker kind. The type system no longer refuses.
 
 **Coverage will be sparse and skewed.** Of 354 artists in the maintainer's cache, 48 have a
 sourced woman/nonbinary gender; intersecting with sourced queerness leaves single digits. Sparse
 coverage skews toward the well-documented — the already-famous, the Anglophone, the living, the
-out — which is the opposite of who a discovery tool should favour. `unknown` must therefore never
+out — which is the opposite of who a discovery tool should favor. `unknown` must therefore never
 read as "not queer", in the UI or in anyone's head, and the lens boosts rather than filters so an
 unknown artist keeps their place on musical merit.
 
@@ -99,4 +99,4 @@ a lens that excludes trans women who have not publicly discussed their orientati
 
 **Filtering instead of boosting.** Rejected for the same reason `--hide-sourced-men` removes only a
 positive sourced claim: filtering on "not aligned" deletes every unknown artist, and here that is
-most of the catalogue.
+most of the catalog.

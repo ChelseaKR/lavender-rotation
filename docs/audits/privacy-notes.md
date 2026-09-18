@@ -34,10 +34,10 @@ the answer for almost everyone and is never a negative claim about them, nothing
 identity-bearing is ever exported (`tests/test_export_schema.py`), and the cache
 is local-only.
 
-The honest consequence is that one defence got weaker. Before, "this repo cannot
+The honest consequence is that one defense got weaker. Before, "this repo cannot
 produce a list of who is trans" was true of the type system — the vocabulary
 could not express it. It is now true of the *process* (no export path, local
-cache, no redistribution), which is a real defence but a weaker kind.
+cache, no redistribution), which is a real defense but a weaker kind.
 
 ## Outbound data flows
 
@@ -140,7 +140,7 @@ change, or the new client will fail the merge-blocking privacy gate:
 - **Exports exclude identity data.** `tests/test_export_schema.py` checks every
   portable format's schema and rendered content so gender, identity basis, and
   provenance cannot silently become a redistributable sidecar.
-- **Data minimisation & lineage.** Only what's needed is stored, each row with a
+- **Data minimization & lineage.** Only what's needed is stored, each row with a
   `fetched_at` timestamp (`pipeline/cache.py`, `tests/test_cache_serde.py`).
 - **Deletion path.** `make forget` deletes the cache at the path above, after
   printing it and asking for confirmation; there is no remote copy to chase.
