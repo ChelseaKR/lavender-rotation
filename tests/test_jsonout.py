@@ -765,7 +765,7 @@ def test_report_output_validates_and_still_writes_the_page(
 def test_report_and_recommend_describe_the_same_ranking(
     capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
-    """One serialisation of a pick list, not two that can drift.
+    """One serialization of a pick list, not two that can drift.
 
     The dashboard once showed one ranking while measuring another; both verbs
     build their picks through the same function so that cannot recur here.
