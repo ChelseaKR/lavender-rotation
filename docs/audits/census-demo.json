@@ -1,0 +1,49 @@
+{
+  "schema_version": "1",
+  "as_of": "2026-09-06",
+  "total_artists": 14,
+  "enriched_artists": 14,
+  "sourced": 10,
+  "unknown_fraction": 0.2857,
+  "by_gender": {
+    "woman": 7,
+    "man": 2,
+    "nonbinary": 1,
+    "other": 0,
+    "unknown": 4
+  },
+  "by_basis": {
+    "self-identified": 10,
+    "band-composition": 0,
+    "unknown": 4
+  },
+  "artists_by_source_kind": {
+    "wikidata-p21": 3,
+    "musicbrainz-gender": 4,
+    "artist-statement": 4,
+    "wikidata-p91": 0,
+    "discogs-lineup": 2,
+    "musicbrainz-relationship": 0
+  },
+  "acts_with_sourced_composition": 2,
+  "conflicting": 0,
+  "with_local_correction": 0,
+  "with_pending_upstream_correction": 0,
+  "fetched_at_age_days": {
+    "0-7": 0,
+    "8-30": 0,
+    "31-90": 0,
+    "91-365": 0,
+    "over-365": 0,
+    "not-recorded": 14,
+    "never": 0
+  },
+  "unknown_reasons": {
+    "never-enriched": 0,
+    "no-permitted-claim": 2,
+    "sourced-on-another-axis-only": 2
+  },
+  "unsupported_unknown_reasons": {
+    "upstream-unreachable": "a refresh that got no answer is not recorded on the cached row, so it cannot be told apart from 'no-permitted-claim' by reading the cache (see issue #122)"
+  }
+}

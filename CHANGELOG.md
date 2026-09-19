@@ -320,6 +320,22 @@ tag, not backfilled to an earlier commit date.
   replaced with "now", and a re-import adds no rows. An export carries plays and not Last.fm's tags
   or similar-artist graph, so `ImportedHistory` returns empty for both and says so at both surfaces
   instead of inferring either from track names. Closes #119.
+- `lavender census` — identity coverage over a whole cached world, in **counts only**
+  (`pipeline/census.py`, `make census`, committed `docs/audits/census-demo.json`). Reports the
+  sourced/unknown split, artists carrying each source kind, acts with a sourced lineup, source
+  disagreements, local and pending-upstream correction counts, lineage-age buckets, and a reason
+  for every unknown. This makes the research roadmap's central claim — that unknown is the common
+  case — measurable on this project's own data instead of cited only from the literature.
+  Deliberately aggregate: no artist id, name or citation URL can appear in the output, because a
+  per-artist identity export is exactly the redistributable dataset this project refuses to create
+  (ideation E2, rejected on those grounds), and a sentinel test asserts it over the real demo world
+  and over the committed artifact. Three things absence is *not* rendered as a measurement here: an
+  artist known to the world but never enriched is counted (`never-enriched`) rather than dropped, so
+  a cache with one enriched artist out of a thousand cannot report full coverage; an enriched row
+  with no lineage date is `not-recorded`, kept apart from both `never` and `over-365`; and
+  `upstream-unreachable` — a real reason an artist is unknown, which the cache does not persist — is
+  named as unsupported with the reason it cannot be derived, rather than folded into
+  `no-permitted-claim`. Closes #124.
 - Periodic re-enrichment is scheduled (ADR 0013). `make refresh LAVENDER_USER=<you>` is the
   bounded re-check; `make schedule LAVENDER_USER=<you>` prints the launchd agent (macOS) or
   crontab line that runs it every 7 days on the operator's own machine, with absolute paths, a
